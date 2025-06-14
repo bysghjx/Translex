@@ -1,0 +1,39 @@
+{
+  "key.translex.remove_block": "移除方块",
+  "key.translex.translate_lore": "翻译物品 Lore",
+  "category.translex.general": "Translex Mod",
+
+  "message.translex.prefix": "§a[Translex]§r ",
+  "message.translex.config_reloaded_success": "配置文件已重新加载 API 设置！",
+  "message.translex.mode_info.message_id": "当前启用模式：消息 ID + 按钮 (§e需要重启游戏切换§r)。",
+  "message.translex.mode_info.command_text": "当前启用模式：命令 + 文本 (§e需要重启游戏切换§r)。",
+  "message.translex.config_reload_error": "重新加载配置文件时出错，请查看日志！",
+  "message.translex.invalid_message_id": "无效的消息 ID: %s",
+  "message.translex.message_not_found": "未找到要翻译的消息 (ID: %s)。可能已过期。",
+  "message.translex.content_empty": "消息内容为空，无需翻译。",
+
+  "message.translex.api_key_not_set": "请先在 Mod 配置中设置 AI API Key！",
+  "message.translex.api_config_incomplete": "API 配置未完全设置！",
+  "message.translex.content_empty": "消息内容为空，无需翻译。",
+  "message.translex.content_empty_with_id": "消息内容为空，无需翻译 (ID: %s)。",
+  "message.translex.invalid_message_id": "无效的消息 ID: %s",
+  "message.translex.message_not_found": "未找到要翻译的消息 (ID: %s)。可能已过期。",
+  "message.translex.translation_result_prefix": "[翻译%s] ",
+  "message.translex.translation_failed_prefix": "§c[翻译失败]§r ",
+  "message.translex.error.ai_empty_content": "AI返回空内容",
+  "message.translex.error.api_content_not_text": "API返回结果内容非文本",
+  "message.translex.error.api_fields_missing": "API返回结果格式未知 (字段缺失)",
+  "message.translex.error.api_choices_missing": "API返回结果格式未知 (Choices缺失或为空)",
+  "message.translex.error.api_json_syntax": "API响应格式无效(JSON语法错误)",
+  "message.translex.error.api_json_structure": "API响应结构意外",
+  "message.translex.error.api_processing": "处理响应时出错",
+  "message.translex.error.api_unknown_format": "API返回结果格式未知 (最终 null)",
+  "message.translex.error.api_empty_response_body": "API返回空响应体",
+  "message.translex.error.api_http": "API错误 (%s)",
+  "message.translex.error.network_io": "网络错误: %s",
+  "message.translex.error.severe_unknown": "严重错误或未知异常: %s",
+
+  "message.translex.translate_button": "[翻译]",
+  "message.translex.translate_button_hover": "点击翻译这条消息 (ID: %s)"
+}
+

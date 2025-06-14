@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "translex",
+  "version": "${version}",
+  "name": "Translex",
+  "description": "",
+  "authors": [],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "icon": "assets/translex/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-datagen": [
+      "top.iencand.translex.client.TranslexDataGenerator"
+    ],
+    "client": [
+      "top.iencand.translex.client.TranslexClient"
+    ],
+    "main": [
+      "top.iencand.translex.Translex"
+    ]
+  },
+  "mixins": [
+    "translex.mixins.json",
+    {
+      "config": "translex.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
