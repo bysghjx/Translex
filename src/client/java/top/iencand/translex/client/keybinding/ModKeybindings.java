@@ -2,40 +2,47 @@ package top.iencand.translex.client.keybinding;
 
 import net.fabricmc.api.Environment;
 import net.fabricmc.api.EnvType;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper; // 导入 Fabric KeyBinding 注册帮助类
-import net.minecraft.client.option.KeyBinding; // 导入 Minecraft 的 KeyBinding 类
-import net.minecraft.client.util.InputUtil; // 导入 InputUtil 用于按键类型和代码
-import org.lwjgl.glfw.GLFW; // 导入 GLFW 用于按键代码常量
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.option.KeyBinding.Category; // 导入 Category 静态内部类
+import net.minecraft.client.util.InputUtil;
+import net.minecraft.util.Identifier; // 导入 Identifier
+import org.lwjgl.glfw.GLFW;
 
 @Environment(EnvType.CLIENT)
 public class ModKeybindings {
+
+    // *** 关键修改：使用 Category.create(Identifier id) 来注册 ***
+    // 推荐使用 Identifier.of(modId, name) 来确保唯一性
+    // 假设您的 Mod ID 是 "translex"
+    public static final Category GENERAL_CATEGORY = Category.create(
+            Identifier.of("translex", "general")
+    );
+
+    // 或者，如果您只需要使用翻译键，也可以使用 create(Identifier)
+    // 但推荐使用上面的方式，因为它与您提供的源代码结构更匹配
+    // public static final Category GENERAL_CATEGORY = Category.create(Identifier.of("key.category", "translex_general"));
+
     public static final KeyBinding REMOVE_BLOCK_KEY = KeyBindingHelper.registerKeyBinding(
             new KeyBinding(
-                    "key.translex.remove_block", // 翻译键
-                    InputUtil.Type.KEYSYM, // 按键类型：键盘按键
-                    GLFW.GLFW_KEY_DELETE, // 默认按键代码 (GLFW.GLFW_KEY_DELETE 对应 Delete 键)
-                    "category.translex.general" // 按键分类翻译键
+                    "key.translex.remove_block",
+                    InputUtil.Type.KEYSYM,
+                    GLFW.GLFW_KEY_DELETE,
+                    GENERAL_CATEGORY // 使用 Category 对象
             )
     );
 
-    // 2. 翻译物品 Lore 按键 (原 Forge Keyboard.KEY_P 对应 P 键)
-    // 注意：这里直接在类中定义并注册了，Main 类中不再需要单独定义字段和 regKeys 方法
     public static final KeyBinding TRANSLATE_LORE_KEY = KeyBindingHelper.registerKeyBinding(
             new KeyBinding(
-                    "key.translex.translate_lore", // 翻译键
-                    InputUtil.Type.KEYSYM, // 按键类型：键盘按键
-                    GLFW.GLFW_KEY_P, // 默认按键代码 (GLFW.GLFW_KEY_P 对应 P 键)
-                    "category.translex.general" // 按键分类翻译键
+                    "key.translex.translate_lore",
+                    InputUtil.Type.KEYSYM,
+                    GLFW.GLFW_KEY_P,
+                    GENERAL_CATEGORY // 使用 Category 对象
             )
     );
 
     public static void register() {
-        // 当这个方法被调用时，上面的静态字段初始化就会执行 KeyBindingHelper.registerKeyBinding()
-        // 打印一条日志确认注册被触发
         System.out.println("[Translex] Registering keybindings...");
-        // 可以选择在这里再次打印每个按键的信息，用于调试
-        // System.out.println("  - " + REMOVE_BLOCK_KEY.getTranslationKey() + " bound to " + REMOVE_BLOCK_KEY.getBoundKey().getTranslationKey());
-        // System.out.println("  - " + TRANSLATE_LORE_KEY.getTranslationKey() + " bound to " + TRANSLATE_LORE_KEY.getBoundKey().getTranslationKey());
         System.out.println("[Translex] Keybindings registration complete.");
     }
 

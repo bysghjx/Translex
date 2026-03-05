@@ -3,8 +3,6 @@
   "minVersion": "0.8",
   "package": "top.iencand.translex.client.mixin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": [
-  ],
   "client": [
     "ChatHudMixin"
   ],

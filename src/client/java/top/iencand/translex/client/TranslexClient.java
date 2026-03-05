@@ -33,12 +33,12 @@ public class TranslexClient implements ClientModInitializer {
         ModConfig.loadConfig();
         ModConfig config = ModConfig.get();
 
-        translationManager.updateSettings(
+/*        translationManager.updateSettings(
                 config.apiKey,
                 config.translationPrompt,
                 config.modelName,
                 config.apiUrl
-        );
+        );*/
         translationManager.setCacheFile(ModConfig.getCacheFile());
 
         new ReloadConfigCommand(translationManager).register();
