@@ -1,123 +1,78 @@
 package top.iencand.translex.client;
 
 import net.fabricmc.api.ClientModInitializer;
-import top.iencand.translex.client.command.ReloadConfigCommand;
-import top.iencand.translex.client.config.ModConfig;
-import top.iencand.translex.client.listener.ChatTranslateHandler;
-import top.iencand.translex.client.command.LegacyTranslateCommand;
-import top.iencand.translex.client.command.TranslateCommand;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import top.iencand.translex.client.Translate.TranslationManager;
+import top.iencand.translex.client.command.TranslexCommand;
+import top.iencand.translex.client.config.ModConfig;
 import top.iencand.translex.client.keybinding.ModKeybindings;
+import top.iencand.translex.client.listener.ChatTranslateHandler;
 import top.iencand.translex.client.listener.ClientStateManager;
 import top.iencand.translex.client.listener.LegacyChatHandler;
-
 
 public class TranslexClient implements ClientModInitializer {
 
     public static final String MOD_ID = "translex";
-    private TranslationManager translationManager;
-    private ChatTranslateHandler chatTranslateHandler; // 消息 ID 模式的聊天处理器 (内部构造函数会注册事件)
-    private LegacyTranslateCommand legacyTranslateCommand; // 命令+文本模式的命令处理器 (register() 方法注册命令)
-    private TranslateCommand translateCommand; // 消息 ID 模式的命令处理器 (register() 方法注册命令)
-    private ClientStateManager clientStateManager;
-    private LegacyChatHandler legacyChatHandlerForLegacyMode;
+    public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
+    private TranslationManager translationManager;
+    private ChatTranslateHandler chatTranslateHandler;
+    private LegacyChatHandler legacyChatHandler;
+    private ClientStateManager clientStateManager;
 
     @Override
     public void onInitializeClient() {
+        LOGGER.info("[{}] Initializing client components...", MOD_ID);
 
-        // 在客户端初始化时创建组件实例
-        translationManager = new TranslationManager();
-        // 创建 ChatTranslateHandler 实例，这会自动注册 MODIFY_GAME 事件
-        ModConfig.loadConfig();
+        // 1. 初始化配置（get() 自动懒加载）
         ModConfig config = ModConfig.get();
 
-/*        translationManager.updateSettings(
-                config.apiKey,
-                config.translationPrompt,
-                config.modelName,
-                config.apiUrl
-        );*/
-        translationManager.setCacheFile(ModConfig.getCacheFile());
+        // 2. 实例化核心指挥官 TranslationManager
+        translationManager = new TranslationManager();
 
-        new ReloadConfigCommand(translationManager).register();
+        // 3. 初始化持久化层
+        if (config.enableCachePersistence) {
+            translationManager.initializePersistence(ModConfig.getCacheFile());
+            LOGGER.info("[{}] Cache persistence enabled and initialized.", MOD_ID);
+        } else {
+            LOGGER.warn("[{}] Cache persistence is disabled in config.", MOD_ID);
+        }
+
+        // 4. 根据配置决定 chatTranslateHandler 是否可用
+        if (config.enableMessageIdSystem) {
+            LOGGER.info("[{}] Enabling Message ID system.", MOD_ID);
+            chatTranslateHandler = new ChatTranslateHandler();
+            legacyChatHandler = null;
+        } else {
+            LOGGER.info("[{}] Enabling Legacy Command+Text system.", MOD_ID);
+            chatTranslateHandler = null;
+            legacyChatHandler = new LegacyChatHandler();
+            legacyChatHandler.registerEvents();
+        }
+
+        // 5. 注册统一的 /translex 子命令系统
+        new TranslexCommand(translationManager, chatTranslateHandler).register();
+
+        // 6. 注册全局事件与按键绑定
         ModKeybindings.register();
 
-        clientStateManager = new ClientStateManager(translationManager); // 实例化
-        clientStateManager.registerEvents(); // 调用注册事件的方法
+        clientStateManager = new ClientStateManager(translationManager);
+        clientStateManager.registerEvents();
 
-
-        /**
-         * 启用缓存系统
-        **/
-        if (config.enableCachePersistence) {
-            translationManager.loadCache();
-        } else {
-            System.out.println("[" + MOD_ID + "] Cache persistence is disabled by config, not loading cache.");
-        }
-
-        /**
-         * 启用消息id系统
-         **/
-
-        if (config.enableMessageIdSystem) {
-            System.out.println("[" + MOD_ID + "] Enabling Message ID system.");
-            // 实例化并注册 ChatTranslateHandler (它内部构造函数会注册 MODIFY_GAME 事件)
-            chatTranslateHandler = new ChatTranslateHandler();
-            // 实例化并注册消息 ID 模式的命令
-            translateCommand = new TranslateCommand(chatTranslateHandler, translationManager);
-            translateCommand.register(); // 调用其 register 方法注册命令
-
-            // 确保旧模式的组件为 null
-            legacyTranslateCommand = null;
-
-        } else {
-            System.out.println("[" + MOD_ID + "] Enabling Legacy Command+Text system.");
-
-            legacyTranslateCommand = new LegacyTranslateCommand(translationManager); // 实例化
-            legacyTranslateCommand.register(); // 调用 register 方法注册命令
-
-            // 确保新模式的组件为 null
-            chatTranslateHandler = null;
-            translateCommand = null;
-
-            // *** 注册 LegacyChatHandler (刚刚迁移完成的部分) ***
-            // 在命令+文本模式下，需要 LegacyChatHandler 来在聊天旁添加按钮
-            legacyChatHandlerForLegacyMode = new LegacyChatHandler(); // 实例化
-            legacyChatHandlerForLegacyMode.registerEvents(); // 调用注册事件的方法
-
-
-            // 确保新模式的组件为 null
-            chatTranslateHandler = null;
-            translateCommand = null;
-
-            // TODO: 如果您打算迁移 LegacyChatHandler.java
-            // 并希望在命令+文本模式下自动在聊天消息旁添加 /translate 按钮，
-            // 您需要在这里实例化并注册迁移后的 LegacyChatHandler。
-            // 例如：LegacyChatHandler legacyChatHandlerForLegacyMode = new LegacyChatHandler();
-            //       legacyChatHandlerForLegacyMode.register(); // 假设 LegacyChatHandler 也有 register 方法
-
-        }
-
-
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            LOGGER.info("[{}] Shutting down, saving translation data...", MOD_ID);
+            if (translationManager != null) {
+                translationManager.shutdown();
+            }
+        }));
     }
 
-    // --- 公共 Getter 方法 (如果其他类需要访问这些组件) ---
     public TranslationManager getTranslationManager() {
         return translationManager;
-    }
-
-    public Object getTranslateCommandInstance() {
-        if (ModConfig.get().enableMessageIdSystem) {
-            return translateCommand;
-        } else {
-            return legacyTranslateCommand;
-        }
     }
 
     public ChatTranslateHandler getChatTranslateHandler() {
         return chatTranslateHandler;
     }
-
 }

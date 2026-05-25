@@ -2,161 +2,285 @@ package top.iencand.translex.client.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonSyntaxException;
+import com.moandjiezana.toml.Toml;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.util.Formatting;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public class ModConfig {
+    private static final Logger LOGGER = LoggerFactory.getLogger("TranslexConfig");
+
     public String apiKey = "YOUR_API_KEY_HERE";
-    public String apiUrl = "https://api.siliconflow.cn/v1/chat/completions";
-    public String modelName = "deepseek-ai/DeepSeek-V3";
-    public String translationPrompt = "You are a professional Hypixel SkyBlock translator. \n" +
-            "### CRITICAL RULES:\n" +
-            "1. Target Language: Always translate to **Simplified Chinese (简体中文)**. NEVER use Korean, Japanese, or any other languages.\n" +
-            "2. Input Format: If the input is a JSON array, return ONLY a JSON string array of the SAME length.\n" +
-            "3. Style: Keep item names (e.g., \"Hyperion\") in English. Keep Minecraft color codes (e.g. §7, §a) unchanged.\n" +
-            "4. Format: No markdown, no conversation, no explanations. Reply ONLY with the translated content.";
+    public String apiUrl = "https://api.deepseek.com/chat/completions";
+    public String modelName = "deepseek-v4-flash";
+    public String translationPrompt = "Translate to Simplified Chinese (简体中文). Keep item names in English. Keep Minecraft color codes (§) unchanged. Reply with a JSON string array only.";
 
-    public boolean enableMessageIdSystem = true; // 是否启用消息 ID 系统
+    public boolean enableMessageIdSystem = true;
 
-    public boolean enableCachePersistence = true; // 是否启用缓存持久化
-    public boolean enablePeriodicSave = true; // 是否启用周期性保存
-    // 周期保存间隔 (ticks)，默认 20分钟 * 60秒/分钟 * 20tick/秒 = 24000
+    public boolean enableCachePersistence = true;
+    public boolean enablePeriodicSave = true;
     public int periodicSaveInterval = 24000;
 
-    // --- 新增：消息折叠相关配置 ---
-    public boolean enableChatCompact = true;     // 是否启用消息折叠
-    public int compactTimeSeconds = 120;         // 重复消息折叠的时间阈值（秒）
-    public String compactColorCode = "GRAY";     // 折叠计数器 (x2) 的颜色名称
+    public boolean enableChatCompact = true;
+    public int compactTimeSeconds = 120;
+    public String compactColorCode = "GRAY";
+    public String buttonStyle = "NORMAL"; // "NORMAL" or "COMPACT"
 
-    /**
-     * 获取配置的折叠颜色枚举
-     */
     public Formatting getCompactColor() {
         try {
             return Formatting.byName(compactColorCode.toUpperCase());
         } catch (Exception e) {
-            return Formatting.GRAY; // 解析失败时默认返回灰色
+            return Formatting.GRAY;
         }
     }
 
-    // --- Gson 实例 (transient 不会被序列化) ---
-    private static transient final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static transient final Gson GSON = new GsonBuilder().create();
 
-    // --- 配置文件路径 (transient 不会被序列化) ---
     private static transient File configFile;
-
-    // --- 单例实例 ---
     private static ModConfig instance;
+    private static final List<ConfigReloadListener> listeners = new CopyOnWriteArrayList<>();
 
-    // 私有构造函数，强制使用静态方法获取实例
     private ModConfig() {
     }
 
-    // 获取单例实例
     public static ModConfig get() {
         if (instance == null) {
-            loadConfig(); // 如果实例不存在，先尝试加载
+            loadConfig();
         }
         return instance;
     }
 
-    // 获取配置文件的 File 对象
     private static File getConfigFile() {
         if (configFile == null) {
-            // 获取 Mod 的配置目录 (例如 .minecraft/config/)
             File configDir = FabricLoader.getInstance().getConfigDir().toFile();
-            // 在 Mod 配置目录下的一个子目录中创建配置文件，例如 config/translex/config.json
             File modConfigDir = new File(configDir, "translex");
-            // 确保目录存在
             modConfigDir.mkdirs();
-            configFile = new File(modConfigDir, "config.json");
+            configFile = new File(modConfigDir, "config.toml");
         }
         return configFile;
     }
 
-    // 获取缓存文件的 File 对象
+    private static File getLegacyConfigFile() {
+        File configDir = FabricLoader.getInstance().getConfigDir().toFile();
+        File modConfigDir = new File(configDir, "translex");
+        return new File(modConfigDir, "config.json");
+    }
+
     public static File getCacheFile() {
         File configDir = FabricLoader.getInstance().getConfigDir().toFile();
         File modConfigDir = new File(configDir, "translex");
         File cacheDir = new File(modConfigDir, "cache");
-        cacheDir.mkdirs(); // 确保目录存在
+        cacheDir.mkdirs();
         return new File(cacheDir, "translation_cache.json");
     }
 
-    /**
-     * 从文件加载配置。
-     * 如果文件不存在或加载失败，将创建默认配置。
-     */
-    public static void loadConfig() {
+    public static void addListener(ConfigReloadListener listener) {
+        listeners.add(listener);
+    }
+
+    public static void reload() {
+        loadConfig();
+        ModConfig config = instance;
+        if (config != null) {
+            for (ConfigReloadListener listener : listeners) {
+                try {
+                    listener.onConfigReload(config);
+                } catch (Exception e) {
+                    LOGGER.error("Error in config reload listener", e);
+                }
+            }
+        }
+    }
+
+    private static void loadConfig() {
         configFile = getConfigFile();
-        System.out.println("[Translex Config] Attempting to load config from: " + configFile.getAbsolutePath());
+        LOGGER.info("Attempting to load config from: {}", configFile.getAbsolutePath());
 
         if (configFile.exists()) {
-            try (Reader reader = new InputStreamReader(new FileInputStream(configFile), StandardCharsets.UTF_8)) {
-                // 1. 原有的反序列化逻辑
-                instance = GSON.fromJson(reader, ModConfig.class);
-
-                if (instance == null) {
-                    System.err.println("[Translex Config] Failed to load config: File content is empty.");
-                    instance = new ModConfig();
-                } else {
-                    // --- 核心：自动更新提示词逻辑 ---
-                    // 定义旧版默认值用于比对
-                    String oldDefault = "Translate the following Hypixel SkyBlock message to Simplified Chinese. Keep item names (e.g., \"Hyperion\") in English. Only provide the translation.";
-
-                    // 定义新版默认值
-                    String newDefault = "You are a professional Hypixel SkyBlock translator. \n" +
-                            "### CRITICAL RULES:\n" +
-                            "1. Target Language: Always translate to **Simplified Chinese (简体中文)**. NEVER use Korean, Japanese, or any other languages.\n" +
-                            "2. Input Format: If the input is a JSON array, return ONLY a JSON string array of the SAME length.\n" +
-                            "3. Style: Keep item names (e.g., \"Hyperion\") in English. Keep Minecraft color codes (e.g. §7, §a) unchanged.\n" +
-                            "4. Format: No markdown, no conversation, no explanations. Reply ONLY with the translated content.";
-
-                    // 如果用户还没改过提示词（还是旧版默认值），则自动更新
-                    if (instance.translationPrompt != null && instance.translationPrompt.trim().equals(oldDefault.trim())) {
-                        System.out.println("[Translex Config] Detected old default prompt. Upgrading to batch-aware version...");
-                        instance.translationPrompt = newDefault;
-                        saveConfig(); // 升级后自动保存，防止下次重复触发
-                    }
-
-                    System.out.println("[Translex Config] Config loaded successfully.");
-                    saveConfig(); // 同步可能新增的配置项
+            loadFromToml(configFile);
+            File legacyFile = getLegacyConfigFile();
+            if (legacyFile.exists()) {
+                File backup = new File(legacyFile.getParentFile(), "config.json.bak");
+                if (legacyFile.renameTo(backup)) {
+                    LOGGER.info("Old config.json renamed to config.json.bak");
                 }
-            } catch (JsonSyntaxException e) {
-                System.err.println("[Translex Config] Invalid JSON format! Using default.");
-                instance = new ModConfig();
-            } catch (IOException e) {
-                System.err.println("[Translex Config] Error reading config: " + e.getMessage());
-                instance = new ModConfig();
             }
         } else {
-            System.out.println("[Translex Config] Config file not found, creating default.");
+            File legacyFile = getLegacyConfigFile();
+            if (legacyFile.exists()) {
+                LOGGER.info("Migrating legacy config from: {}", legacyFile.getAbsolutePath());
+                loadFromLegacyJson(legacyFile);
+                saveConfig();
+                File backup = new File(legacyFile.getParentFile(), "config.json.bak");
+                if (legacyFile.renameTo(backup)) {
+                    LOGGER.info("Old config.json renamed to config.json.bak");
+                }
+            } else {
+                LOGGER.info("Config file not found, creating default.");
+                instance = new ModConfig();
+                saveConfig();
+            }
+        }
+    }
+
+    private static void loadFromToml(File file) {
+        try {
+            Toml toml = new Toml().read(file);
+
+            if (toml.isEmpty()) {
+                LOGGER.warn("Config file is empty. Using defaults.");
+                instance = new ModConfig();
+                return;
+            }
+
             instance = new ModConfig();
+            instance.apiKey = toml.getString("apiKey", instance.apiKey);
+            instance.apiUrl = toml.getString("apiUrl", instance.apiUrl);
+            instance.modelName = toml.getString("modelName", instance.modelName);
+            instance.translationPrompt = toml.getString("translationPrompt", instance.translationPrompt);
+            instance.enableMessageIdSystem = toml.getBoolean("enableMessageIdSystem", instance.enableMessageIdSystem);
+            instance.enableCachePersistence = toml.getBoolean("enableCachePersistence", instance.enableCachePersistence);
+            instance.enablePeriodicSave = toml.getBoolean("enablePeriodicSave", instance.enablePeriodicSave);
+            instance.periodicSaveInterval = toml.getLong("periodicSaveInterval", (long) instance.periodicSaveInterval).intValue();
+            instance.enableChatCompact = toml.getBoolean("enableChatCompact", instance.enableChatCompact);
+            instance.compactTimeSeconds = toml.getLong("compactTimeSeconds", (long) instance.compactTimeSeconds).intValue();
+            instance.compactColorCode = toml.getString("compactColorCode", instance.compactColorCode);
+            instance.buttonStyle = toml.getString("buttonStyle", instance.buttonStyle);
+
+            checkAndUpgradePrompt();
+            LOGGER.info("Config loaded successfully.");
+            saveConfig();
+        } catch (Exception e) {
+            LOGGER.error("Error reading TOML config: {}", e.getMessage());
+            instance = new ModConfig();
+        }
+    }
+
+    private static void loadFromLegacyJson(File file) {
+        try (Reader reader = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)) {
+            instance = GSON.fromJson(reader, ModConfig.class);
+            if (instance == null) {
+                instance = new ModConfig();
+            }
+            checkAndUpgradePrompt();
+            LOGGER.info("Successfully migrated from legacy JSON config.");
+            LOGGER.info("Config will be saved in TOML format at: {}", getConfigFile().getAbsolutePath());
+        } catch (Exception e) {
+            LOGGER.error("Error migrating legacy config: {}", e.getMessage());
+            instance = new ModConfig();
+        }
+    }
+
+    private static void checkAndUpgradePrompt() {
+        String v1 = "Translate the following Hypixel SkyBlock message to Simplified Chinese. Keep item names (e.g., \"Hyperion\") in English. Only provide the translation.";
+        String v2 = "You are a professional Hypixel SkyBlock translator. \n" +
+                "### CRITICAL RULES:\n" +
+                "1. Target Language: Always translate to **Simplified Chinese (简体中文)**. NEVER use Korean, Japanese, or any other languages.\n" +
+                "2. Input Format: If the input is a JSON array, return ONLY a JSON string array of the SAME length.\n" +
+                "3. Style: Keep item names (e.g., \"Hyperion\") in English. Keep Minecraft color codes (e.g. §7, §a) unchanged.\n" +
+                "4. Format: No markdown, no conversation, no explanations. Reply ONLY with the translated content.";
+
+        if (instance.translationPrompt == null) return;
+        String current = normalize(instance.translationPrompt);
+        if (current.equals(normalize(v1)) || current.equals(normalize(v2))) {
+            LOGGER.info("Detected old default prompt. Upgrading to concise version...");
+            instance.translationPrompt = "Translate to Simplified Chinese (简体中文). Keep item names in English. Keep Minecraft color codes (§) unchanged. Reply with a JSON string array only.";
             saveConfig();
         }
     }
 
     /**
-     * 将当前配置保存到文件。
+     * 折叠所有空白字符到单个空格，消除 TOML 多行字符串和 JSON 转义的格式差异。
      */
+    private static String normalize(String s) {
+        return s.replaceAll("\\s+", " ").trim();
+    }
+
     public static void saveConfig() {
         if (instance == null) {
-            System.err.println("[Translex Config] Cannot save config, instance is null!");
+            LOGGER.error("Cannot save config, instance is null!");
             return;
         }
-        configFile = getConfigFile(); // 确保获取了文件对象
-        try (Writer writer = new OutputStreamWriter(new FileOutputStream(configFile), StandardCharsets.UTF_8)) {
-            // 将当前实例序列化为 JSON 并写入文件
-            GSON.toJson(instance, writer);
-            System.out.println("[Translex Config] Config saved successfully to: " + configFile.getAbsolutePath());
+        configFile = getConfigFile();
+        try {
+            String toml = buildTomlContent();
+            Files.writeString(configFile.toPath(), toml, StandardCharsets.UTF_8);
+            LOGGER.info("Config saved successfully to: {}", configFile.getAbsolutePath());
         } catch (IOException e) {
-            System.err.println("[Translex Config] Error writing config file: " + e.getMessage());
-            e.printStackTrace();
+            LOGGER.error("Error writing config file: {}", e.getMessage(), e);
         }
+    }
+
+    private static String buildTomlContent() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("# Translex Mod Configuration\n");
+        sb.append("# Edit this file and run /translex reload to apply changes\n");
+        sb.append("\n");
+
+        sb.append("# Your AI API Key (required)\n");
+        sb.append("apiKey = \"").append(escapeToml(instance.apiKey)).append("\"\n");
+        sb.append("\n");
+
+        sb.append("# API endpoint URL\n");
+        sb.append("apiUrl = \"").append(escapeToml(instance.apiUrl)).append("\"\n");
+        sb.append("\n");
+
+        sb.append("# Model name\n");
+        sb.append("modelName = \"").append(escapeToml(instance.modelName)).append("\"\n");
+        sb.append("\n");
+
+        sb.append("# System prompt sent to the AI — keep it concise to save tokens\n");
+        writeTomlString(sb, "translationPrompt", instance.translationPrompt);
+        sb.append("\n");
+
+        sb.append("# Use Message ID mode (true) or Legacy text mode (false) — requires restart\n");
+        sb.append("enableMessageIdSystem = ").append(instance.enableMessageIdSystem).append("\n");
+        sb.append("\n");
+
+        sb.append("# --- Cache ---\n");
+        sb.append("# Persist translation cache to disk\n");
+        sb.append("enableCachePersistence = ").append(instance.enableCachePersistence).append("\n");
+        sb.append("# Periodically auto-save the cache\n");
+        sb.append("enablePeriodicSave = ").append(instance.enablePeriodicSave).append("\n");
+        sb.append("# Auto-save interval in ticks (24000 ticks = 20 minutes)\n");
+        sb.append("periodicSaveInterval = ").append(instance.periodicSaveInterval).append("\n");
+        sb.append("\n");
+
+        sb.append("# --- Chat Compact ---\n");
+        sb.append("# Fold duplicate chat messages\n");
+        sb.append("enableChatCompact = ").append(instance.enableChatCompact).append("\n");
+        sb.append("# Time window in seconds for folding duplicates\n");
+        sb.append("compactTimeSeconds = ").append(instance.compactTimeSeconds).append("\n");
+        sb.append("# Color for the fold counter (GRAY, DARK_GRAY, GREEN, etc.)\n");
+        sb.append("compactColorCode = \"").append(escapeToml(instance.compactColorCode)).append("\"\n");
+        sb.append("\n");
+
+        sb.append("# Translation button style: \"NORMAL\" or \"COMPACT\" ([T])\n");
+        sb.append("buttonStyle = \"").append(escapeToml(instance.buttonStyle)).append("\"\n");
+
+        return sb.toString();
+    }
+
+    private static void writeTomlString(StringBuilder sb, String key, String value) {
+        if (value.contains("\n")) {
+            sb.append(key).append(" = '''\n");
+            sb.append(value);
+            if (!value.endsWith("\n")) sb.append("\n");
+            sb.append("'''\n");
+        } else {
+            sb.append(key).append(" = \"").append(escapeToml(value)).append("\"\n");
+        }
+    }
+
+    private static String escapeToml(String s) {
+        return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     public static void forceSave() {

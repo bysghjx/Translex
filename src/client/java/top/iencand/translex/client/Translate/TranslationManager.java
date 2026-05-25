@@ -1,43 +1,113 @@
 package top.iencand.translex.client.Translate;
 
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.HoverEvent;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import top.iencand.translex.client.config.ConfigReloadListener;
 import top.iencand.translex.client.config.ModConfig;
 import top.iencand.translex.client.util.I18nHelper;
 
-import java.io.*;
-import java.lang.reflect.Type;
+import java.io.File;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * TranslationManager 是插件的核心调度中心。
+ * 负责任务的批量缓冲、异步流程控制及协调各子组件。
+ */
 public class TranslationManager {
+    // 任务计数与状态管理
     private final AtomicLong translationCounter = new AtomicLong(0);
-    private final Map<String, String> translationCache = new ConcurrentHashMap<>();
     private final List<PendingTask> requestBuffer = Collections.synchronizedList(new ArrayList<>());
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-    private final TranslationRequester translationRequester = new TranslationRequester();
-    private final Gson gson = new Gson();
+
+    // 组合解耦的功能组件
+    private final TranslationRequester requester = new TranslationRequester();
+    private final TranslationParser parser = new TranslationParser();
+    private final TranslationCacheManager cacheManager = new TranslationCacheManager();
+    private final TranslationProgressTracker progressTracker = new TranslationProgressTracker();
+    private final ChatRenderer renderer = new ChatRenderer();
+    private final ItemPresetLibrary presetLibrary = new ItemPresetLibrary();
+
     private ScheduledFuture<?> scheduledTask = null;
-    private File cacheFile;
 
-    private record PendingTask(String text, String displayId, boolean isIdMode) {}
+    public TranslationManager() {
+        ModConfig.addListener(config -> {});
+        presetLibrary.load();
+    }
 
-    public void translateAsync(int id, String text, String unused) { submitToBatcher(text, String.valueOf(id), true); }
-    public void translateTextAsync(String text, String ctx) { submitToBatcher(text, String.valueOf(translationCounter.incrementAndGet()), false); }
+    /**
+     * 内部任务记录类
+     */
+    private record PendingTask(String text, String displayId, boolean isIdMode,
+                               String itemId, String itemDisplayName) {
+        PendingTask(String text, String displayId, boolean isIdMode) {
+            this(text, displayId, isIdMode, null, null);
+        }
+    }
 
-    private void submitToBatcher(String text, String id, boolean mode) {
+    /**
+     * 初始化持久化层（替代了旧的 setCacheFile 和 loadCache）
+     * 由 TranslexClient 在 onInitializeClient 中调用。
+     */
+    public void initializePersistence(File file) {
+        if (file != null) {
+            cacheManager.init(file);
+        }
+    }
+
+    /**
+     * 异步翻译接口 (针对具有特定 ID 的聊天消息)
+     */
+    public void translateAsync(int id, String text, String unused) {
+        submitToBatcher(text, String.valueOf(id), true);
+    }
+
+    /**
+     * 异步翻译接口 (针对纯文本内容，如 /translex text 命令)
+     */
+    public void translateTextAsync(String text, String ctx) {
+        submitToBatcher(text, "TX_" + translationCounter.incrementAndGet(), false);
+    }
+
+    /**
+     * 异步翻译接口 (物品 Lore 翻译，支持预置库自动录入)
+     */
+    public void translateItemLoreAsync(String text, String context, String itemId, String itemDisplayName) {
         if (text == null || text.isBlank()) return;
-        if (translationCache.containsKey(text)) {
-            showInChat(translationCache.get(text), id, false);
+
+        String cached = cacheManager.get(text);
+        if (cached != null) {
+            renderer.renderResult(text, cached, "IL_" + translationCounter.incrementAndGet());
             return;
         }
+
+        String id = "IL_" + translationCounter.incrementAndGet();
+        progressTracker.showLoading(id);
+        requestBuffer.add(new PendingTask(text, id, false, itemId, itemDisplayName));
+        scheduleFlush();
+    }
+
+    /**
+     * 将翻译请求提交到批量缓冲区
+     */
+    private void submitToBatcher(String text, String id, boolean mode) {
+        if (text == null || text.isBlank()) return;
+
+        // 1. 检查缓存
+        String cached = cacheManager.get(text);
+        if (cached != null) {
+            renderer.renderResult(text, cached, id);
+            return;
+        }
+
+        // 2. 显示加载状态
+        progressTracker.showLoading(id);
+
+        // 3. 加入缓冲区并计划 1.5s 后刷新
         requestBuffer.add(new PendingTask(text, id, mode));
+        scheduleFlush();
+    }
+
+    private void scheduleFlush() {
         synchronized (this) {
             if (scheduledTask == null || scheduledTask.isDone()) {
                 scheduledTask = scheduler.schedule(this::flushBuffer, 1500, TimeUnit.MILLISECONDS);
@@ -45,6 +115,9 @@ public class TranslationManager {
         }
     }
 
+    /**
+     * 批量刷新缓冲区，发送请求
+     */
     private void flushBuffer() {
         List<PendingTask> tasks;
         synchronized (requestBuffer) {
@@ -54,99 +127,68 @@ public class TranslationManager {
         }
 
         List<String> rawTexts = tasks.stream().map(PendingTask::text).toList();
-        // 关键修复：第一个参数是用户Prompt，第二个是数量
-        String instruction = I18nHelper.translate("translex.prompt.batch_instruction",
-                ModConfig.get().translationPrompt, rawTexts.size());
+        String jsonPayload = new com.google.gson.Gson().toJson(rawTexts);
 
-        // 关键修复：将原文列表转为 JSON 作为 User 消息发送
-        String jsonInput = gson.toJson(rawTexts);
-
-        translationRequester.requestTranslation(
+        requester.requestTranslation(
                 ModConfig.get().apiKey, ModConfig.get().apiUrl, ModConfig.get().modelName,
-                instruction, jsonInput, "BATCH", "批量",
+                ModConfig.get().translationPrompt, jsonPayload, "BATCH", "批量",
                 (key, result, id) -> processBatchResult(result, tasks)
         );
     }
 
+    /**
+     * 处理 AI 返回结果
+     */
     private void processBatchResult(String result, List<PendingTask> tasks) {
-        if (result.startsWith("§c")) {
-            tasks.forEach(t -> showInChat(result, t.displayId(), true));
+        tasks.forEach(t -> progressTracker.removeLoading(t.displayId()));
+
+        if (result != null && result.trim().startsWith("§c")) {
+            tasks.forEach(t -> renderer.renderError(result.trim(), t.displayId()));
             return;
         }
 
         try {
-            String jsonPart = extractJsonArray(result);
-            String[] results = gson.fromJson(jsonPart, String[].class);
-
+            String[] results = parser.parse(result, tasks.size());
             for (int i = 0; i < tasks.size(); i++) {
                 PendingTask t = tasks.get(i);
-                if (results != null && i < results.length) {
-                    translationCache.put(t.text(), results[i]);
-                    showInChat(results[i], t.displayId(), false);
-                } else {
-                    showInChat("§c" + I18nHelper.translate("translex.error.parse.mismatch_short"), t.displayId(), true);
+                cacheManager.put(t.text(), results[i]);
+                renderer.renderResult(t.text(), results[i], t.displayId());
+                // 物品 Lore 翻译成功后自动录入预置库
+                if (t.itemId() != null && !t.itemId().isEmpty()) {
+                    presetLibrary.put(t.itemId(), t.itemDisplayName(), results[i]);
                 }
             }
-        } catch (Exception e) {
-            handleParseError(result, tasks);
+        } catch (TranslationParser.ParseException e) {
+            handleParseError(result, tasks, e.getMessage());
         }
     }
 
-    private void showInChat(String translatedText, String displayId, boolean isError) {
-        MinecraftClient.getInstance().execute(() -> {
-            if (MinecraftClient.getInstance().inGameHud == null) return;
-
-            // 1. 构造 Translex (绿色)
-            MutableText modName = Text.literal(I18nHelper.translate("translex.prefix.name"))
-                    .formatted(Formatting.GREEN);
-
-            // 2. 构造 » (蓝色)
-            MutableText separator = Text.literal(I18nHelper.translate("translex.prefix.separator"))
-                    .formatted(Formatting.BLUE);
-
-            // 3. 组合前缀并设置悬停
-            MutableText prefix = modName.append(separator);
-            String hoverKey = isError ? "translex.error.hover" : "translex.hover.metadata";
-            prefix.setStyle(prefix.getStyle().withHoverEvent(
-                    new HoverEvent.ShowText(Text.literal(I18nHelper.translate(hoverKey, displayId)))
-            ));
-
-            // 4. 构造正文内容 (显式设为白色或根据错误设为红色)
-            MutableText content = Text.literal(translatedText);
-
-            if (isError) {
-                content.formatted(Formatting.RED);
-            } else {
-                // 显式设置为 WHITE 确保不会继承前面的 GREEN
-                content.formatted(Formatting.WHITE);
+    /**
+     * 异常处理逻辑
+     */
+    private void handleParseError(String rawResponse, List<PendingTask> tasks, String errorDetail) {
+        net.minecraft.client.MinecraftClient.getInstance().execute(() -> {
+            if (rawResponse != null) {
+                net.minecraft.client.MinecraftClient.getInstance().keyboard.setClipboard(rawResponse);
             }
-
-            // 5. 拼接：[前缀(绿+蓝)] + [内容(白/红)]
-            MutableText finalMessage = prefix.append(content);
-
-            MinecraftClient.getInstance().inGameHud.getChatHud().addMessage(finalMessage);
         });
+
+        String localizedError = I18nHelper.translate("translex.error.parse.json") + " (" + errorDetail + ")";
+        tasks.forEach(t -> renderer.renderError(localizedError, t.displayId()));
     }
 
-    private String extractJsonArray(String input) {
-        // 移除所有颜色代码和 Markdown 干扰
-        String cleaned = input.replaceAll("§[0-9a-fk-or]", "").replaceAll("```json|```", "").trim();
-        int first = cleaned.indexOf("[");
-        int last = cleaned.lastIndexOf("]");
-        return (first != -1 && last != -1) ? cleaned.substring(first, last + 1) : cleaned;
-    }
-
-    private void handleParseError(String raw, List<PendingTask> tasks) {
-        MinecraftClient.getInstance().execute(() -> MinecraftClient.getInstance().keyboard.setClipboard(raw));
-        tasks.forEach(t -> showInChat("§c" + I18nHelper.translate("translex.error.parse.json"), t.displayId(), true));
-    }
-
-    public void setCacheFile(File f) { this.cacheFile = f; }
-    public void loadCache() {
-        if (cacheFile == null || !cacheFile.exists()) return;
-        try (FileReader r = new FileReader(cacheFile)) {
-            Map<String, String> m = gson.fromJson(r, new TypeToken<ConcurrentHashMap<String, String>>(){}.getType());
-            if (m != null) translationCache.putAll(m);
-        } catch (Exception ignored) {}
+    /**
+     * 停用时保存数据
+     */
+    public void shutdown() {
+        if (cacheManager != null) {
+            cacheManager.shutdown();
+        }
+        scheduler.shutdown();
+        try {
+            if (!scheduler.awaitTermination(1, TimeUnit.SECONDS)) {
+                scheduler.shutdownNow();
+            }
+        } catch (InterruptedException ignored) {}
     }
 }
