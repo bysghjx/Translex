@@ -6,10 +6,14 @@
   "translex.prefix.name": "Translex",
   "translex.prefix.separator": " » ",
 
+  "translex.info.processing": "正在翻译",
+  "translex.info.success": "翻译完成",
   "translex.info.config_reloaded": "配置文件已重新加载 API 设置！",
   "translex.info.mode_message_id": "当前启用模式：消息 ID + 按钮 (§e需要重启游戏切换§a)。",
   "translex.info.mode_command_text": "当前启用模式：命令 + 文本 (§e需要重启游戏切换§a)。",
   "translex.info.request_sent": "§e已发送翻译请求，请稍候...§r",
+  "translex.info.preset_hit": "§a预置库命中！§r",
+  "translex.info.preset_saved": "§a已保存到预置库。§r",
 
   "translex.hover.metadata": "§7--- 翻译信息 ---\n§f任务 ID: §e%s\n§f来源: §bAI 自动翻译\n§f状态: §a成功",
   "translex.error.hover": "§7--- 错误详情 ---\n§c%s",
@@ -20,14 +24,48 @@
   "translex.error.not_found": "未找到要翻译的消息 (ID: %s)。可能已过期。",
   "translex.error.content_empty": "消息内容为空，无需翻译。",
   "translex.error.no_item_hovered": "未检测到悬停物品！请先将鼠标指向物品再按键。",
-  "translex.error.usage_legacy": "用法: /translate <消息>",
+  "translex.error.usage_legacy": "用法: /translex text <消息>",
+  "translex.error.mode_not_available": "消息 ID 模式未启用，请使用 /translex text。",
 
-  "translex.error.parse.json": "AI 响应不符合 JSON 格式 (内容已复制到剪贴板)",
-  "translex.error.parse.mismatch_short": "AI 未返回此行内容",
+  "translex.error.network.io": "网络传输故障: %s",
+  "translex.error.network.http": "接口响应异常 (%s)",
 
-  "translex.prompt.batch_instruction": "### USER RULES:\n%s\n\n### TASK:\nTranslate each string in the input JSON array.\n- Input Count: %s\n- Requirements: Return ONLY a JSON string array of the same length.\n- Restrictions: No markdown, no explanations, no conversation.",
+  "translex.error.api.processing": "API 响应处理失败",
+  "translex.error.api.empty_content": "API 返回内容为空",
+  "translex.error.api.json_syntax": "API 响应格式非法 (非标准 JSON)",
+
+  "translex.error.parse.empty": "AI 返回内容为空",
+  "translex.error.parse.null": "AI 返回结果包含空条目",
+  "translex.error.parse.mismatch": "AI 返回了 %s 条结果，但需要 %s 条",
+  "translex.error.parse.mismatch_short": "AI 返回的结果数量与原文不匹配",
+  "translex.error.parse.json": "解析 AI 返回的 JSON 失败，原始数据已复制到剪贴板",
+  "translex.error.parse.json_format": "无法解析 AI 返回的 JSON 格式",
+
+  "translex.error.io.dns": "无法解析服务器地址 (请检查网络或代理配置)",
+  "translex.error.io.connect": "服务器拒绝连接 (请检查防火墙或代理端口)",
+  "translex.error.io.timeout": "请求响应超时 (AI 响应过慢或当前网络不佳)",
+  "translex.error.io.ssl": "安全握手失败 (请检查系统证书或代理抓包设置)",
+
+  "translex.info.retrying": "请求超时，正在重试...",
+
+  "translex.error.http.400": "400: 请求格式错误 (模型或参数无效)",
+  "translex.error.http.401": "401: API Key 无效或过期",
+  "translex.error.http.402": "402: 账户余额不足",
+  "translex.error.http.403": "403: 访问被拒绝 (IP受限或权限不足)",
+  "translex.error.http.404": "404: API 接口地址不存在",
+  "translex.error.http.408": "408: 服务器端请求超时",
+  "translex.error.http.413": "413: 请求内容过大",
+  "translex.error.http.422": "422: 请求参数无效",
+  "translex.error.http.429": "429: 额度不足或请求频率过高",
+  "translex.error.http.500": "500: AI 服务器内部错误",
+  "translex.error.http.502": "502: 网关错误 (上游服务器故障)",
+  "translex.error.http.503": "503: AI 服务当前不可用 (维护中)",
+  "translex.error.http.504": "504: 网关超时 (上游服务器超时)",
 
   "translex.gui.translate_button": "[翻译]",
+  "translex.gui.translate_button_compact": "[T]",
   "translex.gui.translate_button_hover": "§a点击翻译这条消息 (ID: %s)",
-  "translex.gui.translate_button_hover_legacy": "§a点击翻译这条消息"
+  "translex.gui.translate_button_hover_legacy": "§a点击翻译这条消息",
+
+  "translex.info.button_style": "按钮样式已切换为: %s"
 }

@@ -1,0 +1,66 @@
+package top.iencand.translex.client.Translate;
+
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.text.HoverEvent;
+import net.minecraft.text.MutableText;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
+import top.iencand.translex.client.util.I18nHelper;
+
+/**
+ * 专门负责在 Minecraft 聊天栏中渲染翻译结果和错误信息。
+ * 移除了点击复制功能，仅保留悬停信息提示。
+ */
+public class ChatRenderer {
+
+    /**
+     * 渲染正常的翻译结果
+     * @param originalText 翻译前的原句（用于悬停显示）
+     * @param translatedText 翻译后的结果
+     * @param displayId 任务唯一标识 ID
+     */
+    public void renderResult(String originalText, String translatedText, String displayId) {
+        render(originalText, translatedText, displayId, false);
+    }
+
+    /**
+     * 渲染错误信息
+     * @param errorDetail 错误描述内容
+     * @param displayId 任务唯一标识 ID
+     */
+    public void renderError(String errorDetail, String displayId) {
+        render(null, errorDetail, displayId, true);
+    }
+
+    /**
+     * 核心渲染逻辑
+     */
+    private void render(String original, String content, String id, boolean isError) {
+        MinecraftClient.getInstance().execute(() -> {
+            if (MinecraftClient.getInstance().inGameHud == null) return;
+
+            // 1. 构造前缀 [Translex » ]
+            MutableText prefix = Text.literal(I18nHelper.translate("translex.prefix.name")).formatted(Formatting.GREEN)
+                    .append(Text.literal(I18nHelper.translate("translex.prefix.separator")).formatted(Formatting.BLUE));
+
+            // 2. 构造悬停内容 (任务 ID + 原句预览)
+            String hoverKey = isError ? "translex.error.hover" : "translex.hover.metadata";
+            MutableText hoverText = Text.literal(I18nHelper.translate(hoverKey, id));
+
+            if (!isError && original != null) {
+                hoverText.append(Text.literal("\n\n").append(Text.literal(original).formatted(Formatting.GRAY)));
+            }
+
+            // 仅保留悬停事件，移除 ClickEvent
+            prefix.setStyle(prefix.getStyle()
+                    .withHoverEvent(new HoverEvent.ShowText(hoverText))
+            );
+
+            // 3. 构造正文 (错误为红色，正常为白色)
+            MutableText body = Text.literal(content).formatted(isError ? Formatting.RED : Formatting.WHITE);
+
+            // 4. 发送到聊天框
+            MinecraftClient.getInstance().inGameHud.getChatHud().addMessage(prefix.append(body));
+        });
+    }
+}

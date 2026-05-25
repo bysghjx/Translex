@@ -14,11 +14,13 @@ import net.minecraft.text.Text;
 import net.minecraft.item.tooltip.TooltipType;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.LoreComponent;
+import net.minecraft.component.type.NbtComponent;
 import net.minecraft.client.input.KeyInput;
 import org.jetbrains.annotations.NotNull;
 import top.iencand.translex.client.keybinding.ModKeybindings;
+import top.iencand.translex.client.Translate.ItemPresetLibrary;
 import top.iencand.translex.client.Translate.TranslationManager;
-import top.iencand.translex.client.util.I18nHelper; // 导入工具类
+import top.iencand.translex.client.util.I18nHelper;
 
 import java.util.List;
 import java.util.regex.Pattern;
@@ -28,11 +30,13 @@ import java.util.regex.Matcher;
 public class ClientStateManager {
 
     private final TranslationManager translationManager;
+    private final ItemPresetLibrary presetLibrary = new ItemPresetLibrary();
     private ItemStack lastHoveredItem = null;
     private static final Pattern COLOR_CODE_PATTERN = Pattern.compile("§[0-9a-fk-or]");
 
     public ClientStateManager(TranslationManager translationManager) {
         this.translationManager = translationManager;
+        presetLibrary.load();
     }
 
     public void registerEvents() {
@@ -65,6 +69,22 @@ public class ClientStateManager {
                 if (this.lastHoveredItem != null && !this.lastHoveredItem.isEmpty()) {
 
                     String itemDisplayName = this.lastHoveredItem.getName().getString();
+
+                    // 0. 提取 custom_data.id 并查预置库
+                    String itemId = extractItemId(this.lastHoveredItem);
+                    if (itemId != null) {
+                        ItemPresetLibrary.ItemPreset preset = presetLibrary.get(itemId);
+                        if (preset != null) {
+                            if (player != null) {
+                                player.sendMessage(Text.literal(
+                                        I18nHelper.getPrefixed("translex.info.preset_hit")), false);
+                                player.sendMessage(Text.literal("§a" + preset.name), false);
+                                player.sendMessage(Text.literal("§7" + preset.lore), false);
+                            }
+                            return;
+                        }
+                    }
+
                     List<Text> loreLines = getLore(this.lastHoveredItem);
                     String rawLoreText = concatenateLore(loreLines);
 
@@ -84,7 +104,7 @@ public class ClientStateManager {
 
                     // 成功发送请求提示 (使用 translex.info.request_sent)
                     String context = "Lore: " + itemDisplayName;
-                    this.translationManager.translateTextAsync(cleanedLoreText, context);
+                    this.translationManager.translateItemLoreAsync(cleanedLoreText, context, itemId, itemDisplayName);
 
                     if (player != null) {
                         player.sendMessage(Text.literal(I18nHelper.getPrefixed("translex.info.request_sent")), false);
@@ -117,5 +137,11 @@ public class ClientStateManager {
         if (text == null) return null;
         Matcher matcher = COLOR_CODE_PATTERN.matcher(text);
         return matcher.replaceAll("");
+    }
+
+    private static String extractItemId(ItemStack stack) {
+        NbtComponent customData = stack.get(DataComponentTypes.CUSTOM_DATA);
+        if (customData == null) return null;
+        return customData.copyNbt().getString("id").orElse(null);
     }
 }
