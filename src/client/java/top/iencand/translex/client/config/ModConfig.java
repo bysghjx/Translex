@@ -8,6 +8,8 @@ import net.minecraft.util.Formatting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import top.iencand.translex.client.web.ConsoleBroadcaster;
+
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -20,7 +22,7 @@ public class ModConfig {
     public String apiKey = "YOUR_API_KEY_HERE";
     public String apiUrl = "https://api.deepseek.com/chat/completions";
     public String modelName = "deepseek-v4-flash";
-    public String translationPrompt = "Translate to Simplified Chinese (简体中文). Keep item names in English. Keep Minecraft color codes (§) unchanged. Reply with a JSON string array only.";
+    public String translationPrompt = "Translate to Simplified Chinese (简体中文). Keep item names in English. Keep Minecraft color codes (§) unchanged. Keep line breaks in output. Reply with a JSON object with same keys.";
 
     public boolean enableMessageIdSystem = true;
 
@@ -33,12 +35,24 @@ public class ModConfig {
     public String compactColorCode = "GRAY";
     public String buttonStyle = "NORMAL"; // "NORMAL" or "COMPACT"
 
+    /** Output mode: "chat" (default), "temporary", or "permanent". */
+    public String outputMode = "chat";
+
     public Formatting getCompactColor() {
         try {
             return Formatting.byName(compactColorCode.toUpperCase());
         } catch (Exception e) {
             return Formatting.GRAY;
         }
+    }
+
+    public String getOutputMode() {
+        return outputMode;
+    }
+
+    public void setOutputMode(String mode) {
+        this.outputMode = mode;
+        saveConfig();
     }
 
     private static transient final Gson GSON = new GsonBuilder().create();
@@ -89,6 +103,7 @@ public class ModConfig {
         loadConfig();
         ModConfig config = instance;
         if (config != null) {
+            ConsoleBroadcaster.broadcast("INFO", "Config reloaded from disk — " + config.modelName + " @ " + config.apiUrl);
             for (ConfigReloadListener listener : listeners) {
                 try {
                     listener.onConfigReload(config);
@@ -153,6 +168,7 @@ public class ModConfig {
             instance.compactTimeSeconds = toml.getLong("compactTimeSeconds", (long) instance.compactTimeSeconds).intValue();
             instance.compactColorCode = toml.getString("compactColorCode", instance.compactColorCode);
             instance.buttonStyle = toml.getString("buttonStyle", instance.buttonStyle);
+            instance.outputMode = toml.getString("outputMode", instance.outputMode);
 
             checkAndUpgradePrompt();
             LOGGER.info("Config loaded successfully.");
@@ -179,20 +195,21 @@ public class ModConfig {
     }
 
     private static void checkAndUpgradePrompt() {
-        String v1 = "Translate the following Hypixel SkyBlock message to Simplified Chinese. Keep item names (e.g., \"Hyperion\") in English. Only provide the translation.";
-        String v2 = "You are a professional Hypixel SkyBlock translator. \n" +
-                "### CRITICAL RULES:\n" +
-                "1. Target Language: Always translate to **Simplified Chinese (简体中文)**. NEVER use Korean, Japanese, or any other languages.\n" +
-                "2. Input Format: If the input is a JSON array, return ONLY a JSON string array of the SAME length.\n" +
-                "3. Style: Keep item names (e.g., \"Hyperion\") in English. Keep Minecraft color codes (e.g. §7, §a) unchanged.\n" +
-                "4. Format: No markdown, no conversation, no explanations. Reply ONLY with the translated content.";
+        String[] oldDefaults = {
+            "Translate the following Hypixel SkyBlock message to Simplified Chinese. Keep item names (e.g., \"Hyperion\") in English. Only provide the translation.",
+            "You are a professional Hypixel SkyBlock translator. ### CRITICAL RULES: 1. Target Language: Always translate to **Simplified Chinese (简体中文)**. NEVER use Korean, Japanese, or any other languages. 2. Input Format: If the input is a JSON array, return ONLY a JSON string array of the SAME length. 3. Style: Keep item names (e.g., \"Hyperion\") in English. Keep Minecraft color codes (e.g. §7, §a) unchanged. 4. Format: No markdown, no conversation, no explanations. Reply ONLY with the translated content.",
+            "Translate to Simplified Chinese (简体中文). Keep item names in English. Keep Minecraft color codes (§) unchanged. Reply with a JSON string array only."
+        };
 
         if (instance.translationPrompt == null) return;
         String current = normalize(instance.translationPrompt);
-        if (current.equals(normalize(v1)) || current.equals(normalize(v2))) {
-            LOGGER.info("Detected old default prompt. Upgrading to concise version...");
-            instance.translationPrompt = "Translate to Simplified Chinese (简体中文). Keep item names in English. Keep Minecraft color codes (§) unchanged. Reply with a JSON string array only.";
-            saveConfig();
+        for (String old : oldDefaults) {
+            if (current.equals(normalize(old))) {
+                LOGGER.info("Detected old default prompt. Upgrading to current version...");
+                instance.translationPrompt = "Translate to Simplified Chinese (简体中文). Keep item names in English. Keep Minecraft color codes (§) unchanged. Keep line breaks in output. Reply with a JSON object with same keys.";
+                saveConfig();
+                return;
+            }
         }
     }
 
@@ -264,6 +281,10 @@ public class ModConfig {
 
         sb.append("# Translation button style: \"NORMAL\" or \"COMPACT\" ([T])\n");
         sb.append("buttonStyle = \"").append(escapeToml(instance.buttonStyle)).append("\"\n");
+        sb.append("\n");
+
+        sb.append("# Translation output mode: \"chat\", \"temporary\", or \"permanent\"\n");
+        sb.append("outputMode = \"").append(escapeToml(instance.outputMode)).append("\"\n");
 
         return sb.toString();
     }

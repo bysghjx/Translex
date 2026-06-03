@@ -67,5 +67,14 @@
   "translex.gui.translate_button_hover": "§a点击翻译这条消息 (ID: %s)",
   "translex.gui.translate_button_hover_legacy": "§a点击翻译这条消息",
 
-  "translex.info.button_style": "按钮样式已切换为: %s"
+  "translex.info.button_style": "按钮样式已切换为: %s",
+
+  "translex.info.translating_batch": "正在翻译 %s 条内容…",
+  "translex.info.preparing": "正在准备翻译 (%s)…",
+  "translex.info.output_mode": "输出模式已切换为: %s",
+  "translex.info.preset_reset": "已清除预置库条目: %s",
+  "translex.info.preset_reset_all": "已清除所有预置库和临时缓存",
+  "translex.info.temp_mode_hint": "§7[临时模式] 翻译后将缓存在内存，下次悬停物品时展示。§r",
+  "translex.info.perm_mode_hint": "§7[永久模式] 翻译后将存入预置库，以后永久显示。§r",
+  "translex.error.invalid_mode": "无效的输出模式 '%s'，可选: chat, temporary, permanent"
 }

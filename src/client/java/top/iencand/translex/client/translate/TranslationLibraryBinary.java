@@ -1,4 +1,4 @@
-package top.iencand.translex.client.Translate;
+package top.iencand.translex.client.translate;
 
 import com.google.gson.Gson;
 import org.slf4j.Logger;

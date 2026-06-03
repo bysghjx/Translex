@@ -3,13 +3,15 @@ package top.iencand.translex.client;
 import net.fabricmc.api.ClientModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import top.iencand.translex.client.Translate.TranslationManager;
+import top.iencand.translex.client.translate.TranslationManager;
 import top.iencand.translex.client.command.TranslexCommand;
 import top.iencand.translex.client.config.ModConfig;
 import top.iencand.translex.client.keybinding.ModKeybindings;
 import top.iencand.translex.client.listener.ChatTranslateHandler;
 import top.iencand.translex.client.listener.ClientStateManager;
 import top.iencand.translex.client.listener.LegacyChatHandler;
+import top.iencand.translex.client.net.NetworkConfig;
+import top.iencand.translex.client.web.WebServer;
 
 public class TranslexClient implements ClientModInitializer {
 
@@ -20,6 +22,7 @@ public class TranslexClient implements ClientModInitializer {
     private ChatTranslateHandler chatTranslateHandler;
     private LegacyChatHandler legacyChatHandler;
     private ClientStateManager clientStateManager;
+    private WebServer webServer;
 
     @Override
     public void onInitializeClient() {
@@ -60,11 +63,19 @@ public class TranslexClient implements ClientModInitializer {
         clientStateManager = new ClientStateManager(translationManager);
         clientStateManager.registerEvents();
 
+        // 7. 启动内嵌 Web 控制台（Dashboard）
+        webServer = new WebServer();
+        webServer.start();
+
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             LOGGER.info("[{}] Shutting down, saving translation data...", MOD_ID);
+            if (webServer != null) {
+                webServer.stop();
+            }
             if (translationManager != null) {
                 translationManager.shutdown();
             }
+            NetworkConfig.shutdown();
         }));
     }
 

@@ -1,4 +1,4 @@
-package top.iencand.translex.client.Translate;
+package top.iencand.translex.client.translate;
 
 import com.google.gson.*;
 import okhttp3.*;
@@ -10,6 +10,7 @@ import javax.net.ssl.SSLHandshakeException;
 import java.util.concurrent.TimeUnit;
 import net.minecraft.client.MinecraftClient;
 import top.iencand.translex.client.util.I18nHelper;
+import top.iencand.translex.client.web.ConsoleBroadcaster;
 
 /**
  * 负责与 AI 接口进行底层的 HTTP 通信。
@@ -95,6 +96,7 @@ public class TranslationRequester {
                 }
 
                 String errorMsg = "§c" + I18nHelper.translate("translex.error.network.io", detail);
+                ConsoleBroadcaster.broadcast("ERROR", "Network error — " + detail);
                 MinecraftClient.getInstance().execute(() -> callback.onTranslationComplete(cacheKey, errorMsg, displayIdentifier));
             }
 

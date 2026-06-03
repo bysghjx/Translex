@@ -11,16 +11,15 @@ import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
-import net.minecraft.item.tooltip.TooltipType;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.LoreComponent;
-import net.minecraft.component.type.NbtComponent;
 import net.minecraft.client.input.KeyInput;
 import org.jetbrains.annotations.NotNull;
+import top.iencand.translex.client.cache.TemporaryTooltipCache;
+import top.iencand.translex.client.config.ModConfig;
 import top.iencand.translex.client.keybinding.ModKeybindings;
-import top.iencand.translex.client.Translate.ItemPresetLibrary;
-import top.iencand.translex.client.Translate.TranslationManager;
+import top.iencand.translex.client.translate.ItemPresetLibrary;
+import top.iencand.translex.client.translate.TranslationManager;
 import top.iencand.translex.client.util.I18nHelper;
+import top.iencand.translex.client.util.ItemIdExtractor;
 
 import java.util.List;
 import java.util.regex.Pattern;
@@ -30,34 +29,49 @@ import java.util.regex.Matcher;
 public class ClientStateManager {
 
     private final TranslationManager translationManager;
-    private final ItemPresetLibrary presetLibrary = new ItemPresetLibrary();
-    private ItemStack lastHoveredItem = null;
+
+    /** The most recently hovered item stack. Static so the Mixin can read it. */
+    private static volatile ItemStack lastHoveredItem = null;
+
     private static final Pattern COLOR_CODE_PATTERN = Pattern.compile("§[0-9a-fk-or]");
 
     public ClientStateManager(TranslationManager translationManager) {
         this.translationManager = translationManager;
-        presetLibrary.load();
+    }
+
+    /** Called by the tooltip replacement Mixin. */
+    public static ItemStack getLastHoveredItem() {
+        return lastHoveredItem;
     }
 
     public void registerEvents() {
-        // 1. 监听悬停物品
+        // Tooltip callback: track hovered item + temp cache cleanup only.
+        // Actual replacement is done by ScreenTooltipMixin + DrawContextTooltipMixin.
         ItemTooltipCallback.EVENT.register((stack, context, type, lines) -> {
-            this.lastHoveredItem = stack;
+            if (lastHoveredItem != null && lastHoveredItem != stack) {
+                TemporaryTooltipCache.remove(lastHoveredItem);
+            }
+            lastHoveredItem = stack;
         });
 
-        // 2. 监听屏幕初始化与按键
+        // Screen events for key bindings (DO NOT clean temp cache here —
+        // screen refresh would wipe the just-stored translation).
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
-            this.lastHoveredItem = null;
+            lastHoveredItem = null;
 
             if (screen instanceof HandledScreen) {
                 ScreenKeyboardEvents.afterKeyPress(screen).register(this::onGuiKeyPress);
             }
 
             ScreenEvents.remove(screen).register((removedScreen) -> {
-                this.lastHoveredItem = null;
+                lastHoveredItem = null;
             });
         });
     }
+
+    // ---------------------------------------------------------------
+    // Key press handling (translate lore on hotkey)
+    // ---------------------------------------------------------------
 
     private void onGuiKeyPress(Screen screen, KeyInput input) {
         if (ModKeybindings.TRANSLATE_LORE_KEY.matchesKey(input)) {
@@ -65,83 +79,86 @@ public class ClientStateManager {
             ClientPlayerEntity player = mc.player;
 
             if (screen instanceof HandledScreen) {
-                // 检查是否有悬停物品
-                if (this.lastHoveredItem != null && !this.lastHoveredItem.isEmpty()) {
+                if (lastHoveredItem != null && !lastHoveredItem.isEmpty()) {
 
-                    String itemDisplayName = this.lastHoveredItem.getName().getString();
+                    String itemDisplayName = lastHoveredItem.getName().getString();
 
-                    // 0. 提取 custom_data.id 并查预置库
-                    String itemId = extractItemId(this.lastHoveredItem);
+                    // 0. Check ItemPresetLibrary first
+                    String itemId = ItemIdExtractor.extractSkyBlockItemId(lastHoveredItem);
                     if (itemId != null) {
-                        ItemPresetLibrary.ItemPreset preset = presetLibrary.get(itemId);
+                        ItemPresetLibrary.ItemPreset preset = translationManager.getPresetLibrary().get(itemId);
                         if (preset != null) {
                             if (player != null) {
                                 player.sendMessage(Text.literal(
                                         I18nHelper.getPrefixed("translex.info.preset_hit")), false);
                                 player.sendMessage(Text.literal("§a" + preset.name), false);
-                                player.sendMessage(Text.literal("§7" + preset.lore), false);
+                                for (String line : preset.loreLines) {
+                                    player.sendMessage(Text.literal("§7" + line), false);
+                                }
                             }
                             return;
                         }
                     }
 
-                    List<Text> loreLines = getLore(this.lastHoveredItem);
-                    String rawLoreText = concatenateLore(loreLines);
+                    // 1. Get full tooltip via getTooltipFromItem (same method the Mixin hooks).
+                    //    This ensures line count matches between translation and replacement.
+                    List<Text> fullTooltip = Screen.getTooltipFromItem(mc, lastHoveredItem);
 
-                    // 错误处理 1：Lore 为空 (使用 translex.error.content_empty)
-                    if (rawLoreText.isEmpty()) {
-                        if (player != null) player.sendMessage(Text.literal(I18nHelper.getPrefixed("translex.error.content_empty")), false);
+                    if (fullTooltip.isEmpty()) {
+                        if (player != null) player.sendMessage(Text.literal(
+                                I18nHelper.getPrefixed("translex.error.content_empty")), false);
                         return;
                     }
 
-                    String cleanedLoreText = removeColorCodes(rawLoreText).trim();
+                    // 2. Concatenate all lines — includes item name + lore + rarity etc.
+                    String fullText = concatenateTooltip(fullTooltip);
 
-                    // 错误处理 2：清理后为空 (使用 translex.error.content_empty)
-                    if (cleanedLoreText.isEmpty()) {
-                        if (player != null) player.sendMessage(Text.literal(I18nHelper.getPrefixed("translex.error.content_empty")), false);
+                    if (fullText.isBlank()) {
+                        if (player != null) player.sendMessage(Text.literal(
+                                I18nHelper.getPrefixed("translex.error.content_empty")), false);
                         return;
                     }
 
-                    // 成功发送请求提示 (使用 translex.info.request_sent)
-                    String context = "Lore: " + itemDisplayName;
-                    this.translationManager.translateItemLoreAsync(cleanedLoreText, context, itemId, itemDisplayName);
+                    // 3. Submit translation of the FULL tooltip
+                    this.translationManager.translateItemLoreAsync(
+                            fullText, itemId, itemDisplayName, lastHoveredItem);
 
                     if (player != null) {
-                        player.sendMessage(Text.literal(I18nHelper.getPrefixed("translex.info.request_sent")), false);
+                        player.sendMessage(Text.literal(
+                                I18nHelper.getPrefixed("translex.info.request_sent")), false);
+
+                        String mode = ModConfig.get().outputMode;
+                        if ("temporary".equals(mode)) {
+                            player.sendMessage(Text.literal(
+                                    I18nHelper.getPrefixed("translex.info.temp_mode_hint")), false);
+                        } else if ("permanent".equals(mode)) {
+                            player.sendMessage(Text.literal(
+                                    I18nHelper.getPrefixed("translex.info.perm_mode_hint")), false);
+                        }
                     }
 
                 } else {
-                    // 调试/错误：未悬停物品 (使用 translex.error.no_item_hovered)
                     if (player != null) {
-                        player.sendMessage(Text.literal(I18nHelper.getPrefixed("translex.error.no_item_hovered")), false);
+                        player.sendMessage(Text.literal(
+                                I18nHelper.getPrefixed("translex.error.no_item_hovered")), false);
                     }
                 }
             }
         }
     }
 
-    public static @NotNull List<Text> getLore(ItemStack stack) {
-        return stack.getOrDefault(DataComponentTypes.LORE, LoreComponent.DEFAULT).styledLines();
-    }
+    // ---------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------
 
-    public static @NotNull String concatenateLore(@NotNull List<Text> lore) {
-        StringBuilder stringBuilder = new StringBuilder();
-        for (int i = 0; i < lore.size(); i++) {
-            stringBuilder.append(lore.get(i).getString());
-            if (i < lore.size() - 1) stringBuilder.append("\n");
+    private static String concatenateTooltip(List<Text> tooltip) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < tooltip.size(); i++) {
+            String line = tooltip.get(i).getString();
+            // Strip color codes for AI
+            sb.append(COLOR_CODE_PATTERN.matcher(line).replaceAll(""));
+            if (i < tooltip.size() - 1) sb.append("\n");
         }
-        return stringBuilder.toString();
-    }
-
-    private static String removeColorCodes(String text) {
-        if (text == null) return null;
-        Matcher matcher = COLOR_CODE_PATTERN.matcher(text);
-        return matcher.replaceAll("");
-    }
-
-    private static String extractItemId(ItemStack stack) {
-        NbtComponent customData = stack.get(DataComponentTypes.CUSTOM_DATA);
-        if (customData == null) return null;
-        return customData.copyNbt().getString("id").orElse(null);
+        return sb.toString().trim();
     }
 }
