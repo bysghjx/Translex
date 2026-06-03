@@ -68,5 +68,16 @@
   "translex.gui.translate_button_hover": "§aClick to translate this message (ID: %s)",
   "translex.gui.translate_button_hover_legacy": "§aClick to translate this message",
 
-  "translex.info.button_style": "Button style: %s"
+  "translex.info.button_style": "Button style: %s",
+
+  "translex.info.translating_batch": "Translating %s items…",
+  "translex.info.preparing": "Preparing translation (%s)…",
+  "translex.info.output_mode": "Output mode set to: %s",
+  "translex.info.preset_reset": "Cleared preset for: %s",
+  "translex.info.preset_reset_all": "Cleared all presets and temporary cache",
+  "translex.info.temp_mode_hint": "§7[Temp mode] Translation cached in memory, shown on next hover.§r",
+  "translex.info.perm_mode_hint": "§7[Perm mode] Translation saved to preset library permanently.§r",
+  "translex.error.invalid_mode": "Invalid output mode '%s'. Options: chat, temporary, permanent",
+
+  "translex.info.config_opened": "Web config panel opened: %s"
 }

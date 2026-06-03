@@ -4,7 +4,10 @@
   "package": "top.iencand.translex.client.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "ChatHudMixin"
+    "ChatHudMixin",
+    "OrderedTextTooltipComponentAccessor",
+    "ScreenTooltipMixin",
+    "DrawContextTooltipMixin"
   ],
   "injectors": {
     "defaultRequire": 1

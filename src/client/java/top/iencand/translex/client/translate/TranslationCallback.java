@@ -1,4 +1,4 @@
-package top.iencand.translex.client.Translate;
+package top.iencand.translex.client.translate;
 
 // 定义一个回调接口，用于在请求完成后报告结果
 @FunctionalInterface // 可以标记为函数式接口，如果只有一个抽象方法

@@ -1,4 +1,4 @@
-package top.iencand.translex.client.Translate;
+package top.iencand.translex.client.translate;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -79,6 +79,22 @@ public class TranslationCache {
     public void put(String original, String translated) {
         if (original == null || translated == null) return;
         storage.put(normalize(original), translated);
+    }
+
+    /** Get by already-normalized key (skip normalization). */
+    public String getByNormKey(String normKey) {
+        if (normKey == null) return null;
+        String result = storage.get(normKey);
+        if (result != null) {
+            System.out.println("[Translex-Debug] 缓存命中 (normKey)！Key: [" + normKey.substring(0, Math.min(normKey.length(), 20)) + "...]");
+        }
+        return result;
+    }
+
+    /** Put by already-normalized key (skip normalization). */
+    public void putByNormKey(String normKey, String translated) {
+        if (normKey == null || translated == null) return;
+        storage.put(normKey, translated);
     }
 
     /**

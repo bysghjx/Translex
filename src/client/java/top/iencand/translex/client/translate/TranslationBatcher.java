@@ -1,4 +1,4 @@
-package top.iencand.translex.client.Translate;
+package top.iencand.translex.client.translate;
 
 import java.util.*;
 import java.util.concurrent.*;

@@ -1,4 +1,4 @@
-package top.iencand.translex.client.Translate;
+package top.iencand.translex.client.translate;
 
 public enum SkyBlockTerm {
     // 基础属性

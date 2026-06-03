@@ -28,7 +28,9 @@ public class ChatTranslateHandler {
     public static final String TRANSLATE_COMMAND_BASE = "translex translate";
 
     public ChatTranslateHandler() {
-        ClientReceiveMessageEvents.MODIFY_GAME.register((message, pack) -> {
+        ClientReceiveMessageEvents.MODIFY_GAME.register((message, overlay) -> {
+            // 跳过 action bar（overlay = true），不添加 [翻译] 按钮
+            if (overlay) return message;
             if (message == null || message.getString().trim().isEmpty()) {
                 return message;
             }

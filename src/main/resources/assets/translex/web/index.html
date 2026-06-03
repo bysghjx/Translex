@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Translex Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    /* === Tailwind 自定义主题：赛博朋克暗色系 === */
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    'cyber-dark':  '#0a0a0f',
+                    'cyber-card':  '#111118',
+                    'cyber-hover': '#16161f',
+                    'cyber-border':'#1e1e2e',
+                    'cyber-green': '#00ff41',
+                    'cyber-blue':  '#00d4ff',
+                    'cyber-amber': '#fbbf24',
+                    'cyber-red':   '#ff4444',
+                },
+                fontFamily: {
+                    mono: ['"JetBrains Mono"', '"Fira Code"', '"Cascadia Code"', 'Consolas', 'monospace'],
+                },
+            },
+        },
+    }
+    </script>
+    <style>
+    /* ============================================================
+       主题变量 — 支持深色 / 浅色 / 跟随系统
+       ============================================================ */
+    :root, [data-theme="dark"] {
+        --bg-primary:       #0a0a0f;
+        --bg-card:          #111118;
+        --bg-hover:         #16161f;
+        --bg-input:         #0a0a0f;
+        --border-color:     #1e1e2e;
+        --border-hover:     #2a2a40;
+        --text-primary:     #c9cdd4;
+        --text-secondary:   #99a2b0;
+        --text-muted:       #6b7280;
+        --header-bg:        rgba(10,10,15,0.85);
+    }
+    [data-theme="light"] {
+        --bg-primary:       #f1f5f9;
+        --bg-card:          #ffffff;
+        --bg-hover:         #f8fafc;
+        --bg-input:         #ffffff;
+        --border-color:     #e2e8f0;
+        --border-hover:     #cbd5e1;
+        --text-primary:     #1e293b;
+        --text-secondary:   #64748b;
+        --text-muted:       #94a3b8;
+        --header-bg:        rgba(255,255,255,0.88);
+    }
+
+    /* 便利类：模板中替代硬编码 Tailwind 颜色 */
+    .bg-themed      { background: var(--bg-primary); }
+    .bg-card-themed { background: var(--bg-card); }
+
+    /* ============================================================
+       全局 & 赛博朋克风格预设
+       ============================================================ */
+    * { box-sizing: border-box; }
+    body {
+        margin: 0;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        overflow-x: hidden;
+    }
+    /* 隐藏 Vue 未编译的模板标记 */
+    [v-cloak] { display: none !important; }
+
+    /* 卡片玻璃拟态 + 边框发光 */
+    .card-panel {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        transition: border-color .25s;
+    }
+    .card-panel:hover { border-color: var(--border-hover); }
+
+    /* 按钮基础 */
+    .btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 8px 18px; border-radius: 8px; font-size: 14px; font-weight: 500;
+        border: 1px solid transparent; cursor: pointer; transition: all .2s;
+    }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-primary {
+        background: #00d4ff; color: #0a0a0f; border-color: #00d4ff;
+    }
+    .btn-primary:hover:not(:disabled) {
+        background: #00b8e0; border-color: #00b8e0; box-shadow: 0 0 18px rgba(0,212,255,.35);
+    }
+    .btn-ghost {
+        background: transparent; color: var(--text-secondary); border-color: var(--border-color);
+    }
+    .btn-ghost:hover:not(:disabled) {
+        background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-hover);
+    }
+
+    /* 开关 (Toggle Switch) */
+    .toggle-switch {
+        appearance: none; -webkit-appearance: none;
+        width: 44px; height: 24px; min-width: 44px;
+        background: var(--border-color); border-radius: 12px; border: 1px solid var(--border-hover);
+        position: relative; cursor: pointer; transition: background .25s, border-color .25s;
+        margin: 0;
+    }
+    .toggle-switch:checked { background: #00d4ff; border-color: #00d4ff; }
+    .toggle-switch::after {
+        content: ''; position: absolute;
+        top: 2px; left: 2px; width: 18px; height: 18px;
+        background: var(--text-primary); border-radius: 50%;
+        transition: transform .25s, background .25s;
+    }
+    .toggle-switch:checked::after {
+        transform: translateX(20px); background: #0a0a0f;
+    }
+    .toggle-switch:focus-visible { outline: 2px solid #00d4ff; outline-offset: 2px; }
+
+    /* 下拉选择框适配主题 */
+    select.input-field {
+        cursor: pointer;
+        appearance: none; -webkit-appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: right 12px center;
+        padding-right: 36px;
+    }
+    select.input-field option { background: var(--bg-card); color: var(--text-primary); }
+
+    /* 配置区块标题 */
+    .section-title {
+        font-size: 12px; font-weight: 600; color: #00d4ff; letter-spacing: .5px;
+        text-transform: uppercase; margin-bottom: 12px; padding-bottom: 8px;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    /* 主题切换按钮 */
+    .theme-btn {
+        background: none; border: 1px solid var(--border-color); border-radius: 8px;
+        cursor: pointer; font-size: 16px; padding: 4px 10px; transition: background .2s;
+        line-height: 1;
+    }
+    .theme-btn:hover { background: var(--bg-hover); }
+
+    /* 输入框 & 文本域 */
+    .input-field {
+        width: 100%; padding: 10px 14px;
+        background: var(--bg-input); color: var(--text-primary);
+        border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px;
+        outline: none; transition: border-color .2s;
+    }
+    .input-field:focus { border-color: #00d4ff; box-shadow: 0 0 0 3px rgba(0,212,255,.08); }
+    .input-label {
+        display: block; margin-bottom: 6px; font-size: 13px;
+        color: var(--text-secondary); font-weight: 500; letter-spacing: .3px;
+    }
+
+    /* 状态指示灯 */
+    .status-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+    .status-dot.online  { background: #00ff41; box-shadow: 0 0 8px rgba(0,255,65,.5); }
+    .status-dot.offline { background: #ff4444; box-shadow: 0 0 8px rgba(255,68,68,.5); }
+
+    /* Toast 弹出通知 */
+    .toast-wrap {
+        position: fixed; top: 24px; right: 24px; z-index: 9999;
+        display: flex; flex-direction: column; gap: 10px; pointer-events: none;
+    }
+    .toast-item {
+        pointer-events: auto;
+        padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 500;
+        color: #fff; backdrop-filter: blur(12px);
+        animation: toastIn .3s ease-out;
+        box-shadow: 0 8px 32px rgba(0,0,0,.5);
+    }
+    .toast-success { background: rgba(0,255,65,.18); border: 1px solid rgba(0,255,65,.3); }
+    .toast-error   { background: rgba(255,68,68,.18); border: 1px solid rgba(255,68,68,.3); }
+    .toast-info    { background: rgba(0,212,255,.15); border: 1px solid rgba(0,212,255,.3); }
+    @keyframes toastIn { from { opacity:0; transform: translateX(40px); } to { opacity:1; transform: translateX(0); } }
+
+    /* 终端控制台样式（保持深色不变） */
+    .terminal {
+        background: #050508; color: #00ff41;
+        font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+        font-size: 13px; line-height: 1.7;
+        overflow-y: auto; white-space: pre-wrap; word-break: break-all;
+    }
+    .terminal .log-warn  { color: #fbbf24; }
+    .terminal .log-error { color: #ff4444; }
+    .terminal .log-debug { color: #6b7280; }
+    .terminal .log-info  { color: #00ff41; }
+    .terminal::-webkit-scrollbar { width: 6px; }
+    .terminal::-webkit-scrollbar-track { background: #050508; }
+    .terminal::-webkit-scrollbar-thumb { background: #1e1e2e; border-radius: 3px; }
+    .terminal::-webkit-scrollbar-thumb:hover { background: #2a2a40; }
+
+    /* 全局自定义滚动条 */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+
+    /* 手风琴展开动画 */
+    .accordion-body { overflow: hidden; transition: max-height .3s ease; }
+
+    /* 标签页高亮下划线 */
+    .tab-btn {
+        position: relative; padding: 10px 20px; font-size: 14px;
+        color: var(--text-muted); background: none; border: none; cursor: pointer;
+        font-weight: 500; transition: color .2s;
+    }
+    .tab-btn:hover { color: var(--text-primary); }
+    .tab-btn.active { color: #00d4ff; }
+    .tab-btn.active::after {
+        content: ''; position: absolute; bottom: -1px; left: 20px; right: 20px;
+        height: 2px; background: #00d4ff; border-radius: 1px;
+        box-shadow: 0 0 10px rgba(0,212,255,.5);
+    }
+
+    /* 统计卡片数字跳动感 */
+    .stat-value { font-variant-numeric: tabular-nums; }
+
+    /* 脉冲动画(连接状态) */
+    @keyframes pulse-dot {
+        0%,100% { opacity:1; } 50% { opacity:.35; }
+    }
+    .pulse { animation: pulse-dot 1.8s ease-in-out infinite; }
+
+    /* 响应式：移动端单列布局 */
+    @media (max-width: 768px) {
+        .grid-2col { grid-template-columns: 1fr !important; }
+    }
+    </style>
+</head>
+<body>
+
+<!-- ============================================================
+     Vue 3 挂载点
+     ============================================================ -->
+<div id="app" v-cloak>
+
+    <!-- ========== 顶部导航栏 ========== -->
+    <header class="sticky top-0 z-50 backdrop-blur-md border-b border-cyber-border" style="background:var(--header-bg);">
+        <div class="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <span class="text-cyber-blue font-bold text-lg tracking-wide">◈ TRANSLEX</span>
+                <span class="text-xs text-gray-500 hidden sm:inline">| &nbsp;{{ lang.subtitle }}</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <!-- 连接状态 -->
+                <span class="flex items-center gap-1.5 text-xs text-gray-400">
+                    <span :class="['status-dot', connected ? 'online pulse' : 'offline']"></span>
+                    {{ connected ? lang.connected : lang.disconnected }}
+                </span>
+                <!-- 主题切换 -->
+                <button @click="cycleTheme" class="theme-btn" :title="lang.themeHint">{{ themeIcon }}</button>
+                <!-- 语言切换 -->
+                <button @click="switchLanguage"
+                        class="btn btn-ghost text-xs !py-1.5 !px-3"
+                        :title="lang.switchLangHint">
+                    🌐 {{ currentLang.toUpperCase() }}
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ========== 标签页导航 ========== -->
+    <nav class="bg-card-themed border-b border-cyber-border">
+        <div class="max-w-7xl mx-auto px-4 flex gap-0 overflow-x-auto">
+            <button v-for="tab in tabs" :key="tab.id"
+                    @click="activeTab = tab.id"
+                    :class="['tab-btn whitespace-nowrap', { active: activeTab === tab.id }]">
+                {{ tab.label }}
+            </button>
+        </div>
+    </nav>
+
+    <!-- ========== 主内容区 ========== -->
+    <main class="max-w-7xl mx-auto px-4 pb-72 pt-6 space-y-6">
+
+        <!-- ===== Tab 1: 运行看板 (Dashboard) ===== -->
+        <section v-show="activeTab === 'dashboard'" class="space-y-6">
+            <!-- 统计卡片行 -->
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div class="card-panel p-5">
+                    <div class="text-xs text-gray-500 mb-1">{{ lang.cacheHits }}</div>
+                    <div class="stat-value text-3xl font-bold text-cyber-green">{{ metrics.localHits }}</div>
+                </div>
+                <div class="card-panel p-5">
+                    <div class="text-xs text-gray-500 mb-1">{{ lang.aiRequests }}</div>
+                    <div class="stat-value text-3xl font-bold text-cyber-blue">{{ metrics.aiRequests }}</div>
+                </div>
+                <div class="card-panel p-5">
+                    <div class="text-xs text-gray-500 mb-1">{{ lang.tokenSaveRate }}</div>
+                    <div class="stat-value text-3xl font-bold text-cyber-amber">{{ tokenSaveRate }}%</div>
+                </div>
+                <div class="card-panel p-5">
+                    <div class="text-xs text-gray-500 mb-1">{{ lang.avgLatency }}</div>
+                    <div class="stat-value text-3xl font-bold text-gray-200">{{ avgLatency }}<span class="text-sm text-gray-500">ms</span></div>
+                </div>
+                <div class="card-panel p-5">
+                    <div class="text-xs text-gray-500 mb-1">{{ lang.tokensSent }}</div>
+                    <div class="stat-value text-3xl font-bold text-cyber-green">{{ formatTokens(metrics.totalEstimatedTokens) }}</div>
+                </div>
+                <div class="card-panel p-5">
+                    <div class="text-xs text-gray-500 mb-1">{{ lang.tokensSaved }}</div>
+                    <div class="stat-value text-3xl font-bold text-cyber-amber">{{ formatTokens(metrics.totalSavedTokens) }}</div>
+                </div>
+            </div>
+
+            <!-- 图表行：环形图 + 折线图 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="card-panel p-5">
+                    <h3 class="text-sm font-semibold text-gray-300 mb-3">{{ lang.hitRatio }}</h3>
+                    <div ref="donutChartEl" style="height:300px;"></div>
+                </div>
+                <div class="card-panel p-5">
+                    <h3 class="text-sm font-semibold text-gray-300 mb-3">{{ lang.latencyTrend }}</h3>
+                    <div ref="lineChartEl" style="height:300px;"></div>
+                </div>
+            </div>
+
+            <!-- 刷新按钮 -->
+            <div class="flex justify-end">
+                <button @click="fetchMetrics" class="btn btn-ghost text-xs" :disabled="metricsLoading">
+                    {{ metricsLoading ? lang.loading : lang.refresh }}
+                </button>
+            </div>
+        </section>
+
+        <!-- ===== Tab 2: 配置管理 (Config) ===== -->
+        <section v-show="activeTab === 'config'" class="space-y-6">
+
+            <!-- ─── API 连接 ─── -->
+            <div class="card-panel p-5 space-y-4">
+                <div class="section-title">{{ lang.sectionApi }}</div>
+                <!-- API Key -->
+                <div>
+                    <label class="input-label">{{ lang.apiKey }}</label>
+                    <div class="relative">
+                        <input :type="showApiKey ? 'text' : 'password'"
+                               v-model="config.apiKey"
+                               class="input-field pr-12 font-mono"
+                               :placeholder="lang.apiKeyPlaceholder">
+                        <button @click="showApiKey = !showApiKey"
+                                class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-300 px-2 py-1"
+                                :title="showApiKey ? lang.hideKey : lang.showKey">
+                            {{ showApiKey ? '🙈' : '👁' }}
+                        </button>
+                    </div>
+                </div>
+                <!-- API URL -->
+                <div>
+                    <label class="input-label">{{ lang.apiUrl }}</label>
+                    <input type="url" v-model="config.apiUrl" class="input-field font-mono"
+                           :placeholder="lang.apiUrlPlaceholder">
+                </div>
+                <!-- Model -->
+                <div>
+                    <label class="input-label">{{ lang.model }}</label>
+                    <input type="text" v-model="config.model" class="input-field"
+                           :placeholder="lang.modelPlaceholder">
+                </div>
+                <!-- System Prompt -->
+                <div>
+                    <label class="input-label">{{ lang.systemPrompt }}</label>
+                    <textarea v-model="config.systemPrompt" class="input-field" rows="4"
+                              :placeholder="lang.systemPromptPlaceholder"
+                              style="resize:vertical; min-height:80px;"></textarea>
+                </div>
+            </div>
+
+            <!-- ─── 翻译行为 ─── -->
+            <div class="card-panel p-5 space-y-4">
+                <div class="section-title">{{ lang.sectionBehavior }}</div>
+                <!-- enableMessageIdSystem -->
+                <label class="flex items-center justify-between cursor-pointer">
+                    <div>
+                        <div class="text-sm text-gray-300">{{ lang.enableMessageIdSystem }}</div>
+                        <div class="text-xs text-gray-500 mt-0.5">{{ lang.enableMessageIdSystemDesc }}</div>
+                    </div>
+                    <input type="checkbox" v-model="config.enableMessageIdSystem" class="toggle-switch">
+                </label>
+                <!-- buttonStyle -->
+                <div>
+                    <label class="input-label">{{ lang.buttonStyle }}</label>
+                    <select v-model="config.buttonStyle" class="input-field">
+                        <option value="NORMAL">NORMAL</option>
+                        <option value="COMPACT">COMPACT ([T])</option>
+                    </select>
+                </div>
+                <!-- outputMode -->
+                <div>
+                    <label class="input-label">{{ lang.outputMode }}</label>
+                    <select v-model="config.outputMode" class="input-field">
+                        <option value="chat">{{ lang.outputModeChat }}</option>
+                        <option value="temporary">{{ lang.outputModeTemporary }}</option>
+                        <option value="permanent">{{ lang.outputModePermanent }}</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- ─── 缓存设置 ─── -->
+            <div class="card-panel p-5 space-y-4">
+                <div class="section-title">{{ lang.sectionCache }}</div>
+                <label class="flex items-center justify-between cursor-pointer">
+                    <div>
+                        <div class="text-sm text-gray-300">{{ lang.enableCachePersistence }}</div>
+                        <div class="text-xs text-gray-500 mt-0.5">{{ lang.enableCachePersistenceDesc }}</div>
+                    </div>
+                    <input type="checkbox" v-model="config.enableCachePersistence" class="toggle-switch">
+                </label>
+                <label class="flex items-center justify-between cursor-pointer">
+                    <div>
+                        <div class="text-sm text-gray-300">{{ lang.enablePeriodicSave }}</div>
+                        <div class="text-xs text-gray-500 mt-0.5">{{ lang.enablePeriodicSaveDesc }}</div>
+                    </div>
+                    <input type="checkbox" v-model="config.enablePeriodicSave" class="toggle-switch">
+                </label>
+                <!-- periodicSaveInterval (仅当启用时显示) -->
+                <div v-show="config.enablePeriodicSave">
+                    <label class="input-label">{{ lang.periodicSaveInterval }}</label>
+                    <input type="number" v-model.number="config.periodicSaveInterval" class="input-field w-32"
+                           min="1200" max="240000" step="1200">
+                    <div class="text-xs text-gray-500 mt-1">{{ lang.periodicSaveIntervalDesc }}</div>
+                </div>
+            </div>
+
+            <!-- ─── 聊天折叠 ─── -->
+            <div class="card-panel p-5 space-y-4">
+                <div class="section-title">{{ lang.sectionCompact }}</div>
+                <label class="flex items-center justify-between cursor-pointer">
+                    <div>
+                        <div class="text-sm text-gray-300">{{ lang.enableChatCompact }}</div>
+                        <div class="text-xs text-gray-500 mt-0.5">{{ lang.enableChatCompactDesc }}</div>
+                    </div>
+                    <input type="checkbox" v-model="config.enableChatCompact" class="toggle-switch">
+                </label>
+                <div v-show="config.enableChatCompact" class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="input-label">{{ lang.compactTimeSeconds }}</label>
+                        <input type="number" v-model.number="config.compactTimeSeconds" class="input-field"
+                               min="10" max="600" step="10">
+                    </div>
+                    <div>
+                        <label class="input-label">{{ lang.compactColorCode }}</label>
+                        <select v-model="config.compactColorCode" class="input-field">
+                            <option value="GRAY">GRAY</option>
+                            <option value="DARK_GRAY">DARK_GRAY</option>
+                            <option value="GREEN">GREEN</option>
+                            <option value="DARK_GREEN">DARK_GREEN</option>
+                            <option value="AQUA">AQUA</option>
+                            <option value="YELLOW">YELLOW</option>
+                            <option value="GOLD">GOLD</option>
+                            <option value="RED">RED</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 保存 / 重载按钮 -->
+            <div class="flex items-center gap-3">
+                <button @click="saveConfig" class="btn btn-primary" :disabled="configSaving">
+                    <span v-if="configSaving" class="inline-block w-4 h-4 border-2 border-cyber-dark border-t-transparent rounded-full animate-spin"></span>
+                    {{ configSaving ? lang.saving : lang.saveConfig }}
+                </button>
+                <button @click="fetchConfig" class="btn btn-ghost" :disabled="configLoading">
+                    {{ lang.reloadConfig }}
+                </button>
+            </div>
+        </section>
+
+        <!-- ===== Tab 3: 网络抓包 (Network Trace) ===== -->
+        <section v-show="activeTab === 'network'" class="space-y-3">
+            <div v-if="traces.length === 0" class="card-panel p-8 text-center text-gray-500">
+                {{ lang.noTraces }}
+            </div>
+            <div v-for="(trace, idx) in traces" :key="idx" class="card-panel overflow-hidden">
+                <!-- 手风琴标题行 -->
+                <button @click="toggleTrace(idx)"
+                        class="w-full flex items-center gap-4 px-5 py-3.5 text-left hover:bg-cyber-hover transition-colors">
+                    <!-- 状态指示 -->
+                    <span :class="['w-2 h-2 rounded-full shrink-0',
+                        trace.success ? 'bg-cyber-green' : 'bg-cyber-red']"></span>
+                    <!-- 请求概要 -->
+                    <span class="text-xs text-gray-400 font-mono shrink-0 w-20">{{ trace.timestamp }}</span>
+                    <span class="text-xs font-semibold text-gray-300 shrink-0 w-14">{{ trace.method }}</span>
+                    <span class="text-sm text-gray-400 truncate flex-1">{{ trace.url }}</span>
+                    <span class="text-xs text-gray-500 shrink-0">{{ trace.durationMs }}ms</span>
+                    <span class="text-gray-500 shrink-0 transition-transform"
+                          :style="{ transform: trace.expanded ? 'rotate(180deg)' : 'rotate(0deg)' }">▼</span>
+                </button>
+                <!-- 手风琴展开内容 -->
+                <div class="accordion-body" :style="{ maxHeight: trace.expanded ? '600px' : '0px' }">
+                    <div class="px-5 pb-4 space-y-3 border-t border-cyber-border pt-3">
+                        <!-- Request Payload -->
+                        <div>
+                            <div class="text-xs text-cyber-blue font-semibold mb-1.5">{{ lang.requestPayload }}</div>
+                            <pre class="text-xs text-gray-300 rounded-lg p-3 overflow-x-auto font-mono" style="background:var(--bg-input);"
+                                 >{{ formatJson(trace.requestBody) }}</pre>
+                        </div>
+                        <!-- Response Body -->
+                        <div>
+                            <div class="text-xs text-cyber-green font-semibold mb-1.5">{{ lang.responseBody }}</div>
+                            <pre class="text-xs text-gray-300 rounded-lg p-3 overflow-x-auto font-mono" style="background:var(--bg-input);"
+                                 >{{ formatJson(trace.responseBody) }}</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ========== 底部：实时控制台（常驻） ========== -->
+    <footer class="fixed bottom-0 left-0 right-0 z-40 border-t border-cyber-border bg-cyber-dark"
+            :style="{ height: terminalCollapsed ? '36px' : terminalHeight + 'px', transition: 'height .25s ease' }">
+        <!-- 控制台标题栏 -->
+        <div class="flex items-center justify-between h-9 px-4 bg-cyber-card cursor-pointer select-none"
+             @click="terminalCollapsed = !terminalCollapsed">
+            <div class="flex items-center gap-2 text-xs text-gray-400">
+                <span class="text-cyber-green text-sm">〉_</span>
+                <span>{{ lang.liveConsole }}</span>
+                <span class="text-gray-600">({{ consoleLines.length }})</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button @click.stop="clearConsole" class="text-xs text-gray-500 hover:text-gray-300 px-2">{{ lang.clear }}</button>
+                <span class="text-gray-500 text-xs">{{ terminalCollapsed ? '▲' : '▼' }}</span>
+            </div>
+        </div>
+        <!-- 控制台输出区 -->
+        <div ref="terminalEl" class="terminal px-4"
+             :style="{ height: (terminalCollapsed ? 0 : terminalHeight - 36) + 'px' }">
+            <div v-for="(line, i) in consoleLines" :key="i" :class="'log-' + line.level.toLowerCase()">
+                <span class="text-gray-600">[{{ line.timestamp }}]</span> {{ line.message }}
+            </div>
+            <div v-if="consoleLines.length === 0" class="text-gray-600 select-none">
+                {{ lang.consolePlaceholder }}
+            </div>
+        </div>
+    </footer>
+
+    <!-- ========== Toast 通知容器 ========== -->
+    <div class="toast-wrap">
+        <div v-for="(t, i) in toasts" :key="i" :class="['toast-item', 'toast-' + t.type]">
+            {{ t.message }}
+        </div>
+    </div>
+
+</div><!-- /#app -->
+
+<!-- ============================================================
+     第三方库 & 应用逻辑
+     ============================================================ -->
+<!-- ApexCharts -->
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+<!-- Vue 3 生产版 -->
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+
+<script>
+const { createApp } = Vue;
+
+/* ============================================================
+   i18n 轻量多语言字典（中/英）
+   通过 URL 参数 ?lang=zh|en 驱动，默认跟随浏览器语言
+   ============================================================ */
+const I18N_DICT = {
+    zh: {
+        subtitle: 'AI 翻译控制面板',
+        connected: '已连接',
+        disconnected: '未连接',
+        switchLangHint: '切换语言',
+        dashboard: '运行看板',
+        config: '配置管理',
+        network: '网络抓包',
+        liveConsole: '实时控制台',
+        cacheHits: '本地规则命中',
+        aiRequests: 'AI 请求数',
+        tokenSaveRate: 'Token 节省率',
+        avgLatency: '平均延迟',
+        hitRatio: '命中率分布（本地缓存 vs AI 请求）',
+        latencyTrend: '最近 20 次 API 响应延迟趋势',
+        refresh: '刷新数据',
+        loading: '加载中...',
+        reloadConfig: '重新加载',
+        saveConfig: '保存配置',
+        saving: '保存中...',
+        apiKey: 'API Key',
+        apiKeyPlaceholder: '请输入你的 API Key...',
+        showKey: '显示',
+        hideKey: '隐藏',
+        apiUrl: 'API URL',
+        apiUrlPlaceholder: 'https://api.openai.com/v1/chat/completions',
+        model: 'Model（模型标识）',
+        modelPlaceholder: '例如: gpt-4o, claude-sonnet-4-6',
+        systemPrompt: 'System Prompt（系统提示词）',
+        systemPromptPlaceholder: '你是一个 Minecraft 翻译助手...',
+        saveSuccess: '配置已保存并重载成功 ✓',
+        saveFailed: '配置保存失败，请检查后端日志',
+        loadFailed: '加载配置失败',
+        requestPayload: '📤 Request Payload',
+        responseBody: '📥 Response Body',
+        noTraces: '暂无请求记录',
+        consolePlaceholder: '等待后端日志推送... 控制台自动滚动到底部。',
+        clear: '清屏',
+        totalRequests: '总请求数',
+        themeHint: '切换主题 (系统 → 深色 → 浅色 → 系统)',
+        themeLabel: '主题',
+        tokensSent: '已消耗 Token (估算)',
+        tokensSaved: '缓存节省 Token (估算)',
+
+        // -- 配置区块标题 --
+        sectionApi: 'API 连接',
+        sectionBehavior: '翻译行为',
+        sectionCache: '缓存设置',
+        sectionCompact: '聊天折叠',
+
+        // -- 新增字段 --
+        enableMessageIdSystem: 'Message ID 模式',
+        enableMessageIdSystemDesc: '启用基于 Message ID 的翻译系统（关闭则使用旧版文本匹配模式，需重启）',
+        buttonStyle: '按钮样式',
+        outputMode: '翻译输出模式',
+        outputModeChat: 'chat — 直接替换聊天消息',
+        outputModeTemporary: 'temporary — 临时 Tooltip 显示',
+        outputModePermanent: 'permanent — 永久写入物品缓存',
+        enableCachePersistence: '缓存持久化',
+        enableCachePersistenceDesc: '将翻译缓存写入磁盘，重启后保留',
+        enablePeriodicSave: '定时自动保存',
+        enablePeriodicSaveDesc: '每隔一定 tick 自动将缓存刷写到磁盘',
+        periodicSaveInterval: '保存间隔 (ticks)',
+        periodicSaveIntervalDesc: '24000 ticks ≈ 20 分钟。范围: 1200~240000',
+        enableChatCompact: '聊天折叠',
+        enableChatCompactDesc: '将连续重复的聊天消息折叠为一条，附带次数标记',
+        compactTimeSeconds: '折叠时间窗口 (秒)',
+        compactColorCode: '折叠计数器颜色',
+    },
+    en: {
+        subtitle: 'AI Translation Dashboard',
+        connected: 'Connected',
+        disconnected: 'Disconnected',
+        switchLangHint: 'Switch Language',
+        dashboard: 'Dashboard',
+        config: 'Configuration',
+        network: 'Network Trace',
+        liveConsole: 'Live Console',
+        cacheHits: 'Local Cache Hits',
+        aiRequests: 'AI Requests',
+        tokenSaveRate: 'Token Save Rate',
+        avgLatency: 'Avg Latency',
+        hitRatio: 'Hit Ratio (Local Cache vs AI)',
+        latencyTrend: 'Last 20 API Latency Trend',
+        refresh: 'Refresh',
+        loading: 'Loading...',
+        reloadConfig: 'Reload',
+        saveConfig: 'Save Config',
+        saving: 'Saving...',
+        apiKey: 'API Key',
+        apiKeyPlaceholder: 'Enter your API Key...',
+        showKey: 'Show',
+        hideKey: 'Hide',
+        apiUrl: 'API URL',
+        apiUrlPlaceholder: 'https://api.openai.com/v1/chat/completions',
+        model: 'Model',
+        modelPlaceholder: 'e.g. gpt-4o, claude-sonnet-4-6',
+        systemPrompt: 'System Prompt',
+        systemPromptPlaceholder: 'You are a Minecraft translation assistant...',
+        saveSuccess: 'Config saved & reloaded successfully ✓',
+        saveFailed: 'Failed to save config, check backend logs',
+        loadFailed: 'Failed to load config',
+        requestPayload: '📤 Request Payload',
+        responseBody: '📥 Response Body',
+        noTraces: 'No request traces yet',
+        consolePlaceholder: 'Waiting for backend log stream... Console auto-scrolls to bottom.',
+        clear: 'Clear',
+        totalRequests: 'Total Requests',
+        themeHint: 'Switch theme (System → Dark → Light → System)',
+        themeLabel: 'Theme',
+        tokensSent: 'Tokens Consumed (est.)',
+        tokensSaved: 'Tokens Saved by Cache (est.)',
+
+        // -- Config section titles --
+        sectionApi: 'API Connection',
+        sectionBehavior: 'Translation Behavior',
+        sectionCache: 'Cache Settings',
+        sectionCompact: 'Chat Compact',
+
+        // -- Additional fields --
+        enableMessageIdSystem: 'Message ID Mode',
+        enableMessageIdSystemDesc: 'Use Message-ID-based translation (disable for legacy text matching, requires restart)',
+        buttonStyle: 'Button Style',
+        outputMode: 'Translation Output Mode',
+        outputModeChat: 'chat — Replace chat message inline',
+        outputModeTemporary: 'temporary — Show as temporary tooltip',
+        outputModePermanent: 'permanent — Save permanently to item cache',
+        enableCachePersistence: 'Cache Persistence',
+        enableCachePersistenceDesc: 'Write translation cache to disk, survives restarts',
+        enablePeriodicSave: 'Periodic Auto-Save',
+        enablePeriodicSaveDesc: 'Flush cache to disk at regular intervals',
+        periodicSaveInterval: 'Save Interval (ticks)',
+        periodicSaveIntervalDesc: '24000 ticks ≈ 20 min. Range: 1200–240000',
+        enableChatCompact: 'Chat Compact',
+        enableChatCompactDesc: 'Fold duplicate chat messages with a repeat counter',
+        compactTimeSeconds: 'Compact Time Window (seconds)',
+        compactColorCode: 'Compact Counter Color',
+    },
+};
+
+/* ============================================================
+   Vue 3 应用主逻辑
+   ============================================================ */
+createApp({
+    data() {
+        return {
+            /* ---- i18n ---- */
+            currentLang: 'zh',
+            lang: I18N_DICT.zh,
+
+            /* ---- 标签页 ---- */
+            activeTab: 'dashboard',
+            tabs: [
+                { id: 'dashboard', label: '' },
+                { id: 'config',    label: '' },
+                { id: 'network',   label: '' },
+            ],
+
+            /* ---- 连接状态 ---- */
+            connected: false,
+            /** 安全 Token，由 /translex config 命令传入 URL，防御本地其他应用访问 API */
+            token: '',
+
+            /* ---- 主题 ---- */
+            theme: 'system',   // 'system' | 'dark' | 'light'
+            themeMedia: null,  // matchMedia 监听器引用
+
+            /* ---- 配置表单 ---- */
+            config: {
+                apiKey:                '',
+                apiUrl:                '',
+                model:                 '',
+                systemPrompt:          '',
+                enableMessageIdSystem: true,
+                buttonStyle:           'NORMAL',
+                outputMode:            'chat',
+                enableCachePersistence: true,
+                enablePeriodicSave:    true,
+                periodicSaveInterval:  24000,
+                enableChatCompact:     true,
+                compactTimeSeconds:    120,
+                compactColorCode:      'GRAY',
+            },
+            showApiKey: false,
+            configLoading: false,
+            configSaving: false,
+
+            /* ---- 运行指标 ---- */
+            metrics: {
+                localHits:            0,
+                aiRequests:           0,
+                totalEstimatedTokens: 0,
+                totalSavedTokens:     0,
+                latencyHistory:       [],
+            },
+            metricsLoading: false,
+
+            /* ---- 网络抓包 ---- */
+            traces: [],
+
+            /* ---- 控制台 ---- */
+            consoleLines: [],
+            terminalCollapsed: false,
+            terminalHeight: 260,
+
+            /* ---- 图表实例 ---- */
+            donutChart: null,
+            lineChart: null,
+
+            /* ---- Toast ---- */
+            toasts: [],
+
+            /* ---- SSE ---- */
+            eventSource: null,
+            metricsTimer: null,
+            tracesTimer: null,
+        };
+    },
+
+    computed: {
+        /** Token 节省率 = 本地命中 / (本地命中 + AI请求) */
+        tokenSaveRate() {
+            const total = this.metrics.localHits + this.metrics.aiRequests;
+            if (total === 0) return 0;
+            return Math.round((this.metrics.localHits / total) * 100);
+        },
+        /** 平均延迟 */
+        avgLatency() {
+            const arr = this.metrics.latencyHistory;
+            if (!arr || arr.length === 0) return 0;
+            const sum = arr.reduce((a,b) => a + b, 0);
+            return Math.round(sum / arr.length);
+        },
+        /** 主题图标 */
+        themeIcon() {
+            if (this.theme === 'system') return '🌓';
+            if (this.theme === 'dark')   return '🌙';
+            return '☀️';
+        },
+    },
+
+    watch: {
+        /** 标签页切换时，触发表格重绘（ApexCharts 在隐藏容器中需手动 resize） */
+        activeTab(val) {
+            if (val === 'dashboard') {
+                this.$nextTick(() => {
+                    if (this.donutChart) this.donutChart.updateOptions({}, false, false);
+                    if (this.lineChart)  this.lineChart.updateOptions({}, false, false);
+                });
+            }
+        },
+        /** i18n 响应式更新标签页文案 */
+        currentLang() {
+            this.updateTabLabels();
+        },
+    },
+
+    methods: {
+        /* ==================== i18n ==================== */
+        detectLanguage() {
+            const params = new URLSearchParams(window.location.search);
+
+            // 提取安全 Token
+            this.token = params.get('token') || '';
+
+            const urlLang = params.get('lang');
+            if (urlLang && I18N_DICT[urlLang]) {
+                this.currentLang = urlLang;
+            } else {
+                // 回退到浏览器语言
+                const nav = navigator.language || '';
+                this.currentLang = nav.startsWith('zh') ? 'zh' : 'en';
+            }
+            this.lang = I18N_DICT[this.currentLang];
+            this.updateTabLabels();
+        },
+        /** 构造带安全 Token 的 API URL */
+        apiUrl(path) {
+            const sep = path.includes('?') ? '&' : '?';
+            return path + sep + 'token=' + encodeURIComponent(this.token);
+        },
+        switchLanguage() {
+            this.currentLang = this.currentLang === 'zh' ? 'en' : 'zh';
+            this.lang = I18N_DICT[this.currentLang];
+            // 同步更新 URL 参数（不刷新页面）
+            const url = new URL(window.location);
+            url.searchParams.set('lang', this.currentLang);
+            window.history.replaceState({}, '', url);
+        },
+        updateTabLabels() {
+            this.tabs[0].label = this.lang.dashboard;
+            this.tabs[1].label = this.lang.config;
+            this.tabs[2].label = this.lang.network;
+        },
+
+        /* ==================== 主题切换 ==================== */
+        /** 初始化主题：优先 localStorage，回退跟随系统 */
+        initTheme() {
+            const saved = localStorage.getItem('translex-theme');
+            if (saved === 'dark' || saved === 'light') {
+                this.theme = saved;
+            } else {
+                this.theme = 'system';
+            }
+            this.applyTheme();
+
+            // 监听系统主题变化
+            this.themeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+            this.themeMedia.addEventListener('change', () => {
+                if (this.theme === 'system') this.applyTheme();
+            });
+        },
+        /** 循环切换：system → dark → light → system */
+        cycleTheme() {
+            if (this.theme === 'system') this.theme = 'dark';
+            else if (this.theme === 'dark') this.theme = 'light';
+            else this.theme = 'system';
+            localStorage.setItem('translex-theme', this.theme);
+            this.applyTheme();
+        },
+        /** 将当前主题应用到 <html> 的 data-theme 属性 */
+        applyTheme() {
+            const isDark = this.theme === 'dark'
+                || (this.theme === 'system' && this.themeMedia && this.themeMedia.matches);
+            document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+        },
+
+        /* ==================== Toast 通知 ==================== */
+        showToast(message, type) {
+            type = type || 'info';
+            const t = { message, type, id: Date.now() };
+            this.toasts.push(t);
+            // 3 秒后自动移除
+            setTimeout(() => {
+                const idx = this.toasts.indexOf(t);
+                if (idx > -1) this.toasts.splice(idx, 1);
+            }, 3500);
+        },
+
+        /* ==================== API 调用 ==================== */
+        /** GET /api/config —— 拉取当前 TOML 内存配置的 JSON 表示 */
+        async fetchConfig() {
+            this.configLoading = true;
+            try {
+                const res = await fetch(this.apiUrl('/api/config'));
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                this.config.apiKey                = data.apiKey                || '';
+                this.config.apiUrl                = data.apiUrl                || data.api_url || '';
+                this.config.model                 = data.model                 || '';
+                this.config.systemPrompt          = data.systemPrompt          || data.system_prompt || '';
+                this.config.enableMessageIdSystem = data.enableMessageIdSystem ?? true;
+                this.config.buttonStyle           = data.buttonStyle           || 'NORMAL';
+                this.config.outputMode            = data.outputMode            || 'chat';
+                this.config.enableCachePersistence = data.enableCachePersistence ?? true;
+                this.config.enablePeriodicSave    = data.enablePeriodicSave    ?? true;
+                this.config.periodicSaveInterval  = data.periodicSaveInterval  || 24000;
+                this.config.enableChatCompact     = data.enableChatCompact     ?? true;
+                this.config.compactTimeSeconds    = data.compactTimeSeconds    || 120;
+                this.config.compactColorCode      = data.compactColorCode      || 'GRAY';
+            } catch (err) {
+                console.error('[Translex] fetchConfig error:', err);
+                this.showToast(this.lang.loadFailed, 'error');
+            } finally {
+                this.configLoading = false;
+            }
+        },
+
+        /** POST /api/config/save —— 提交配置 JSON，后端负责写回 TOML 并热重载 */
+        async saveConfig() {
+            this.configSaving = true;
+            try {
+                const res = await fetch(this.apiUrl('/api/config/save'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        apiKey:                this.config.apiKey,
+                        apiUrl:                this.config.apiUrl,
+                        model:                 this.config.model,
+                        systemPrompt:          this.config.systemPrompt,
+                        enableMessageIdSystem: this.config.enableMessageIdSystem,
+                        buttonStyle:           this.config.buttonStyle,
+                        outputMode:            this.config.outputMode,
+                        enableCachePersistence: this.config.enableCachePersistence,
+                        enablePeriodicSave:    this.config.enablePeriodicSave,
+                        periodicSaveInterval:  this.config.periodicSaveInterval,
+                        enableChatCompact:     this.config.enableChatCompact,
+                        compactTimeSeconds:    this.config.compactTimeSeconds,
+                        compactColorCode:      this.config.compactColorCode,
+                    }),
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const result = await res.json();
+                if (result.success) {
+                    this.showToast(this.lang.saveSuccess, 'success');
+                } else {
+                    throw new Error(result.error || 'unknown');
+                }
+            } catch (err) {
+                console.error('[Translex] saveConfig error:', err);
+                this.showToast(this.lang.saveFailed, 'error');
+            } finally {
+                this.configSaving = false;
+            }
+        },
+
+        /** GET /api/metrics —— 获取运行期可观测性指标 */
+        async fetchMetrics() {
+            this.metricsLoading = true;
+            try {
+                const res = await fetch(this.apiUrl('/api/metrics'));
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                this.metrics.localHits            = data.localHits            || data.local_hits || 0;
+                this.metrics.aiRequests           = data.aiRequests           || data.ai_requests || 0;
+                this.metrics.totalEstimatedTokens = data.totalEstimatedTokens || data.total_estimated_tokens || 0;
+                this.metrics.totalSavedTokens     = data.totalSavedTokens     || data.total_saved_tokens || 0;
+                this.metrics.latencyHistory       = data.latencyHistory       || data.latency_history || [];
+                // 更新图表数据
+                this.updateCharts();
+            } catch (err) {
+                console.error('[Translex] fetchMetrics error:', err);
+            } finally {
+                this.metricsLoading = false;
+            }
+        },
+
+        /** GET /api/traces —— 获取最近 N 条网络抓包记录 */
+        async fetchTraces() {
+            try {
+                const res = await fetch(this.apiUrl('/api/traces'));
+                if (!res.ok) return;
+                const data = await res.json();
+                if (Array.isArray(data)) {
+                    // 保留之前的展开状态
+                    const oldMap = {};
+                    this.traces.forEach(t => { oldMap[t.id] = t.expanded; });
+                    this.traces = data.map((t, i) => ({
+                        ...t,
+                        id:       t.id || t.timestamp + '_' + i,
+                        expanded: oldMap[t.id] || false,
+                    }));
+                }
+            } catch (err) {
+                // traces 端点可能尚未实现，静默失败
+            }
+        },
+
+        /* ==================== 图表 (ApexCharts) ==================== */
+        /** 初始化环形图（本地命中 vs AI 请求） */
+        initDonutChart() {
+            const opts = {
+                chart: {
+                    type: 'donut',
+                    height: 300,
+                    background: 'transparent',
+                    animations: { enabled: true, easing: 'easeinout', speed: 800 },
+                },
+                series: [this.metrics.localHits, this.metrics.aiRequests],
+                labels: [this.lang.cacheHits, this.lang.aiRequests],
+                colors: ['#00ff41', '#00d4ff'],
+                stroke: { width: 0 },
+                plotOptions: {
+                    pie: {
+                        donut: {
+                            size: '68%',
+                            labels: {
+                                show: true,
+                                total: {
+                                    show: true,
+                                    label: this.lang.totalRequests,
+                                    color: '#99a2b0',
+                                    fontSize: '13px',
+                                    fontFamily: 'inherit',
+                                },
+                                value: {
+                                    color: '#e0e4ea',
+                                    fontSize: '28px',
+                                    fontFamily: 'inherit',
+                                    fontWeight: 600,
+                                },
+                            },
+                        },
+                    },
+                },
+                dataLabels: { enabled: false },
+                legend: {
+                    position: 'bottom',
+                    labels: { colors: '#99a2b0', useSeriesColors: false },
+                    fontSize: '13px',
+                    fontFamily: 'inherit',
+                },
+                tooltip: {
+                    theme: 'dark',
+                    style: { fontSize: '13px', fontFamily: 'inherit' },
+                },
+            };
+            if (this.$refs.donutChartEl) {
+                this.donutChart = new ApexCharts(this.$refs.donutChartEl, opts);
+                this.donutChart.render();
+            }
+        },
+
+        /** 初始化折线图（最近 20 次延迟趋势） */
+        initLineChart() {
+            const opts = {
+                chart: {
+                    type: 'line',
+                    height: 300,
+                    background: 'transparent',
+                    animations: { enabled: true, easing: 'easeinout', speed: 800 },
+                    toolbar: { show: false },
+                    zoom: { enabled: false },
+                },
+                series: [{
+                    name: this.lang.avgLatency + ' (ms)',
+                    data: this.buildLatencySeries(),
+                }],
+                colors: ['#00d4ff'],
+                stroke: { curve: 'smooth', width: 2.5 },
+                fill: {
+                    type: 'gradient',
+                    gradient: {
+                        shade: 'dark',
+                        type: 'vertical',
+                        opacityFrom: .35,
+                        opacityTo: 0,
+                        stops: [0, 100],
+                        colorStops: [
+                            { offset: 0,   color: '#00d4ff', opacity: .35 },
+                            { offset: 100, color: '#00d4ff', opacity: 0 },
+                        ],
+                    },
+                },
+                markers: { size: 3, colors: ['#00d4ff'], strokeWidth: 0 },
+                grid: {
+                    borderColor: '#1e1e2e',
+                    strokeDashArray: 4,
+                    xaxis: { lines: { show: false } },
+                },
+                xaxis: {
+                    categories: this.buildLatencyXLabels(),
+                    labels: { style: { colors: '#6b7280', fontSize: '11px', fontFamily: 'inherit' } },
+                    axisBorder: { color: '#1e1e2e' },
+                    axisTicks: { show: false },
+                },
+                yaxis: {
+                    labels: {
+                        style: { colors: '#6b7280', fontSize: '11px', fontFamily: 'inherit' },
+                        formatter: (v) => v + 'ms',
+                    },
+                },
+                tooltip: {
+                    theme: 'dark',
+                    style: { fontSize: '13px', fontFamily: 'inherit' },
+                    y: { formatter: (v) => v + ' ms' },
+                },
+                noData: {
+                    text: this.lang.noTraces,
+                    style: { color: '#6b7280', fontSize: '14px', fontFamily: 'inherit' },
+                },
+            };
+            if (this.$refs.lineChartEl) {
+                this.lineChart = new ApexCharts(this.$refs.lineChartEl, opts);
+                this.lineChart.render();
+            }
+        },
+
+        /** 构建延迟序列（最近 20 个点，不足补 0） */
+        buildLatencySeries() {
+            const arr = this.metrics.latencyHistory || [];
+            const recent = arr.slice(-20);
+            // 不足 20 个时前端不补零，直接返回实际数据，图表更真实
+            return recent.length > 0 ? recent : [0];
+        },
+        buildLatencyXLabels() {
+            const arr = this.metrics.latencyHistory || [];
+            const len = Math.min(arr.length, 20);
+            if (len === 0) return [''];
+            return Array.from({ length: len }, (_, i) => '#' + (i + 1));
+        },
+
+        /** 更新图表数据（指标刷新后调用） */
+        updateCharts() {
+            if (this.donutChart) {
+                this.donutChart.updateSeries([this.metrics.localHits, this.metrics.aiRequests]);
+            }
+            if (this.lineChart) {
+                this.lineChart.updateSeries([{ name: this.lang.avgLatency + ' (ms)', data: this.buildLatencySeries() }]);
+                this.lineChart.updateOptions({ xaxis: { categories: this.buildLatencyXLabels() } });
+            }
+        },
+
+        /* ==================== SSE 实时控制台 ==================== */
+        connectSSE() {
+            if (this.eventSource) {
+                this.eventSource.close();
+            }
+            try {
+                this.eventSource = new EventSource(this.apiUrl('/api/debug/console'));
+                this.eventSource.onopen = () => {
+                    this.connected = true;
+                };
+                // 默认 message 事件（部分后端不指定 event 类型）
+                this.eventSource.onmessage = (e) => {
+                    this.appendConsoleLine(e.data);
+                };
+                // 具名 log 事件
+                this.eventSource.addEventListener('log', (e) => {
+                    this.appendConsoleLine(e.data);
+                });
+                this.eventSource.onerror = () => {
+                    this.connected = false;
+                    // EventSource 原生支持自动重连，无需手动干预
+                };
+            } catch (err) {
+                console.error('[Translex] SSE connect error:', err);
+                this.connected = false;
+            }
+        },
+
+        /** 解析 SSE 推送的日志行并追加到控制台 */
+        appendConsoleLine(raw) {
+            let parsed;
+            try {
+                parsed = JSON.parse(raw);
+            } catch (_) {
+                // 非 JSON 格式的直接作为纯文本
+                parsed = {
+                    timestamp: new Date().toLocaleTimeString('en-GB', { hour12: false }),
+                    level: 'INFO',
+                    message: raw,
+                };
+            }
+            const line = {
+                timestamp: parsed.timestamp || new Date().toLocaleTimeString('en-GB', { hour12: false }),
+                level:    (parsed.level || 'INFO').toUpperCase(),
+                message:  parsed.message || '',
+            };
+            this.consoleLines.push(line);
+
+            // 保留最近 500 行，防止内存溢出
+            if (this.consoleLines.length > 500) {
+                this.consoleLines.splice(0, this.consoleLines.length - 500);
+            }
+            // 自动滚动到底部
+            this.$nextTick(() => {
+                const el = this.$refs.terminalEl;
+                if (el) {
+                    // 如果用户在底部附近（30px 以内），自动滚到底
+                    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+                    if (nearBottom) el.scrollTop = el.scrollHeight;
+                }
+            });
+        },
+
+        /** 清空控制台 */
+        clearConsole() {
+            this.consoleLines = [];
+        },
+
+        /* ==================== 网络抓包手风琴 ==================== */
+        toggleTrace(idx) {
+            if (idx >= 0 && idx < this.traces.length) {
+                this.traces[idx].expanded = !this.traces[idx].expanded;
+            }
+        },
+
+        /* ==================== 工具函数 ==================== */
+        /** 格式化 JSON 为缩进可读字符串 */
+        formatJson(obj) {
+            if (!obj) return '—';
+            try {
+                if (typeof obj === 'string') {
+                    const parsed = JSON.parse(obj);
+                    return JSON.stringify(parsed, null, 2);
+                }
+                return JSON.stringify(obj, null, 2);
+            } catch (_) {
+                return String(obj);
+            }
+        },
+
+        /** Token 数量格式化（≥1000 → 1.2k，≥1M → 3.5M） */
+        formatTokens(n) {
+            if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+            if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'k';
+            return String(n);
+        },
+    },
+
+    /* ==================== 生命周期 ==================== */
+    mounted() {
+        // 0. 主题初始化（尽可能早，避免闪烁）
+        this.initTheme();
+        // 1. 语言检测
+        this.detectLanguage();
+        // 2. 初始化图表（需要 DOM 就绪）
+        this.$nextTick(() => {
+            this.initDonutChart();
+            this.initLineChart();
+        });
+        // 3. 首次数据拉取
+        this.fetchConfig();
+        this.fetchMetrics();
+        this.fetchTraces();
+        // 4. 建立 SSE 连接
+        this.connectSSE();
+        // 5. 定时轮询指标（每 5 秒）
+        this.metricsTimer = setInterval(() => this.fetchMetrics(), 5000);
+        // 6. 定时轮询抓包记录（每 3 秒）
+        this.tracesTimer = setInterval(() => this.fetchTraces(), 3000);
+    },
+
+    beforeUnmount() {
+        // 清理资源
+        if (this.eventSource) this.eventSource.close();
+        if (this.donutChart)  this.donutChart.destroy();
+        if (this.lineChart)   this.lineChart.destroy();
+        if (this.metricsTimer) clearInterval(this.metricsTimer);
+        if (this.tracesTimer)  clearInterval(this.tracesTimer);
+    },
+}).mount('#app');
+</script>
+
+</body>
+</html>
