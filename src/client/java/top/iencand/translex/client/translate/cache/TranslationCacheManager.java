@@ -1,6 +1,4 @@
-package top.iencand.translex.client.translate;
-
-import top.iencand.translex.client.util.NumberNormalizer;
+package top.iencand.translex.client.translate.cache;
 
 import java.io.File;
 import java.util.HashMap;
@@ -12,12 +10,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
+import top.iencand.translex.client.config.ModConfig;
+import top.iencand.translex.client.translate.model.SkyBlockTerm;
+import top.iencand.translex.client.web.ConsoleBroadcaster;
 
 /**
- * Cache management with glossary overlay, number-normalized keys,
- * and incremental disk shard persistence.
+ * 缓存管理器，提供词库覆盖、数字规范化键值和增量磁盘分片持久化。
  *
- * <p>Lookup order: Glossary → Memory (L1) → Disk shard (L2) → AI.</p>
+ * <p>查找顺序：词库 → 内存 (L1) → 磁盘分片 (L2) → AI。</p>
  */
 public class TranslationCacheManager {
     private final TranslationCache cache = new TranslationCache();
@@ -46,9 +46,9 @@ public class TranslationCacheManager {
         cache.load(file);
     }
 
-    // ---------------------------------------------------------------
-    // Glossary (public so TranslationSplitter can use it)
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 词库查询（公开给 TranslationSplitter 使用）
+    // ===============================================================
 
     public String applyGlossary(String text) {
         if (text == null) return null;
@@ -59,44 +59,44 @@ public class TranslationCacheManager {
         return result;
     }
 
-    // ---------------------------------------------------------------
-    // Cache key generation (with number normalization)
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 缓存键生成（含数字规范化）
+    // ===============================================================
 
     /**
-     * Build a normalized cache key: strip colors → lowercase → collapse
-     * whitespace → normalize digits to {num}.
+     * 构建规范化的缓存键：去除颜色码 → 转小写 → 压缩空白。
+     * 注意：不进行数字规范化，价格敏感的行必须精确匹配。
      */
     public String buildCacheKey(String original) {
         if (original == null) return "";
-        String step1 = original.replaceAll("§[0-9a-fk-or]", "").trim();
-        String step2 = step1.toLowerCase().replaceAll("\\s+", " ");
-        String step3 = step2.replaceAll("\\d+", "{num}");
-        return step3;
+        return original.replaceAll("§[0-9a-fk-or]", "").trim()
+                .toLowerCase().replaceAll("\\s+", " ");
     }
 
-    // ---------------------------------------------------------------
-    // Cache access (template-based)
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 缓存访问（模板化）
+    // ===============================================================
 
-    /** Look up by pre-computed cache key. */
+    /** 通过预计算的缓存键查询。 */
     public String getByCacheKey(String cacheKey) {
         if (cacheKey == null || cacheKey.isEmpty()) return null;
+        if (ModConfig.get().debug) return null; // debug mode: force cache miss
         return cache.getByNormKey(cacheKey);
     }
 
-    /** Store with pre-computed cache key. */
+    /** 用预计算的缓存键存储。 */
     public void putByCacheKey(String cacheKey, String translated) {
         if (cacheKey == null || translated == null) return;
+        if (ModConfig.get().debug) return; // debug mode: don't cache
         cache.putByNormKey(cacheKey, translated);
         dirtyShards.add(cache.getShardId(cacheKey));
     }
 
-    // ---------------------------------------------------------------
-    // Legacy compat (without number normalization)
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 旧版兼容（不含数字规范化）
+    // ===============================================================
 
-    /** @deprecated Use {@link #getByCacheKey}({@link #buildCacheKey}(original)) instead. */
+    /** @deprecated 请使用 {@link #getByCacheKey}({@link #buildCacheKey}(original)) 替代。 */
     @Deprecated
     public String get(String original) {
         if (original == null || original.isEmpty()) return null;
@@ -105,7 +105,7 @@ public class TranslationCacheManager {
         return cache.get(original);
     }
 
-    /** @deprecated Use {@link #putByCacheKey} instead. */
+    /** @deprecated 请使用 {@link #putByCacheKey} 替代。 */
     @Deprecated
     public void put(String original, String translated) {
         if (original == null || translated == null) return;
@@ -114,9 +114,9 @@ public class TranslationCacheManager {
         dirtyShards.add(cache.getShardId(normKey));
     }
 
-    // ---------------------------------------------------------------
-    // Persistence
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 持久化
+    // ===============================================================
 
     private void autoSave() {
         if (cacheFile == null || dirtyShards.isEmpty()) return;
@@ -142,16 +142,16 @@ public class TranslationCacheManager {
     }
 
     public void shutdown() {
-        System.out.println("[Translex] Forcing cache save before shutdown...");
+        ConsoleBroadcaster.broadcast("INFO", "Forcing cache save before shutdown...");
         try {
             saveScheduler.shutdown();
             forceSave();
             if (!saveScheduler.awaitTermination(1, TimeUnit.SECONDS)) {
                 saveScheduler.shutdownNow();
             }
-            System.out.println("[Translex] Cache saved successfully.");
+            ConsoleBroadcaster.broadcast("INFO", "Cache saved successfully.");
         } catch (Exception e) {
-            System.err.println("[Translex] Shutdown save failed: " + e.getMessage());
+            ConsoleBroadcaster.broadcast("ERROR", "Shutdown save failed: " + e.getMessage());
             e.printStackTrace();
         }
     }

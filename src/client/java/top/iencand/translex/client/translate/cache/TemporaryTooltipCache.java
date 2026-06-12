@@ -1,4 +1,4 @@
-package top.iencand.translex.client.cache;
+package top.iencand.translex.client.translate.cache;
 
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
@@ -8,9 +8,9 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Holds translated tooltip lines as plain {@code List<String>} for
- * "temporary" output mode. Styles are applied at replacement time
- * from the original tooltip lines, not stored here.
+ * 临时工具提示缓存，用于 "temporary" 输出模式。
+ * 以纯文本 {@code List<String>} 存储翻译后的物品说明行。
+ * 样式在替换时从原始工具提示行中读取，不在此处存储。
  */
 public class TemporaryTooltipCache {
     private static final ConcurrentHashMap<String, List<String>> CACHE = new ConcurrentHashMap<>();

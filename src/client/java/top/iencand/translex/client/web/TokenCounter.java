@@ -6,8 +6,8 @@ package top.iencand.translex.client.web;
  *
  * <p>规则：
  * <ul>
- *   <li>CJK / 日韩文字 ≈ 1.5 token/字符</li>
- *   <li>其余文字按空格分词 ≈ 1.3 token/词</li>
+ *   <li>CJK / 日韩文字 ≈ 1.5 Token/字符</li>
+ *   <li>其余文字按空格分词 ≈ 1.3 Token/词</li>
  * </ul>
  */
 public final class TokenCounter {
@@ -15,9 +15,9 @@ public final class TokenCounter {
     private TokenCounter() {}
 
     /**
-     * 估算给定文本的 token 数。
+     * 估算给定文本的 Token 数。
      * @param text 输入文本，可为 null
-     * @return 估算 token 数，null / 空字符串返回 0
+     * @return 估算 Token 数，null / 空字符串返回 0
      */
     public static long estimate(String text) {
         if (text == null || text.isEmpty()) return 0;

@@ -11,6 +11,7 @@ import net.minecraft.text.HoverEvent;
 import net.minecraft.util.Formatting;
 import top.iencand.translex.client.config.ButtonStyleManager;
 import top.iencand.translex.client.util.I18nHelper;
+import top.iencand.translex.client.web.ConsoleBroadcaster;
 
 @Environment(EnvType.CLIENT)
 public class LegacyChatHandler {
@@ -18,7 +19,7 @@ public class LegacyChatHandler {
     public static final String TRANSLATE_COMMAND_BASE = "translex text";
 
     public LegacyChatHandler() {
-        System.out.println("[Translex] LegacyChatHandler created.");
+        ConsoleBroadcaster.broadcast("DEBUG", "旧版聊天处理器已创建");
     }
 
     public void registerEvents() {
@@ -31,10 +32,15 @@ public class LegacyChatHandler {
                 return message;
             }
 
-            // 1. Get full message text
+            // 如果翻译按钮被禁用，直接返回原始消息
+            if (!ButtonStyleManager.isButtonEnabled()) {
+                return message;
+            }
+
+            // 1. 获取完整消息文本
             String fullMessageText = message.getString();
 
-            // 2. Create button based on style
+            // 2. 根据样式创建按钮
             String buttonText;
             Formatting buttonColor;
             if (ButtonStyleManager.isCompact()) {
@@ -47,21 +53,21 @@ public class LegacyChatHandler {
             MutableText translateButton = Text.literal(buttonText)
                     .setStyle(Style.EMPTY.withColor(buttonColor));
 
-            // 3. Hover event
+            // 3. 设置悬停事件
             String hoverText = I18nHelper.translate("translex.gui.translate_button_hover_legacy");
             HoverEvent hoverEvent = new HoverEvent.ShowText(Text.literal(hoverText));
 
-            // 4. Click event
+            // 4. 设置点击事件（直接发送完整消息文本到命令）
             ClickEvent clickEvent = new ClickEvent.RunCommand(
                     "/" + TRANSLATE_COMMAND_BASE + " " + fullMessageText
             );
 
-            // 5. Apply style
+            // 5. 应用样式
             translateButton.setStyle(translateButton.getStyle()
                     .withHoverEvent(hoverEvent)
                     .withClickEvent(clickEvent));
 
-            // 6. Combine message
+            // 6. 组合消息
             MutableText newMessageWithButton = Text.empty();
             if (ButtonStyleManager.isCompact()) {
                 newMessageWithButton.append(message);
@@ -76,6 +82,6 @@ public class LegacyChatHandler {
             return newMessageWithButton;
         });
 
-        System.out.println("[Translex] LegacyChatHandler registered for MODIFY_GAME event.");
+        ConsoleBroadcaster.broadcast("DEBUG", "旧版聊天处理器已注册 MODIFY_GAME 事件");
     }
 }

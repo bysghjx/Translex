@@ -1,4 +1,4 @@
-package top.iencand.translex.client.translate;
+package top.iencand.translex.client.translate.render;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.hud.ChatHudLine;
@@ -11,15 +11,14 @@ import top.iencand.translex.client.util.I18nHelper;
 import java.util.List;
 
 /**
- * Manages "loading…" progress indicators in the chat HUD.
- * Supports showing, updating (remove + re-add), and removing messages
- * identified by a hidden marker tag.
+ * 管理聊天 HUD 中的"加载中…"进度指示器。
+ * 支持显示、更新（删除后重新添加）和移除通过隐藏标记标签识别的消息。
  */
 public class TranslationProgressTracker {
     private static final String LOADING_MARKER_PREFIX = "​§8[TL_WAIT_";
     private static final String LOADING_MARKER_SUFFIX = "]​";
 
-    /** Show a new loading message. */
+    /** 显示新的加载中消息 */
     public void showLoading(String displayId) {
         MinecraftClient.getInstance().execute(() -> {
             if (MinecraftClient.getInstance().inGameHud == null) return;
@@ -39,8 +38,8 @@ public class TranslationProgressTracker {
     }
 
     /**
-     * Update an existing loading message in-place.
-     * Removes the old marker and adds a new message with the updated text.
+     * 原地更新已有的加载中消息。
+     * 删除旧的标记后添加一条带有更新文本的新消息。
      */
     public void updateLoading(String displayId, String newText) {
         MinecraftClient.getInstance().execute(() -> {
@@ -68,7 +67,7 @@ public class TranslationProgressTracker {
         });
     }
 
-    /** Remove a loading message by its display ID. */
+    /** 通过显示 ID 移除加载中消息 */
     public void removeLoading(String displayId) {
         MinecraftClient.getInstance().execute(() -> {
             if (MinecraftClient.getInstance().inGameHud == null) return;

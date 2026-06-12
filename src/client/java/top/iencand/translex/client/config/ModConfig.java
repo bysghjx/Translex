@@ -22,9 +22,10 @@ public class ModConfig {
     public String apiKey = "YOUR_API_KEY_HERE";
     public String apiUrl = "https://api.deepseek.com/chat/completions";
     public String modelName = "deepseek-v4-flash";
-    public String translationPrompt = "Translate to Simplified Chinese (简体中文). Keep item names in English. Keep Minecraft color codes (§) unchanged. Keep line breaks in output. Reply with a JSON object with same keys.";
+    public String translationPrompt = "You are a translator. Translate each value in the JSON object to Simplified Chinese (简体中文). Preserve placeholders like {0} {1} exactly as-is. Keep proper names and item names in English. Keep § color codes. Reply with a JSON object with the same keys.";
 
-    public boolean enableMessageIdSystem = true;
+    /** 翻译模式："auto"（自动）、"message_id"（基于消息ID）或 "text"（纯文本）。默认为 "auto"。 */
+    public String translationMode = "auto";
 
     public boolean enableCachePersistence = true;
     public boolean enablePeriodicSave = true;
@@ -35,9 +36,19 @@ public class ModConfig {
     public String compactColorCode = "GRAY";
     public String buttonStyle = "NORMAL"; // "NORMAL" or "COMPACT"
 
-    /** Output mode: "chat" (default), "temporary", or "permanent". */
+    /** 是否在聊天消息中添加翻译按钮。默认为 true。 */
+    public boolean enableTranslateButton = true;
+
+    /** 输出模式："chat"（聊天栏，默认）、"temporary"（临时）或 "permanent"（永久保存）。 */
     public String outputMode = "chat";
 
+    /** 调试模式：启动时自动打开 Web 仪表盘的网络抓包页面。 */
+    public boolean debug = false;
+
+    /**
+     * 获取折叠计数使用的颜色。
+     * @return Formatting 枚举值，解析失败时返回 GRAY
+     */
     public Formatting getCompactColor() {
         try {
             return Formatting.byName(compactColorCode.toUpperCase());
@@ -50,6 +61,7 @@ public class ModConfig {
         return outputMode;
     }
 
+    /** 设置输出模式并立即保存配置 */
     public void setOutputMode(String mode) {
         this.outputMode = mode;
         saveConfig();
@@ -160,7 +172,13 @@ public class ModConfig {
             instance.apiUrl = toml.getString("apiUrl", instance.apiUrl);
             instance.modelName = toml.getString("modelName", instance.modelName);
             instance.translationPrompt = toml.getString("translationPrompt", instance.translationPrompt);
-            instance.enableMessageIdSystem = toml.getBoolean("enableMessageIdSystem", instance.enableMessageIdSystem);
+            // translationMode: new string field, with backward compat for old boolean enableMessageIdSystem
+            if (toml.contains("translationMode")) {
+                instance.translationMode = toml.getString("translationMode", instance.translationMode);
+            } else if (toml.contains("enableMessageIdSystem")) {
+                boolean old = toml.getBoolean("enableMessageIdSystem", true);
+                instance.translationMode = old ? "message_id" : "text";
+            }
             instance.enableCachePersistence = toml.getBoolean("enableCachePersistence", instance.enableCachePersistence);
             instance.enablePeriodicSave = toml.getBoolean("enablePeriodicSave", instance.enablePeriodicSave);
             instance.periodicSaveInterval = toml.getLong("periodicSaveInterval", (long) instance.periodicSaveInterval).intValue();
@@ -168,7 +186,9 @@ public class ModConfig {
             instance.compactTimeSeconds = toml.getLong("compactTimeSeconds", (long) instance.compactTimeSeconds).intValue();
             instance.compactColorCode = toml.getString("compactColorCode", instance.compactColorCode);
             instance.buttonStyle = toml.getString("buttonStyle", instance.buttonStyle);
+            instance.enableTranslateButton = toml.getBoolean("enableTranslateButton", instance.enableTranslateButton);
             instance.outputMode = toml.getString("outputMode", instance.outputMode);
+            instance.debug = toml.getBoolean("debug", instance.debug);
 
             checkAndUpgradePrompt();
             LOGGER.info("Config loaded successfully.");
@@ -195,18 +215,32 @@ public class ModConfig {
     }
 
     private static void checkAndUpgradePrompt() {
+        // Every previous factory-default or upgrade-target prompt that should
+        // be refreshed to the current default when detected.
         String[] oldDefaults = {
+            // v1.x — original deepseek prompt
             "Translate the following Hypixel SkyBlock message to Simplified Chinese. Keep item names (e.g., \"Hyperion\") in English. Only provide the translation.",
+            // v1.x — professional SkyBlock translator (long)
             "You are a professional Hypixel SkyBlock translator. ### CRITICAL RULES: 1. Target Language: Always translate to **Simplified Chinese (简体中文)**. NEVER use Korean, Japanese, or any other languages. 2. Input Format: If the input is a JSON array, return ONLY a JSON string array of the SAME length. 3. Style: Keep item names (e.g., \"Hyperion\") in English. Keep Minecraft color codes (e.g. §7, §a) unchanged. 4. Format: No markdown, no conversation, no explanations. Reply ONLY with the translated content.",
-            "Translate to Simplified Chinese (简体中文). Keep item names in English. Keep Minecraft color codes (§) unchanged. Reply with a JSON string array only."
+            // v1.x — short JSON-array variant
+            "Translate to Simplified Chinese (简体中文). Keep item names in English. Keep Minecraft color codes (§) unchanged. Reply with a JSON string array only.",
+            // v1.x — minimal JSON-object variant
+            "Translate to Simplified Chinese. Preserve: item names, color codes (§), line breaks. Output JSON only.",
+            // v1.6.x — previous upgrade target (stale, needs re-upgrade)
+            "You are a translator. Translate each value in the JSON object to Simplified Chinese (简体中文). Keep proper names and item names in English. Keep color codes (§). Reply with a JSON object with the same keys — every value translated.",
         };
 
         if (instance.translationPrompt == null) return;
         String current = normalize(instance.translationPrompt);
+
+        // Auto-skip: if already at the current default, nothing to do
+        String currentDefault = normalize(new ModConfig().translationPrompt);
+        if (current.equals(currentDefault)) return;
+
         for (String old : oldDefaults) {
             if (current.equals(normalize(old))) {
                 LOGGER.info("Detected old default prompt. Upgrading to current version...");
-                instance.translationPrompt = "Translate to Simplified Chinese (简体中文). Keep item names in English. Keep Minecraft color codes (§) unchanged. Keep line breaks in output. Reply with a JSON object with same keys.";
+                instance.translationPrompt = new ModConfig().translationPrompt;
                 saveConfig();
                 return;
             }
@@ -214,7 +248,8 @@ public class ModConfig {
     }
 
     /**
-     * 折叠所有空白字符到单个空格，消除 TOML 多行字符串和 JSON 转义的格式差异。
+     * 折叠所有空白字符到单个空格，用于消除 TOML 多行字符串和 JSON 转义之间的格式差异，
+     * 以便准确比较提示词内容是否匹配旧版本默认值。
      */
     private static String normalize(String s) {
         return s.replaceAll("\\s+", " ").trim();
@@ -257,8 +292,8 @@ public class ModConfig {
         writeTomlString(sb, "translationPrompt", instance.translationPrompt);
         sb.append("\n");
 
-        sb.append("# Use Message ID mode (true) or Legacy text mode (false) — requires restart\n");
-        sb.append("enableMessageIdSystem = ").append(instance.enableMessageIdSystem).append("\n");
+        sb.append("# Translation mode: \"auto\" (default), \"message_id\", or \"text\"\n");
+        sb.append("translationMode = \"").append(escapeToml(instance.translationMode)).append("\"\n");
         sb.append("\n");
 
         sb.append("# --- Cache ---\n");
@@ -283,8 +318,16 @@ public class ModConfig {
         sb.append("buttonStyle = \"").append(escapeToml(instance.buttonStyle)).append("\"\n");
         sb.append("\n");
 
+        sb.append("# Show translation button on chat messages\n");
+        sb.append("enableTranslateButton = ").append(instance.enableTranslateButton).append("\n");
+        sb.append("\n");
+
         sb.append("# Translation output mode: \"chat\", \"temporary\", or \"permanent\"\n");
         sb.append("outputMode = \"").append(escapeToml(instance.outputMode)).append("\"\n");
+        sb.append("\n");
+
+        sb.append("# Debug mode: auto-open web dashboard to network traces tab on startup\n");
+        sb.append("debug = ").append(instance.debug).append("\n");
 
         return sb.toString();
     }

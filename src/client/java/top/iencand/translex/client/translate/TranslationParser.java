@@ -11,63 +11,23 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * Cleans and parses AI raw responses into structured data.
- * Supports both JSON arrays (legacy) and JSON dicts (current).
+ * 解析器：清理并解析 AI 原始返回结果，将其转换为带索引的翻译条目映射表。
+ * 支持 JSON 对象和 JSON 数组两种格式。
  */
 public class TranslationParser {
     private static final Gson GSON = new Gson();
     private static final Type MAP_TYPE = new TypeToken<Map<String, String>>() {}.getType();
 
-    /** Matches the innermost JSON array. */
-    private static final Pattern JSON_ARRAY_PATTERN = Pattern.compile("\\[\\s*\".*\"\\s*\\]", Pattern.DOTALL);
-
-    /** Defensive: fix unquoted numeric keys: {@code {0:"text"}} → {@code {"0":"text"}}. */
+    /** 防御性修复：处理 AI 返回中未加引号的数字键：{@code {0:"text"}} → {@code {"0":"text"}} */
     private static final Pattern UNQUOTED_KEY_RE = Pattern.compile("\\{(\\d+):");
 
-    // ---------------------------------------------------------------
-    // Legacy array parsing (for backwards compat)
-    // ---------------------------------------------------------------
-
-    public String[] parse(String rawResponse, int expectedSize) throws ParseException {
-        if (rawResponse == null || rawResponse.isBlank()) {
-            throw new ParseException(I18nHelper.translate("translex.error.parse.empty"));
-        }
-
-        String cleaned = rawResponse
-                .replaceAll("§[0-9a-fk-or]", "")
-                .replaceAll("```json|```", "")
-                .trim();
-
-        String jsonPart = extractJsonArray(cleaned);
-
-        try {
-            String[] results = GSON.fromJson(jsonPart, String[].class);
-            if (results == null) {
-                throw new ParseException(I18nHelper.translate("translex.error.parse.null"));
-            }
-            if (results.length != expectedSize) {
-                throw new ParseException(I18nHelper.translate("translex.error.parse.mismatch", expectedSize, results.length));
-            }
-            return results;
-        } catch (JsonSyntaxException e) {
-            if (expectedSize == 1) {
-                return new String[]{cleaned};
-            }
-            throw new ParseException(I18nHelper.translate("translex.error.parse.json_format"), e);
-        }
-    }
-
-    // ---------------------------------------------------------------
-    // Dict format parsing (current primary path)
-    // ---------------------------------------------------------------
-
     /**
-     * Parse the AI response as a dictionary {@code {"0":"text","1":"text"}}.
-     * Applies defensive cleaning before parsing.
+     * 将 AI 响应解析为字典 {@code {"0":"text","1":"text"}}。
+     * 应用防御性清理并对每个值执行 {@link TranslationPostProcessor#clean} 后处理。
      *
-     * @param rawResponse  raw AI response body
-     * @param expectedSize hint for validation
-     * @return map of index → translated text
+     * @param rawResponse  AI 原始响应文本
+     * @param expectedSize 期望的条目数（仅用于 API 兼容，未实际使用）
+     * @return 索引 → 翻译文本的映射表
      */
     public Map<Integer, String> parseDict(String rawResponse, int expectedSize) throws ParseException {
         if (rawResponse == null || rawResponse.isBlank()) {
@@ -93,7 +53,8 @@ public class TranslationParser {
             if (stringMap != null) {
                 for (Map.Entry<String, String> e : stringMap.entrySet()) {
                     try {
-                        result.put(Integer.parseInt(e.getKey()), e.getValue());
+                        result.put(Integer.parseInt(e.getKey()),
+                                TranslationPostProcessor.clean(e.getValue()));
                     } catch (NumberFormatException ignored) {}
                 }
             }
@@ -101,12 +62,11 @@ public class TranslationParser {
         } catch (JsonSyntaxException e) {
             // Fallback: try as array
             try {
-                String jsonPart = extractJsonArray(cleaned);
-                String[] arr = GSON.fromJson(jsonPart, String[].class);
+                String[] arr = GSON.fromJson(cleaned, String[].class);
                 Map<Integer, String> result = new LinkedHashMap<>();
                 if (arr != null) {
                     for (int i = 0; i < arr.length; i++) {
-                        result.put(i, arr[i]);
+                        result.put(i, TranslationPostProcessor.clean(arr[i]));
                     }
                 }
                 return result;
@@ -120,16 +80,7 @@ public class TranslationParser {
     // Helpers
     // ---------------------------------------------------------------
 
-    private String extractJsonArray(String input) {
-        int first = input.indexOf("[");
-        int last = input.lastIndexOf("]");
-        if (first != -1 && last != -1 && last > first) {
-            return input.substring(first, last + 1);
-        }
-        return input;
-    }
-
-    private String extractJsonObject(String input) {
+    private static String extractJsonObject(String input) {
         int first = input.indexOf("{");
         int last = input.lastIndexOf("}");
         if (first != -1 && last != -1 && last > first) {

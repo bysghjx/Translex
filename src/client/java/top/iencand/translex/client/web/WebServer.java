@@ -4,6 +4,9 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.reflect.TypeToken;
+import top.iencand.translex.client.spam.SpamFilterData;
+import top.iencand.translex.client.spam.SpamHider;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import net.fabricmc.loader.api.FabricLoader;
@@ -19,6 +22,8 @@ import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.util.List;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 基于 JDK 内置 {@link HttpServer} 的轻量 Web 控制台（零外部依赖）。
@@ -57,15 +62,20 @@ public class WebServer {
     public static String getToken() { return securityToken; }
 
     private HttpServer server;
+    private ScheduledExecutorService metricsSaver;
+    private Path metricsFile;
 
     public void start() {
         int port = resolvePort();
         boolean isDev = resolveDevMode();
         String webRoot = isDev ? resolveDevWebRoot() : null;
 
-        actualPort = port;
-        securityToken = generateToken();
-        LOGGER.info("[Web] Security token: {}", securityToken);
+        // 指标持久化路径
+        metricsFile = FabricLoader.getInstance().getConfigDir()
+                .resolve("translex").resolve("metrics.json");
+
+        // 从磁盘恢复上次运行的指标
+        MetricsCollector.get().loadFromFile(metricsFile);
 
         try {
             server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
@@ -77,6 +87,8 @@ public class WebServer {
             server.createContext("/api/traces",        this::handleGetTraces);
             server.createContext("/api/debug/console", this::handleSseConsole);
             // 兜底 — 静态文件服务
+            server.createContext("/api/spam-filters",      this::handleGetSpamFilters);
+            server.createContext("/api/spam-filters/save", this::handleSaveSpamFilters);
             server.createContext("/", ex -> handleStatic(ex, isDev, webRoot));
 
             server.setExecutor(Executors.newCachedThreadPool(r -> {
@@ -86,14 +98,37 @@ public class WebServer {
             }));
             server.start();
 
+            // 仅启动成功后才赋值，避免 /translex config 打开死链
+            actualPort = port;
+            securityToken = generateToken();
+
+            // 每 5 分钟自动落盘
+            metricsSaver = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "Translex-MetricsSaver");
+                t.setDaemon(true);
+                return t;
+            });
+            metricsSaver.scheduleAtFixedRate(
+                    () -> MetricsCollector.get().saveToFile(metricsFile),
+                    5, 5, TimeUnit.MINUTES);
+
             LOGGER.info("[Web] {} mode — Dashboard at http://localhost:{}",
                     isDev ? "DEV" : "PROD", port);
+            LOGGER.info("[Web] Security token: {}", securityToken);
         } catch (IOException e) {
             LOGGER.error("[Web] Failed to start HTTP server", e);
         }
     }
 
     public void stop() {
+        // 停掉定时保存，立刻落盘一次
+        if (metricsSaver != null) {
+            metricsSaver.shutdown();
+            try { metricsSaver.awaitTermination(2, TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
+        }
+        if (metricsFile != null) {
+            MetricsCollector.get().saveToFile(metricsFile);
+        }
         if (server != null) {
             server.stop(1);
             LOGGER.info("[Web] Server stopped.");
@@ -113,8 +148,9 @@ public class WebServer {
         json.addProperty("apiUrl",                cfg.apiUrl);
         json.addProperty("model",                 cfg.modelName);
         json.addProperty("systemPrompt",          cfg.translationPrompt);
-        json.addProperty("enableMessageIdSystem", cfg.enableMessageIdSystem);
+        json.addProperty("translationMode", cfg.translationMode);
         json.addProperty("buttonStyle",           cfg.buttonStyle);
+        json.addProperty("enableTranslateButton",  cfg.enableTranslateButton);
         json.addProperty("outputMode",            cfg.outputMode);
         json.addProperty("enableCachePersistence",cfg.enableCachePersistence);
         json.addProperty("enablePeriodicSave",    cfg.enablePeriodicSave);
@@ -122,6 +158,7 @@ public class WebServer {
         json.addProperty("enableChatCompact",     cfg.enableChatCompact);
         json.addProperty("compactTimeSeconds",    cfg.compactTimeSeconds);
         json.addProperty("compactColorCode",      cfg.compactColorCode);
+        json.addProperty("debug",               cfg.debug);
         sendJson(ex, 200, json);
     }
 
@@ -142,8 +179,9 @@ public class WebServer {
             if (input.has("apiUrl"))       { cfg.apiUrl = input.get("apiUrl").getAsString(); changed = true; }
             if (input.has("model"))        { cfg.modelName = input.get("model").getAsString(); changed = true; }
             if (input.has("systemPrompt")) { cfg.translationPrompt = input.get("systemPrompt").getAsString(); changed = true; }
-            if (input.has("enableMessageIdSystem"))  { cfg.enableMessageIdSystem = input.get("enableMessageIdSystem").getAsBoolean(); changed = true; }
+            if (input.has("translationMode"))    { cfg.translationMode = input.get("translationMode").getAsString(); changed = true; }
             if (input.has("buttonStyle"))   { cfg.buttonStyle = input.get("buttonStyle").getAsString(); changed = true; }
+            if (input.has("enableTranslateButton")) { cfg.enableTranslateButton = input.get("enableTranslateButton").getAsBoolean(); changed = true; }
             if (input.has("outputMode"))    { cfg.outputMode = input.get("outputMode").getAsString(); changed = true; }
             if (input.has("enableCachePersistence")) { cfg.enableCachePersistence = input.get("enableCachePersistence").getAsBoolean(); changed = true; }
             if (input.has("enablePeriodicSave"))     { cfg.enablePeriodicSave = input.get("enablePeriodicSave").getAsBoolean(); changed = true; }
@@ -151,11 +189,12 @@ public class WebServer {
             if (input.has("enableChatCompact"))      { cfg.enableChatCompact = input.get("enableChatCompact").getAsBoolean(); changed = true; }
             if (input.has("compactTimeSeconds"))     { cfg.compactTimeSeconds = input.get("compactTimeSeconds").getAsInt(); changed = true; }
             if (input.has("compactColorCode"))       { cfg.compactColorCode = input.get("compactColorCode").getAsString(); changed = true; }
+            if (input.has("debug"))               { cfg.debug = input.get("debug").getAsBoolean(); changed = true; }
 
             if (changed) {
                 ModConfig.forceSave();
                 ModConfig.reload();
-                ConsoleBroadcaster.broadcast("INFO", "Config saved & reloaded via Dashboard");
+                // reload() 内部已 broadcast "Config reloaded from disk"，不再重复
                 JsonObject result = new JsonObject();
                 result.addProperty("success", true);
                 result.addProperty("message", "Config saved & reloaded");
@@ -176,8 +215,12 @@ public class WebServer {
         JsonObject json = new JsonObject();
         json.addProperty("localHits",            mc.getLocalHits());
         json.addProperty("aiRequests",           mc.getAiRequests());
-        json.addProperty("totalEstimatedTokens", mc.getTotalEstimatedTokens());
-        json.addProperty("totalSavedTokens",     mc.getTotalSavedTokens());
+        json.addProperty("totalEstimatedTokens",     mc.getTotalEstimatedTokens());
+        json.addProperty("totalSavedTokens",         mc.getTotalSavedTokens());
+        json.addProperty("totalActualPromptTokens",  mc.getTotalActualPromptTokens());
+        json.addProperty("totalActualCompletionTokens", mc.getTotalActualCompletionTokens());
+        json.addProperty("totalActualTokens",        mc.getTotalActualTokens());
+        json.addProperty("hasActualTokenData",      mc.hasActualTokenData());
         json.add("latencyHistory",               GSON.toJsonTree(mc.getLatencyHistory()));
         json.addProperty("sseClientCount",       ConsoleBroadcaster.getClientCount());
         sendJson(ex, 200, json);
@@ -192,13 +235,23 @@ public class WebServer {
         for (int i = 0; i < traces.size(); i++) {
             if (i > 0) sb.append(",");
             MetricsCollector.TraceEntry t = traces.get(i);
-            sb.append("{\"timestamp\":\"").append(escape(t.timestamp))
+            sb.append("{\"id\":").append(t.id)
+              .append(",\"timestamp\":\"").append(escape(t.timestamp))
               .append("\",\"method\":\"").append(escape(t.method))
               .append("\",\"url\":\"").append(escape(t.url))
               .append("\",\"success\":").append(t.success)
               .append(",\"durationMs\":").append(t.durationMs)
               .append(",\"requestBody\":").append(GSON.toJson(t.requestBody))
               .append(",\"responseBody\":").append(GSON.toJson(t.responseBody))
+              .append(",\"estimatedTokens\":").append(t.estimatedTokens)
+              .append(",\"estimatedSystemPromptTokens\":").append(t.estimatedSystemPromptTokens)
+              .append(",\"estimatedPayloadTokens\":").append(t.estimatedPayloadTokens)
+              .append(",\"promptTokens\":").append(t.promptTokens)
+              .append(",\"completionTokens\":").append(t.completionTokens)
+              .append(",\"totalTokens\":").append(t.totalTokens)
+              .append(",\"cachedTokens\":").append(t.cachedTokens)
+              .append(",\"reasoningTokens\":").append(t.reasoningTokens)
+              .append(",\"hasTokenData\":").append(t.hasTokenData)
               .append("}");
         }
         sb.append("]");
@@ -234,6 +287,59 @@ public class WebServer {
         } finally {
             ConsoleBroadcaster.removeClient(out);
             try { out.close(); } catch (IOException ignored) {}
+        }
+    }
+
+    // ================================================================
+    // SpamHider 过滤器 API
+    // ================================================================
+
+    /** GET /api/spam-filters — 返回 SpamHider 状态和过滤器列表 */
+    private void handleGetSpamFilters(HttpExchange ex) throws IOException {
+        if (!checkToken(ex)) { sendForbidden(ex); return; }
+        SpamHider sh = SpamHider.getInstance();
+        JsonObject json = new JsonObject();
+        json.addProperty("enabled", sh.isEnabled());
+        json.add("filters", GSON.toJsonTree(sh.getFilters()));
+        sendJson(ex, 200, json);
+    }
+
+    /** POST /api/spam-filters/save — 保存 SpamHider 状态和全部过滤器 */
+    private void handleSaveSpamFilters(HttpExchange ex) throws IOException {
+        if (!checkToken(ex)) { sendForbidden(ex); return; }
+        if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
+            sendJson(ex, 405, errorJson("Method not allowed"));
+            return;
+        }
+        try {
+            String body = readBody(ex);
+            JsonObject input = JsonParser.parseString(body).getAsJsonObject();
+            SpamHider sh = SpamHider.getInstance();
+
+            if (input.has("enabled")) {
+                sh.setEnabled(input.get("enabled").getAsBoolean());
+            }
+
+            if (input.has("filters")) {
+                java.lang.reflect.Type filterListType =
+                        new TypeToken<java.util.List<SpamFilterData.Filter>>() {}.getType();
+                java.util.List<SpamFilterData.Filter> loaded =
+                        GSON.fromJson(input.getAsJsonArray("filters"), filterListType);
+                if (loaded != null) {
+                    for (SpamFilterData.Filter f : loaded) {
+                        f.recompile();
+                    }
+                    sh.replaceAll(loaded);
+                }
+            }
+
+            JsonObject result = new JsonObject();
+            result.addProperty("success", true);
+            result.addProperty("message", "Spam filters saved (" + sh.getFilters().size() + " rules)");
+            sendJson(ex, 200, result);
+        } catch (Exception e) {
+            LOGGER.error("[Web] Failed to save spam filters", e);
+            sendJson(ex, 500, errorJson(e.getMessage()));
         }
     }
 
@@ -365,8 +471,13 @@ public class WebServer {
         if (path.endsWith(".js"))   return "application/javascript; charset=utf-8";
         if (path.endsWith(".json")) return "application/json; charset=utf-8";
         if (path.endsWith(".png"))  return "image/png";
+        if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
+        if (path.endsWith(".gif"))  return "image/gif";
+        if (path.endsWith(".webp")) return "image/webp";
         if (path.endsWith(".svg"))  return "image/svg+xml";
         if (path.endsWith(".ico"))  return "image/x-icon";
+        if (path.endsWith(".woff2")) return "font/woff2";
+        if (path.endsWith(".woff"))  return "font/woff";
         return "application/octet-stream";
     }
 

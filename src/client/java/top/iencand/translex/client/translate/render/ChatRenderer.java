@@ -1,4 +1,4 @@
-package top.iencand.translex.client.translate;
+package top.iencand.translex.client.translate.render;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.text.HoverEvent;

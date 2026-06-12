@@ -13,10 +13,10 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 import net.minecraft.client.input.KeyInput;
 import org.jetbrains.annotations.NotNull;
-import top.iencand.translex.client.cache.TemporaryTooltipCache;
+import top.iencand.translex.client.translate.cache.TemporaryTooltipCache;
 import top.iencand.translex.client.config.ModConfig;
 import top.iencand.translex.client.keybinding.ModKeybindings;
-import top.iencand.translex.client.translate.ItemPresetLibrary;
+import top.iencand.translex.client.translate.model.ItemPresetLibrary;
 import top.iencand.translex.client.translate.TranslationManager;
 import top.iencand.translex.client.util.I18nHelper;
 import top.iencand.translex.client.util.ItemIdExtractor;
@@ -26,11 +26,21 @@ import java.util.regex.Pattern;
 import java.util.regex.Matcher;
 
 @Environment(EnvType.CLIENT)
+/**
+ * 客户端状态管理器，负责追踪玩家当前悬停的物品、注册按键事件和工具提示回调。
+ *
+ * <p>核心职责：
+ * <ul>
+ *   <li>记录最近悬停的物品堆栈（供 Mixin 读取）</li>
+ *   <li>管理按键快捷键触发物品说明翻译</li>
+ *   <li>清理临时缓存中的旧物品条目</li>
+ * </ul>
+ */
 public class ClientStateManager {
 
     private final TranslationManager translationManager;
 
-    /** The most recently hovered item stack. Static so the Mixin can read it. */
+    /** 最近悬停的物品堆栈（静态变量以便 Mixin 访问） */
     private static volatile ItemStack lastHoveredItem = null;
 
     private static final Pattern COLOR_CODE_PATTERN = Pattern.compile("§[0-9a-fk-or]");
@@ -39,17 +49,22 @@ public class ClientStateManager {
         this.translationManager = translationManager;
     }
 
-    /** Called by the tooltip replacement Mixin. */
+    /** 供工具提示替换 Mixin 调用，获取当前悬停的物品 */
     public static ItemStack getLastHoveredItem() {
         return lastHoveredItem;
     }
 
     public void registerEvents() {
-        // Tooltip callback: track hovered item + temp cache cleanup only.
-        // Actual replacement is done by ScreenTooltipMixin + DrawContextTooltipMixin.
+        // 工具提示回调：追踪悬停物品 + 清理临时缓存
+        // 实际的文本替换由 ScreenTooltipMixin 和 DrawContextTooltipMixin 完成
         ItemTooltipCallback.EVENT.register((stack, context, type, lines) -> {
+            // Clean up temp cache when hover changes (compare by stable key, not identity)
             if (lastHoveredItem != null && lastHoveredItem != stack) {
-                TemporaryTooltipCache.remove(lastHoveredItem);
+                String lastKey = TemporaryTooltipCache.keyOf(lastHoveredItem);
+                String curKey = TemporaryTooltipCache.keyOf(stack);
+                if (lastKey != null && !lastKey.equals(curKey)) {
+                    TemporaryTooltipCache.remove(lastHoveredItem);
+                }
             }
             lastHoveredItem = stack;
         });
@@ -81,6 +96,20 @@ public class ClientStateManager {
             if (screen instanceof HandledScreen) {
                 if (lastHoveredItem != null && !lastHoveredItem.isEmpty()) {
 
+                    // Check API key before doing any work (skip in debug mode)
+                    if (!ModConfig.get().debug) {
+                        String key = ModConfig.get().apiKey;
+                        if (key == null || key.isBlank() || key.equals("YOUR_API_KEY_HERE")) {
+                            if (player != null) {
+                                player.sendMessage(Text.literal(
+                                        I18nHelper.getPrefixed("translex.error.api_key_unset")), false);
+                                player.sendMessage(Text.literal(
+                                        "  §e/translex config §7— " + I18nHelper.translate("translex.error.api_key_hint")), false);
+                            }
+                            return;
+                        }
+                    }
+
                     String itemDisplayName = lastHoveredItem.getName().getString();
 
                     // 0. Check ItemPresetLibrary first
@@ -100,8 +129,8 @@ public class ClientStateManager {
                         }
                     }
 
-                    // 1. Get full tooltip via getTooltipFromItem (same method the Mixin hooks).
-                    //    This ensures line count matches between translation and replacement.
+                    // 1. 通过 getTooltipFromItem 获取完整工具提示（与 Mixin 使用相同方法）
+                    //    确保翻译行数与替换时的行数一致
                     List<Text> fullTooltip = Screen.getTooltipFromItem(mc, lastHoveredItem);
 
                     if (fullTooltip.isEmpty()) {
@@ -119,9 +148,9 @@ public class ClientStateManager {
                         return;
                     }
 
-                    // 3. Submit translation of the FULL tooltip
-                    this.translationManager.translateItemLoreAsync(
-                            fullText, itemId, itemDisplayName, lastHoveredItem);
+                    // 3. 提交翻译，传入原始 Text 对象用于模板提取
+                    this.translationManager.translateItemLoreTemplates(
+                            fullTooltip, itemId, itemDisplayName, lastHoveredItem);
 
                     if (player != null) {
                         player.sendMessage(Text.literal(
@@ -147,15 +176,14 @@ public class ClientStateManager {
         }
     }
 
-    // ---------------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 辅助方法
+    // ===============================================================
 
     private static String concatenateTooltip(List<Text> tooltip) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < tooltip.size(); i++) {
             String line = tooltip.get(i).getString();
-            // Strip color codes for AI
             sb.append(COLOR_CODE_PATTERN.matcher(line).replaceAll(""));
             if (i < tooltip.size() - 1) sb.append("\n");
         }

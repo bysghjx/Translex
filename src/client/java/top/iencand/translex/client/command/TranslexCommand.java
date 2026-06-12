@@ -11,11 +11,11 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Util;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import top.iencand.translex.client.cache.TemporaryTooltipCache;
+import top.iencand.translex.client.translate.cache.TemporaryTooltipCache;
 import top.iencand.translex.client.translate.TranslationManager;
 import top.iencand.translex.client.config.ButtonStyleManager;
 import top.iencand.translex.client.config.ModConfig;
-import top.iencand.translex.client.listener.ChatTranslateHandler;
+import top.iencand.translex.client.listener.MessageLookup;
 import top.iencand.translex.client.util.I18nHelper;
 import top.iencand.translex.client.web.WebServer;
 
@@ -27,21 +27,26 @@ import java.util.regex.Pattern;
 import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.argument;
 import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal;
 
+/**
+ * /translex 命令系统的注册与执行。
+ * 提供 translate、text、reload、compat（快捷切换按钮样式）、mode、reset、config 等子命令。
+ */
 public class TranslexCommand {
     private static final Logger LOGGER = LoggerFactory.getLogger("TranslexCommand");
     private static final Pattern COLOR_CODE_PATTERN = Pattern.compile("§[0-9a-fk-or]");
 
     private final TranslationManager translationManager;
-    private final ChatTranslateHandler chatTranslateHandler;
+    private final MessageLookup messageLookup;
 
-    public TranslexCommand(TranslationManager translationManager, ChatTranslateHandler chatTranslateHandler) {
+    public TranslexCommand(TranslationManager translationManager, MessageLookup messageLookup) {
         this.translationManager = translationManager;
-        this.chatTranslateHandler = chatTranslateHandler;
+        this.messageLookup = messageLookup;
     }
 
     public void register() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, environment) -> {
             dispatcher.register(literal("translex")
+                    .executes(this::executeHelp)
                     // /translex translate <message_id>
                     .then(literal("translate")
                             .then(argument("message_id", IntegerArgumentType.integer())
@@ -56,6 +61,9 @@ public class TranslexCommand {
                     // /translex button (compat alias)
                     .then(literal("compat")
                             .executes(this::executeButton))
+                    // /translex button
+                    .then(literal("button")
+                            .executes(this::executeToggleButton))
                     // /translex mode [chat|temporary|permanent]
                     .then(literal("mode")
                             .then(argument("mode", StringArgumentType.word())
@@ -71,29 +79,56 @@ public class TranslexCommand {
                             .then(argument("itemId", StringArgumentType.word())
                                     .executes(this::executeReset))
                             .executes(this::executeResetAll))
+                    // /translex debug
+                    .then(literal("debug")
+                            .executes(this::executeDebug))
                     // /translex config
                     .then(literal("config")
                             .executes(this::executeConfig))
             );
         });
-        LOGGER.info("Translex command registered (translate, text, reload, button, mode, reset, config).");
+        LOGGER.info("Translex command registered (translate, text, reload, compat, button, mode, reset, config).");
     }
 
-    // ---------------------------------------------------------------
-    // translate
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 帮助（/translex 无参数）
+    // ===============================================================
 
+    private int executeHelp(CommandContext<FabricClientCommandSource> context) {
+        FabricClientCommandSource source = context.getSource();
+        source.sendFeedback(Text.literal("§a━━━ Translex Help ━━━"));
+        source.sendFeedback(Text.literal("§e/translex §7— Show this help"));
+        source.sendFeedback(Text.literal("§e/translex translate <id> §7— Translate message by ID"));
+        source.sendFeedback(Text.literal("§e/translex text <message> §7— Translate arbitrary text"));
+        source.sendFeedback(Text.literal("§e/translex reload §7— Reload configuration from disk"));
+        source.sendFeedback(Text.literal("§e/translex compat §7— Toggle button style [翻译]/[T]"));
+        source.sendFeedback(Text.literal("§e/translex button §7— Toggle translation button on/off"));
+        source.sendFeedback(Text.literal("§e/translex mode <chat|temporary|permanent> §7— Set output mode"));
+        source.sendFeedback(Text.literal("§e/translex reset [itemId] §7— Clear preset library entries"));
+        source.sendFeedback(Text.literal("§e/translex debug §7— Toggle debug mode (no API key needed)"));
+        source.sendFeedback(Text.literal("§e/translex config §7— Open web configuration panel"));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    // ===============================================================
+    // 翻译 by ID（/translex translate &lt;id&gt;）
+    // ===============================================================
+
+    /**
+     * 通过消息 ID 翻译聊天消息。
+     * 从 messageLookup 中获取原始文本，分离玩家名称前缀后提交翻译。
+     */
     private int executeTranslate(CommandContext<FabricClientCommandSource> context) {
         int messageId = IntegerArgumentType.getInteger(context, "message_id");
         MinecraftClient client = MinecraftClient.getInstance();
 
-        if (chatTranslateHandler == null) {
+        if (messageLookup == null) {
             client.execute(() -> context.getSource().sendError(
                     Text.literal(I18nHelper.getPrefixed("translex.error.mode_not_available"))));
             return 0;
         }
 
-        Text originalMessage = chatTranslateHandler.getMessageById(messageId);
+        Text originalMessage = messageLookup.getMessageById(messageId);
         if (originalMessage == null) {
             client.execute(() -> {
                 String errorMsg = I18nHelper.translate("translex.error.not_found", messageId);
@@ -106,6 +141,7 @@ public class TranslexCommand {
         String messageTextToTranslate = originalMessage.getString();
         String playerNameWithSeparator = "";
 
+        // 尝试分离"玩家名: "前缀，保留在最终输出中
         int firstColonSpace = messageTextToTranslate.indexOf(": ");
         if (firstColonSpace != -1) {
             playerNameWithSeparator = messageTextToTranslate.substring(0, firstColonSpace + 2);
@@ -114,14 +150,23 @@ public class TranslexCommand {
             messageTextToTranslate = originalMessage.getString();
         }
 
+        // 检查 API Key 是否已配置
+        if (isApiKeyMissing()) {
+            return showApiKeyHint(context);
+        }
+
         translationManager.translateAsync(messageId, messageTextToTranslate, playerNameWithSeparator);
         return Command.SINGLE_SUCCESS;
     }
 
-    // ---------------------------------------------------------------
-    // text
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 纯文本翻译（/translex text &lt;message&gt;）
+    // ===============================================================
 
+    /**
+     * 翻译用户输入的原始文本（不依赖消息 ID 追踪）。
+     * 自动去除颜色码后提交翻译。
+     */
     private int executeText(CommandContext<FabricClientCommandSource> context) {
         FabricClientCommandSource source = context.getSource();
         String fullMessageText;
@@ -140,13 +185,17 @@ public class TranslexCommand {
             return 0;
         }
 
+        if (isApiKeyMissing()) {
+            return showApiKeyHint(context);
+        }
+
         translationManager.translateTextAsync(cleanedMessageText, "TX_" + System.currentTimeMillis());
         return Command.SINGLE_SUCCESS;
     }
 
-    // ---------------------------------------------------------------
-    // reload
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 重载配置（/translex reload）
+    // ===============================================================
 
     private int executeReload(CommandContext<FabricClientCommandSource> context) {
         FabricClientCommandSource source = context.getSource();
@@ -157,10 +206,14 @@ public class TranslexCommand {
 
             source.sendFeedback(Text.literal(I18nHelper.getPrefixed("translex.info.config_reloaded")));
 
-            String modeKey = config.enableMessageIdSystem
-                    ? "translex.info.mode_message_id"
-                    : "translex.info.mode_command_text";
-            source.sendFeedback(Text.literal(I18nHelper.getPrefixed(modeKey)));
+            // 显示当前翻译模式
+            String modeName = switch (config.translationMode) {
+                case "message_id" -> "Message ID";
+                case "text" -> "Text";
+                default -> "Auto";
+            };
+            source.sendFeedback(Text.literal(I18nHelper.getPrefixed(
+                    "translex.info.translation_mode", modeName)));
 
         } catch (Exception e) {
             source.sendError(Text.literal(I18nHelper.getPrefixed("translex.error.config_load")));
@@ -171,9 +224,9 @@ public class TranslexCommand {
         return Command.SINGLE_SUCCESS;
     }
 
-    // ---------------------------------------------------------------
-    // button (compat)
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 按钮切换（/translex compat）
+    // ===============================================================
 
     private int executeButton(CommandContext<FabricClientCommandSource> context) {
         FabricClientCommandSource source = context.getSource();
@@ -184,9 +237,24 @@ public class TranslexCommand {
         return Command.SINGLE_SUCCESS;
     }
 
-    // ---------------------------------------------------------------
-    // mode [chat|temporary|permanent]
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 按钮启用/禁用切换（/translex button）
+    // ===============================================================
+
+    private int executeToggleButton(CommandContext<FabricClientCommandSource> context) {
+        FabricClientCommandSource source = context.getSource();
+        boolean enabled = ButtonStyleManager.toggleButtonEnabled();
+        String status = enabled
+                ? I18nHelper.translate("translex.info.button_enabled")
+                : I18nHelper.translate("translex.info.button_disabled");
+        source.sendFeedback(Text.literal(
+                I18nHelper.getPrefixed("translex.info.button_status", status)));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    // ===============================================================
+    // 输出模式设置（/translex mode &lt;chat|temporary|permanent&gt;）
+    // ===============================================================
 
     private int executeMode(CommandContext<FabricClientCommandSource> context) {
         FabricClientCommandSource source = context.getSource();
@@ -205,9 +273,9 @@ public class TranslexCommand {
         return Command.SINGLE_SUCCESS;
     }
 
-    // ---------------------------------------------------------------
-    // reset [itemId]
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 重置预设库（/translex reset [itemId]）
+    // ===============================================================
 
     private int executeReset(CommandContext<FabricClientCommandSource> context) {
         FabricClientCommandSource source = context.getSource();
@@ -229,9 +297,31 @@ public class TranslexCommand {
         return Command.SINGLE_SUCCESS;
     }
 
-    // ---------------------------------------------------------------
-    // config — 打开 Web 配置面板
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 调试模式切换（/translex debug）
+    // ===============================================================
+
+    private int executeDebug(CommandContext<FabricClientCommandSource> context) {
+        FabricClientCommandSource source = context.getSource();
+        ModConfig config = ModConfig.get();
+        config.debug = !config.debug;
+        ModConfig.forceSave();
+
+        if (config.debug) {
+            source.sendFeedback(Text.literal(
+                    I18nHelper.getPrefixed("translex.info.debug_enabled")));
+            source.sendFeedback(Text.literal(
+                    "  §7— " + I18nHelper.translate("translex.info.debug_hint")));
+        } else {
+            source.sendFeedback(Text.literal(
+                    I18nHelper.getPrefixed("translex.info.debug_disabled")));
+        }
+        return Command.SINGLE_SUCCESS;
+    }
+
+    // ===============================================================
+    // 打开 Web 配置面板（/translex config）
+    // ===============================================================
 
     private int executeConfig(CommandContext<FabricClientCommandSource> context) {
         FabricClientCommandSource source = context.getSource();
@@ -245,10 +335,28 @@ public class TranslexCommand {
         return Command.SINGLE_SUCCESS;
     }
 
-    // ---------------------------------------------------------------
-    // helpers
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 辅助方法
+    // ===============================================================
 
+    /** 检查 API Key 是否缺失或为默认占位值（调试模式下跳过检查） */
+    private static boolean isApiKeyMissing() {
+        if (ModConfig.get().debug) return false;
+        String key = ModConfig.get().apiKey;
+        return key == null || key.isBlank() || key.equals("YOUR_API_KEY_HERE");
+    }
+
+    /** 显示 API Key 未配置的提示消息 */
+    private static int showApiKeyHint(CommandContext<FabricClientCommandSource> context) {
+        FabricClientCommandSource source = context.getSource();
+        source.sendError(Text.literal(
+                I18nHelper.getPrefixed("translex.error.api_key_unset")));
+        source.sendFeedback(Text.literal(
+                "  §e/translex config §7— " + I18nHelper.translate("translex.error.api_key_hint")));
+        return 0;
+    }
+
+    /** 移除所有 Minecraft 颜色代码（§ 前缀的 ANSI 格式码） */
     private static String removeColorCodes(String text) {
         if (text == null) return null;
         Matcher matcher = COLOR_CODE_PATTERN.matcher(text);

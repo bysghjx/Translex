@@ -1,12 +1,12 @@
-package top.iencand.translex.client.net;
+package top.iencand.translex.client.config;
 
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Shared thread-pool configuration for network retries.
- * Core 2, max 4, bounded queue of 200, CallerRunsPolicy on overflow.
+ * 网络重试的共享线程池配置。
+ * 核心线程 2，最大线程 4，有界队列 200，溢出时由调用线程处理（CallerRunsPolicy）。
  */
 public final class NetworkConfig {
 
@@ -24,6 +24,7 @@ public final class NetworkConfig {
             new ThreadPoolExecutor.CallerRunsPolicy()
     );
 
+    /** 优雅关闭线程池，最多等待 2 秒 */
     public static void shutdown() {
         RETRY_EXECUTOR.shutdown();
         try {

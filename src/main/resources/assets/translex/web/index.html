@@ -236,7 +236,70 @@
     @media (max-width: 768px) {
         .grid-2col { grid-template-columns: 1fr !important; }
     }
-    </style>
+
+    /* 首次欢迎横幅 */
+    .welcome-banner {
+        background: linear-gradient(135deg, rgba(0,212,255,.12) 0%, rgba(0,255,65,.08) 100%);
+        border: 1px solid rgba(0,212,255,.25);
+        border-radius: 12px;
+        padding: 20px 24px;
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+        animation: welcomeIn .5s ease-out;
+    }
+    @keyframes welcomeIn { from { opacity:0; transform: translateY(-16px); } to { opacity:1; transform: translateY(0); } }
+    .welcome-banner .welcome-icon { font-size: 32px; flex-shrink: 0; line-height: 1; }
+    .welcome-banner .welcome-body { flex: 1; min-width: 0; }
+    .welcome-banner .welcome-title {
+        font-size: 16px; font-weight: 600; color: #00d4ff; margin-bottom: 6px;
+    }
+    .welcome-banner .welcome-text {
+        font-size: 13px; color: var(--text-secondary); line-height: 1.6;
+    }
+    .welcome-banner .welcome-text code {
+        background: rgba(0,212,255,.12); color: #00d4ff;
+        padding: 1px 6px; border-radius: 4px; font-size: 12px;
+    }
+    .welcome-banner .welcome-close {
+        flex-shrink: 0;
+        background: none; border: 1px solid var(--border-color); border-radius: 8px;
+        color: var(--text-muted); cursor: pointer; font-size: 18px; padding: 4px 10px;
+        transition: all .2s; line-height: 1;
+    }
+    .welcome-banner .welcome-close:hover {
+        background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-hover);
+    }
+
+    /* Spam Hider 专用 */
+    .btn-danger {
+        background: transparent; color: #ff4444; border-color: #ff4444;
+    }
+    .btn-danger:hover:not(:disabled) {
+        background: rgba(255,68,68,.12); box-shadow: 0 0 12px rgba(255,68,68,.25);
+    }
+    .select-field {
+        cursor: pointer; appearance: none; -webkit-appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: right 10px center; padding-right: 32px;
+    }
+    .filter-row {
+        display: grid; grid-template-columns: 1.2fr 1.5fr auto auto auto auto; gap: 8px;
+        align-items: center; padding: 10px 14px;
+        border: 1px solid var(--border-color); border-radius: 10px;
+        background: var(--bg-card); transition: border-color .2s;
+    }
+    .filter-row:hover { border-color: var(--border-hover); }
+    @media (max-width: 900px) {
+        .filter-row { grid-template-columns: 1fr 1fr; gap: 6px; }
+        .filter-row .span-full { grid-column: 1 / -1; }
+    }
+    .help-badge {
+        display: inline-block; width: 16px; height: 16px; border-radius: 50%;
+        background: var(--border-color); color: var(--text-muted);
+        font-size: 10px; text-align: center; line-height: 16px; cursor: help; margin-left: 4px;
+    }
+</style>
 </head>
 <body>
 
@@ -278,8 +341,24 @@
                     :class="['tab-btn whitespace-nowrap', { active: activeTab === tab.id }]">
                 {{ tab.label }}
             </button>
+            <button @click="activeTab = 'spam'"
+                    :class="['tab-btn whitespace-nowrap', { active: activeTab === 'spam' }]">
+                🛡 Spam Hider
+            </button>
         </div>
     </nav>
+
+    <!-- ========== 首次欢迎横幅 ========== -->
+    <div v-if="showWelcome" class="max-w-7xl mx-auto px-4 pt-4">
+        <div class="welcome-banner">
+            <span class="welcome-icon">👋</span>
+            <div class="welcome-body">
+                <div class="welcome-title">{{ lang.welcomeTitle }}</div>
+                <div class="welcome-text" v-html="lang.welcomeText"></div>
+            </div>
+            <button @click="dismissWelcome" class="welcome-close" :title="lang.welcomeDismiss">✕</button>
+        </div>
+    </div>
 
     <!-- ========== 主内容区 ========== -->
     <main class="max-w-7xl mx-auto px-4 pb-72 pt-6 space-y-6">
@@ -305,8 +384,9 @@
                     <div class="stat-value text-3xl font-bold text-gray-200">{{ avgLatency }}<span class="text-sm text-gray-500">ms</span></div>
                 </div>
                 <div class="card-panel p-5">
-                    <div class="text-xs text-gray-500 mb-1">{{ lang.tokensSent }}</div>
-                    <div class="stat-value text-3xl font-bold text-cyber-green">{{ formatTokens(metrics.totalEstimatedTokens) }}</div>
+                    <div class="text-xs text-gray-500 mb-1">{{ lang.tokensConsumed }}</div>
+                    <div class="text-xs text-gray-400 mt-0.5">{{ lang.est }} <span class="text-cyber-green font-semibold">{{ formatTokens(metrics.totalEstimatedTokens) }}</span></div>
+                    <div class="text-xs text-gray-400 mt-0.5">{{ lang.api }} <span class="text-cyber-blue font-semibold">{{ metrics.hasActualTokenData ? formatTokens(metrics.totalActualTokens) : '—' }}</span></div>
                 </div>
                 <div class="card-panel p-5">
                     <div class="text-xs text-gray-500 mb-1">{{ lang.tokensSaved }}</div>
@@ -379,13 +459,23 @@
             <!-- ─── 翻译行为 ─── -->
             <div class="card-panel p-5 space-y-4">
                 <div class="section-title">{{ lang.sectionBehavior }}</div>
-                <!-- enableMessageIdSystem -->
+                <!-- translationMode -->
+                <div>
+                    <label class="input-label">{{ lang.translationMode }}</label>
+                    <select v-model="config.translationMode" class="input-field">
+                        <option value="auto">auto — {{ lang.translationModeAutoDesc }}</option>
+                        <option value="message_id">message_id — {{ lang.translationModeIdDesc }}</option>
+                        <option value="text">text — {{ lang.translationModeTextDesc }}</option>
+                    </select>
+                    <div class="text-xs text-gray-500 mt-1">{{ lang.translationModeHint }}</div>
+                </div>
+                <!-- debug -->
                 <label class="flex items-center justify-between cursor-pointer">
                     <div>
-                        <div class="text-sm text-gray-300">{{ lang.enableMessageIdSystem }}</div>
-                        <div class="text-xs text-gray-500 mt-0.5">{{ lang.enableMessageIdSystemDesc }}</div>
+                        <div class="text-sm text-gray-300">{{ lang.debugMode }}</div>
+                        <div class="text-xs text-gray-500 mt-0.5">{{ lang.debugModeDesc }}</div>
                     </div>
-                    <input type="checkbox" v-model="config.enableMessageIdSystem" class="toggle-switch">
+                    <input type="checkbox" v-model="config.debug" class="toggle-switch">
                 </label>
                 <!-- buttonStyle -->
                 <div>
@@ -395,6 +485,14 @@
                         <option value="COMPACT">COMPACT ([T])</option>
                     </select>
                 </div>
+                <!-- enableTranslateButton -->
+                <label class="flex items-center justify-between cursor-pointer">
+                    <div>
+                        <div class="text-sm text-gray-300">{{ lang.enableTranslateButton }}</div>
+                        <div class="text-xs text-gray-500 mt-0.5">{{ lang.enableTranslateButtonDesc }}</div>
+                    </div>
+                    <input type="checkbox" v-model="config.enableTranslateButton" class="toggle-switch">
+                </label>
                 <!-- outputMode -->
                 <div>
                     <label class="input-label">{{ lang.outputMode }}</label>
@@ -493,12 +591,22 @@
                     <span class="text-xs font-semibold text-gray-300 shrink-0 w-14">{{ trace.method }}</span>
                     <span class="text-sm text-gray-400 truncate flex-1">{{ trace.url }}</span>
                     <span class="text-xs text-gray-500 shrink-0">{{ trace.durationMs }}ms</span>
+                    <span v-if="trace.estimatedTokens > 0" class="text-xs text-cyber-green shrink-0">~{{ formatTokens(trace.estimatedTokens) }} tok</span>
+                    <span v-if="trace.hasTokenData" class="text-xs text-cyber-blue shrink-0">{{ formatTokens(trace.promptTokens + trace.completionTokens) }} tok</span>
                     <span class="text-gray-500 shrink-0 transition-transform"
                           :style="{ transform: trace.expanded ? 'rotate(180deg)' : 'rotate(0deg)' }">▼</span>
                 </button>
                 <!-- 手风琴展开内容 -->
                 <div class="accordion-body" :style="{ maxHeight: trace.expanded ? '600px' : '0px' }">
                     <div class="px-5 pb-4 space-y-3 border-t border-cyber-border pt-3">
+                        <!-- Request 概要信息 -->
+                        <div v-if="trace.estimatedTokens > 0" class="text-xs text-gray-400 flex items-center gap-3 flex-wrap">
+                            <span>{{ lang.estTokens }}: ~{{ formatTokens(trace.estimatedTokens) }}</span>
+                            <span v-if="trace.estimatedSystemPromptTokens > 0" class="text-gray-500">
+                                ({{ lang.systemPromptLabel }} ~{{ formatTokens(trace.estimatedSystemPromptTokens) }}
+                                + {{ lang.payloadLabel }} ~{{ formatTokens(trace.estimatedPayloadTokens) }})
+                            </span>
+                        </div>
                         <!-- Request Payload -->
                         <div>
                             <div class="text-xs text-cyber-blue font-semibold mb-1.5">{{ lang.requestPayload }}</div>
@@ -511,6 +619,187 @@
                             <pre class="text-xs text-gray-300 rounded-lg p-3 overflow-x-auto font-mono" style="background:var(--bg-input);"
                                  >{{ formatJson(trace.responseBody) }}</pre>
                         </div>
+                        <!-- Token 用量（有数据时显示） -->
+                        <div v-if="trace.hasTokenData" class="text-xs space-y-1.5 rounded-lg p-3 mt-2" style="background:var(--bg-input);">
+                            <div class="text-gray-400 font-semibold mb-2">{{ lang.tokenUsage }}</div>
+                            <!-- 效率警告横幅 -->
+                            <div v-if="trace.completionTokens > trace.promptTokens * 3 && trace.reasoningTokens <= 0"
+                                 class="text-cyber-amber text-xs mb-2">⚠ {{ lang.tokenWaste }}</div>
+                            <div v-if="trace.reasoningTokens > 0"
+                                 class="text-cyber-red text-xs mb-2">💭 {{ lang.reasoningWaste.replace('{n}', formatTokens(trace.reasoningTokens)) }}</div>
+                            <div class="grid grid-cols-2 gap-x-4 gap-y-1">
+                                <span class="text-gray-400">{{ lang.promptLabel }}</span>
+                                <span class="text-cyber-green text-right">{{ trace.promptTokens }}</span>
+                                <span class="text-gray-400">{{ lang.completionLabel }}</span>
+                                <span class="text-cyber-blue text-right">{{ trace.completionTokens }}</span>
+                                <span v-if="trace.reasoningTokens > 0" class="text-gray-400">{{ lang.reasoningLabel }}</span>
+                                <span v-if="trace.reasoningTokens > 0" class="text-cyber-red text-right">{{ trace.reasoningTokens }}</span>
+                                <span class="text-gray-400">{{ lang.cachedLabel }}</span>
+                                <span class="text-gray-400 text-right">{{ trace.cachedTokens > 0 ? trace.cachedTokens : '—' }}</span>
+                            </div>
+                            <div class="border-t border-cyber-border pt-1.5 flex justify-between">
+                                <span class="text-gray-400">{{ lang.totalLabel }}</span>
+                                <span class="text-cyber-amber font-semibold">{{ trace.totalTokens || (trace.promptTokens + trace.completionTokens) }} tok</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== Tab 4: Debug 控制台 ===== -->
+        <section v-show="activeTab === 'debug'" class="space-y-4" style="padding-bottom: 42px;">
+            <!-- 状态卡片 -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div class="card-panel p-3 text-center">
+                    <div class="text-xs text-gray-500">{{ lang.debugStatusSse }}</div>
+                    <div class="text-sm font-semibold" :class="connected ? 'text-cyber-green' : 'text-cyber-red'">
+                        {{ connected ? lang.connected : lang.disconnected }}
+                    </div>
+                </div>
+                <div class="card-panel p-3 text-center">
+                    <div class="text-xs text-gray-500">{{ lang.debugStatusCache }}</div>
+                    <div class="text-sm font-semibold" :class="config.debug ? 'text-cyber-amber' : 'text-cyber-green'">
+                        {{ config.debug ? lang.disabled : lang.enabled }}
+                    </div>
+                </div>
+                <div class="card-panel p-3 text-center">
+                    <div class="text-xs text-gray-500">{{ lang.debugStatusMode }}</div>
+                    <div class="text-sm font-semibold text-cyber-blue">{{ config.translationMode || 'auto' }}</div>
+                </div>
+                <div class="card-panel p-3 text-center">
+                    <div class="text-xs text-gray-500">{{ lang.debugStatusApi }}</div>
+                    <div class="text-sm font-semibold text-cyber-blue truncate" :title="config.apiUrl">{{ config.apiUrl || '—' }}</div>
+                </div>
+            </div>
+
+            <!-- 控制台全高度视图 -->
+            <div class="card-panel flex flex-col" style="min-height: 55vh;">
+                <div class="flex items-center justify-between px-4 py-3 border-b border-cyber-border">
+                    <div class="flex items-center gap-2 text-sm text-gray-400">
+                        <span class="text-cyber-green">〉_</span>
+                        <span>{{ lang.liveConsole }}</span>
+                        <span class="text-gray-600">({{ filteredConsoleLines.length }})</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <!-- 级别过滤 -->
+                        <select v-model="consoleLevelFilter" class="text-xs bg-cyber-dark border border-cyber-border rounded px-2 py-1 text-gray-300">
+                            <option value="all">ALL</option>
+                            <option value="DEBUG">DEBUG</option>
+                            <option value="INFO">INFO</option>
+                            <option value="WARN">WARN</option>
+                            <option value="ERROR">ERROR</option>
+                        </select>
+                        <button @click="clearConsole" class="text-xs text-gray-500 hover:text-gray-300">{{ lang.clear }}</button>
+                    </div>
+                </div>
+                <div ref="debugConsoleEl" class="terminal p-4 flex-1 overflow-y-auto"
+                     style="max-height: 60vh; font-size: 12px; line-height: 1.7;">
+                    <div v-for="(line, i) in filteredConsoleLines" :key="i" :class="'log-' + line.level.toLowerCase()">
+                        <span class="text-gray-600">[{{ line.timestamp }}]</span>
+                        <span :class="levelBadgeClass(line.level)">{{ line.level }}</span>
+                        {{ line.message }}
+                    </div>
+                    <div v-if="filteredConsoleLines.length === 0" class="text-gray-600 select-none">
+                        {{ consoleLevelFilter === 'all' ? lang.consolePlaceholder : lang.debugNoMatch }}
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== Tab 5: Spam Hider ===== -->
+        <section v-show="activeTab === 'spam'" class="space-y-6">
+            <!-- Enable Toggle -->
+            <div class="card-panel p-5">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-semibold text-gray-300">{{ lang.spamEnable }}</div>
+                        <div class="text-xs text-gray-500 mt-0.5">{{ lang.spamEnableDesc }}</div>
+                    </div>
+                    <input type="checkbox" v-model="spamEnabled" class="toggle-switch">
+                </div>
+            </div>
+
+            <!-- Filter List -->
+            <div class="card-panel p-5 space-y-4">
+                <div class="flex items-center justify-between">
+                    <div class="section-title m-0 p-0 border-0">{{ lang.spamFilters }} ({{ spamFilters.length }})</div>
+                    <button @click="addSpamFilter" class="btn btn-ghost text-xs !py-1.5 !px-3">+ {{ lang.spamAdd }}</button>
+                </div>
+
+                <div v-if="spamFilters.length === 0" class="text-center text-gray-500 py-12 text-sm">
+                    {{ lang.spamEmpty }}
+                </div>
+
+                <!-- Column Headers (desktop) -->
+                <div v-if="spamFilters.length > 0" class="hidden md:grid gap-2 px-2 text-xs text-gray-500"
+                     style="grid-template-columns:1.2fr 1.5fr 100px 110px auto 40px">
+                    <span>{{ lang.spamName }}</span>
+                    <span>{{ lang.spamPattern }}</span>
+                    <span>{{ lang.spamType }}</span>
+                    <span>{{ lang.spamState }}</span>
+                    <span class="text-center">{{ lang.spamColorCode }}</span>
+                    <span></span>
+                </div>
+
+                <!-- Filter Rows -->
+                <div v-for="(f, i) in spamFilters" :key="i" class="filter-row">
+                    <input v-model="f.name" class="input-field" :placeholder="lang.spamNamePlaceholder">
+                    <input v-model="f.patternString" class="input-field font-mono text-xs" :placeholder="lang.spamPatternPlaceholder">
+                    <select v-model="f.type" class="input-field select-field text-xs">
+                        <option value="STARTSWITH">StartsWith</option>
+                        <option value="CONTAINS">Contains</option>
+                        <option value="REGEX">Regex</option>
+                    </select>
+                    <select v-model="f.state" class="input-field select-field text-xs"
+                            :class="{'text-cyber-red':f.state==='HIDDEN','text-cyber-blue':f.state==='SEPARATE'}">
+                        <option value="NORMAL">Normal</option>
+                        <option value="HIDDEN">Hidden</option>
+                        <option value="SEPARATE">Separate</option>
+                    </select>
+                    <label class="flex items-center justify-center gap-1 text-xs text-gray-500 cursor-pointer select-none whitespace-nowrap">
+                        <span class="hidden sm:inline">{{ lang.spamColorCodeLabel }}</span>
+                        <span class="help-badge" :title="lang.spamColorCodeHelp">?</span>
+                        <input type="checkbox" v-model="f.formatted" class="toggle-switch !w-32 !h-18" style="transform:scale(0.65)">
+                    </label>
+                    <button @click="removeSpamFilter(i)" class="btn btn-danger !p-1.5 !rounded-lg text-xs" :title="lang.spamDelete">✕</button>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex items-center gap-3">
+                <button @click="saveSpamFilters" class="btn btn-primary" :disabled="spamSaving">
+                    <span v-if="spamSaving" class="inline-block w-4 h-4 border-2 border-cyber-dark border-t-transparent rounded-full animate-spin"></span>
+                    {{ spamSaving ? lang.saving : lang.spamSave }}
+                </button>
+                <button @click="loadSpamFilters" class="btn btn-ghost" :disabled="spamLoading">{{ lang.spamReload }}</button>
+            </div>
+
+            <!-- Quick Reference -->
+            <div class="card-panel p-5">
+                <div class="section-title">{{ lang.spamRefTitle }}</div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div class="space-y-1">
+                        <span class="text-gray-300 font-medium">Normal</span>
+                        <p class="text-xs text-gray-500">{{ lang.spamRefNormal }}</p>
+                    </div>
+                    <div class="space-y-1">
+                        <span class="text-cyber-red font-medium">Hidden</span>
+                        <p class="text-xs text-gray-500">{{ lang.spamRefHidden }}</p>
+                    </div>
+                    <div class="space-y-1">
+                        <span class="text-cyber-blue font-medium">Separate</span>
+                        <p class="text-xs text-gray-500">{{ lang.spamRefSeparate }}</p>
+                    </div>
+                </div>
+                <div class="mt-4 pt-3 border-t border-cyber-border">
+                    <div class="text-xs text-gray-400 space-y-1">
+                        <p><strong class="text-gray-300">{{ lang.spamRefMatchTitle }}</strong>
+                            <code class="text-cyber-green bg-cyber-dark px-1 rounded">StartsWith</code> {{ lang.spamRefStartsWith }} ·
+                            <code class="text-cyber-green bg-cyber-dark px-1 rounded">Contains</code> {{ lang.spamRefContains }} ·
+                            <code class="text-cyber-green bg-cyber-dark px-1 rounded">Regex</code> {{ lang.spamRefRegex }}
+                        </p>
+                        <p v-html="lang.spamRefColorCodeNote"></p>
                     </div>
                 </div>
             </div>
@@ -579,6 +868,16 @@ const I18N_DICT = {
         dashboard: '运行看板',
         config: '配置管理',
         network: '网络抓包',
+        debugTab: '调试',
+        debugStatusSse: 'SSE 连接',
+        debugStatusCache: '缓存状态',
+        debugStatusMode: '翻译模式',
+        debugStatusApi: 'API 地址',
+        debugNoMatch: '没有匹配的日志行',
+        connected: '已连接',
+        disconnected: '未连接',
+        enabled: '已启用',
+        disabled: '已禁用',
         liveConsole: '实时控制台',
         cacheHits: '本地规则命中',
         aiRequests: 'AI 请求数',
@@ -612,8 +911,21 @@ const I18N_DICT = {
         totalRequests: '总请求数',
         themeHint: '切换主题 (系统 → 深色 → 浅色 → 系统)',
         themeLabel: '主题',
-        tokensSent: '已消耗 Token (估算)',
-        tokensSaved: '缓存节省 Token (估算)',
+        tokensConsumed: 'Token 消耗',
+        tokensSaved: '缓存节省 (估算)',
+        est: '本地估算',
+        api: 'API 实际',
+        tokenUsage: 'Token',
+        estTokens: '请求侧估算',
+        systemPromptLabel: '提示词',
+        payloadLabel: '载荷',
+        promptLabel: '输入',
+        completionLabel: '输出',
+        cachedLabel: '服务器端缓存命中',
+        reasoningLabel: '其中 Reasoning',
+        totalLabel: '合计',
+        tokenWaste: '输出 token 超过输入 3 倍，建议检查 System Prompt 是否过于复杂，或模型是否开启了 thinking 模式',
+        reasoningWaste: '检测到 Reasoning token ({n})！建议在 API 请求中关闭 thinking 模式以节省成本',
 
         // -- 配置区块标题 --
         sectionApi: 'API 连接',
@@ -622,9 +934,19 @@ const I18N_DICT = {
         sectionCompact: '聊天折叠',
 
         // -- 新增字段 --
-        enableMessageIdSystem: 'Message ID 模式',
-        enableMessageIdSystemDesc: '启用基于 Message ID 的翻译系统（关闭则使用旧版文本匹配模式，需重启）',
+        translationMode: '翻译模式',
+        translationModeAutoDesc: '自动选择（短消息用文本，长消息用ID）',
+        translationModeIdDesc: '仅消息ID模式',
+        translationModeTextDesc: '仅文本命令模式',
+        translationModeHint: 'Auto 模式下短消息直接附带文本，长消息自动切换 ID 模式。需重启生效。',
+        debugMode: '调试模式',
+        debugModeDesc: '启动时自动打开浏览器并导航到网络抓包页面',
+        welcomeTitle: '🎉 欢迎使用 Translex！',
+        welcomeText: '请先在 <code>配置管理</code> 标签页中设置 <b>API Key</b> 以启用翻译功能。<br>配置完成后，返回游戏即可使用翻译按钮或按下 <code>P</code> 键翻译物品 Lore。',
+        welcomeDismiss: '知道了',
         buttonStyle: '按钮样式',
+        enableTranslateButton: '显示翻译按钮',
+        enableTranslateButtonDesc: '在聊天消息旁显示 [翻译] 按钮，关闭后按钮不再出现',
         outputMode: '翻译输出模式',
         outputModeChat: 'chat — 直接替换聊天消息',
         outputModeTemporary: 'temporary — 临时 Tooltip 显示',
@@ -639,6 +961,37 @@ const I18N_DICT = {
         enableChatCompactDesc: '将连续重复的聊天消息折叠为一条，附带次数标记',
         compactTimeSeconds: '折叠时间窗口 (秒)',
         compactColorCode: '折叠计数器颜色',
+        // Spam Hider
+        spamEnable: '启用 Spam Hider',
+        spamEnableDesc: '关闭后所有过滤规则不生效，消息正常显示',
+        spamFilters: '过滤规则',
+        spamAdd: '添加规则',
+        spamEmpty: '还没有过滤规则，点击「添加规则」创建一个',
+        spamName: '名称',
+        spamPattern: '匹配内容',
+        spamType: '匹配方式',
+        spamState: '状态',
+        spamColorCode: '§码',
+        spamNamePlaceholder: '过滤器名称',
+        spamPatternPlaceholder: '要匹配的文字...',
+        spamColorCodeLabel: '§码',
+        spamColorCodeHelp: '开启后按带 Minecraft § 颜色码的文本匹配。关闭则按纯文本匹配。',
+        spamDelete: '删除此规则',
+        spamSave: '保存规则',
+        spamReload: '重新加载',
+        spamSaved: '规则已保存',
+        spamSaveFailed: '保存失败',
+        spamLoadFailed: '加载过滤规则失败',
+        spamNewFilter: '新过滤器',
+        spamRefTitle: '状态说明',
+        spamRefNormal: '消息正常显示在聊天栏，不做任何处理',
+        spamRefHidden: '消息被完全丢弃，不进入聊天栏也不在别处显示',
+        spamRefSeparate: '消息从聊天栏移除，改为在浮动 HUD 中显示',
+        spamRefMatchTitle: '匹配方式：',
+        spamRefStartsWith: '前缀匹配',
+        spamRefContains: '包含匹配',
+        spamRefRegex: 'Java 正则',
+        spamRefColorCodeNote: '<strong class="text-gray-300">§码开关：</strong>开启后按带颜色码的文本匹配（如 <code class="text-cyber-green bg-cyber-dark px-1 rounded">§r§cThere are no enemies nearby!</code>）。注意 § 在输入框中显示为纯文本 <code class="text-gray-500 bg-cyber-dark px-1 rounded">§</code>。',
     },
     en: {
         subtitle: 'AI Translation Dashboard',
@@ -648,6 +1001,16 @@ const I18N_DICT = {
         dashboard: 'Dashboard',
         config: 'Configuration',
         network: 'Network Trace',
+        debugTab: 'Debug',
+        debugStatusSse: 'SSE Status',
+        debugStatusCache: 'Cache',
+        debugStatusMode: 'Mode',
+        debugStatusApi: 'API URL',
+        debugNoMatch: 'No matching log lines',
+        connected: 'Connected',
+        disconnected: 'Disconnected',
+        enabled: 'Enabled',
+        disabled: 'Disabled',
         liveConsole: 'Live Console',
         cacheHits: 'Local Cache Hits',
         aiRequests: 'AI Requests',
@@ -681,8 +1044,21 @@ const I18N_DICT = {
         totalRequests: 'Total Requests',
         themeHint: 'Switch theme (System → Dark → Light → System)',
         themeLabel: 'Theme',
-        tokensSent: 'Tokens Consumed (est.)',
-        tokensSaved: 'Tokens Saved by Cache (est.)',
+        tokensConsumed: 'Token Usage',
+        tokensSaved: 'Saved by Cache (est.)',
+        est: 'Local est.',
+        api: 'API actual',
+        tokenUsage: 'Token',
+        estTokens: 'Request est. tokens',
+        systemPromptLabel: 'system prompt',
+        payloadLabel: 'payload',
+        promptLabel: 'Prompt',
+        completionLabel: 'Completion',
+        cachedLabel: 'Server cache hit',
+        reasoningLabel: 'Of which Reasoning',
+        totalLabel: 'Total',
+        tokenWaste: 'Output tokens > 3x input. Consider simplifying System Prompt or disabling thinking mode.',
+        reasoningWaste: 'Reasoning tokens detected ({n})! Disable thinking mode in API request to save cost.',
 
         // -- Config section titles --
         sectionApi: 'API Connection',
@@ -691,9 +1067,19 @@ const I18N_DICT = {
         sectionCompact: 'Chat Compact',
 
         // -- Additional fields --
-        enableMessageIdSystem: 'Message ID Mode',
-        enableMessageIdSystemDesc: 'Use Message-ID-based translation (disable for legacy text matching, requires restart)',
+        translationMode: 'Translation Mode',
+        translationModeAutoDesc: 'Auto (short→text, long→ID)',
+        translationModeIdDesc: 'Message ID only',
+        translationModeTextDesc: 'Text command only',
+        translationModeHint: 'Auto mode uses text commands for short messages and ID mode for long ones. Requires restart.',
+        debugMode: 'Debug Mode',
+        debugModeDesc: 'Auto-open browser to network traces page on startup',
+        welcomeTitle: '🎉 Welcome to Translex!',
+        welcomeText: 'Please set your <b>API Key</b> in the <code>Configuration</code> tab to enable translation.<br>Once configured, return to the game to use the translate button or press <code>P</code> to translate item lore.',
+        welcomeDismiss: 'Got it',
         buttonStyle: 'Button Style',
+        enableTranslateButton: 'Show Translate Button',
+        enableTranslateButtonDesc: 'Show [Translate] button next to chat messages. Turn off to hide the button.',
         outputMode: 'Translation Output Mode',
         outputModeChat: 'chat — Replace chat message inline',
         outputModeTemporary: 'temporary — Show as temporary tooltip',
@@ -708,6 +1094,37 @@ const I18N_DICT = {
         enableChatCompactDesc: 'Fold duplicate chat messages with a repeat counter',
         compactTimeSeconds: 'Compact Time Window (seconds)',
         compactColorCode: 'Compact Counter Color',
+        // Spam Hider
+        spamEnable: 'Enable Spam Hider',
+        spamEnableDesc: 'When disabled, all filter rules are inactive and messages appear normally',
+        spamFilters: 'Filter Rules',
+        spamAdd: 'Add Rule',
+        spamEmpty: 'No filter rules yet. Click "Add Rule" to create one.',
+        spamName: 'Name',
+        spamPattern: 'Match Pattern',
+        spamType: 'Match Mode',
+        spamState: 'Action',
+        spamColorCode: '§ code',
+        spamNamePlaceholder: 'Filter name',
+        spamPatternPlaceholder: 'Text to match...',
+        spamColorCodeLabel: '§ code',
+        spamColorCodeHelp: 'When enabled, matches against formatted text with Minecraft § color codes. When disabled, matches plain text only.',
+        spamDelete: 'Delete this rule',
+        spamSave: 'Save Rules',
+        spamReload: 'Reload',
+        spamSaved: 'Rules saved',
+        spamSaveFailed: 'Failed to save',
+        spamLoadFailed: 'Failed to load filter rules',
+        spamNewFilter: 'New Filter',
+        spamRefTitle: 'Action Reference',
+        spamRefNormal: 'Message displays normally in chat, no filtering applied',
+        spamRefHidden: 'Message is completely discarded from chat and all other displays',
+        spamRefSeparate: 'Message is removed from chat and shown in a floating HUD overlay',
+        spamRefMatchTitle: 'Match Modes: ',
+        spamRefStartsWith: 'prefix match',
+        spamRefContains: 'contains match',
+        spamRefRegex: 'Java regex',
+        spamRefColorCodeNote: '<strong class="text-gray-300">§ code toggle:</strong> When enabled, matches against text with color codes (e.g. <code class="text-cyber-green bg-cyber-dark px-1 rounded">§r§cThere are no enemies nearby!</code>). Note: § appears as plain text <code class="text-gray-500 bg-cyber-dark px-1 rounded">§</code> in the input field.',
     },
 };
 
@@ -723,10 +1140,12 @@ createApp({
 
             /* ---- 标签页 ---- */
             activeTab: 'dashboard',
+            showWelcome: false,
             tabs: [
                 { id: 'dashboard', label: '' },
                 { id: 'config',    label: '' },
                 { id: 'network',   label: '' },
+                { id: 'debug',     label: '' },
             ],
 
             /* ---- 连接状态 ---- */
@@ -744,8 +1163,9 @@ createApp({
                 apiUrl:                '',
                 model:                 '',
                 systemPrompt:          '',
-                enableMessageIdSystem: true,
+                translationMode: 'auto',
                 buttonStyle:           'NORMAL',
+                enableTranslateButton: true,
                 outputMode:            'chat',
                 enableCachePersistence: true,
                 enablePeriodicSave:    true,
@@ -753,6 +1173,7 @@ createApp({
                 enableChatCompact:     true,
                 compactTimeSeconds:    120,
                 compactColorCode:      'GRAY',
+                debug:                 false,
             },
             showApiKey: false,
             configLoading: false,
@@ -762,8 +1183,12 @@ createApp({
             metrics: {
                 localHits:            0,
                 aiRequests:           0,
-                totalEstimatedTokens: 0,
-                totalSavedTokens:     0,
+                totalEstimatedTokens:     0,
+                totalSavedTokens:         0,
+                totalActualPromptTokens:  0,
+                totalActualCompletionTokens: 0,
+                totalActualTokens:        0,
+                hasActualTokenData:     false,
                 latencyHistory:       [],
             },
             metricsLoading: false,
@@ -773,6 +1198,7 @@ createApp({
 
             /* ---- 控制台 ---- */
             consoleLines: [],
+            consoleLevelFilter: 'all',
             terminalCollapsed: false,
             terminalHeight: 260,
 
@@ -782,6 +1208,13 @@ createApp({
 
             /* ---- Toast ---- */
             toasts: [],
+
+            /* ---- Spam Hider ---- */
+            spamEnabled: true,
+            spamFilters: [],
+            spamLoaded: false,
+            spamLoading: false,
+            spamSaving: false,
 
             /* ---- SSE ---- */
             eventSource: null,
@@ -810,6 +1243,12 @@ createApp({
             if (this.theme === 'dark')   return '🌙';
             return '☀️';
         },
+        /** 按级别过滤控制台行 */
+        filteredConsoleLines() {
+            if (this.consoleLevelFilter === 'all') return this.consoleLines;
+            const lvl = this.consoleLevelFilter;
+            return this.consoleLines.filter(l => l.level === lvl);
+        },
     },
 
     watch: {
@@ -820,6 +1259,18 @@ createApp({
                     if (this.donutChart) this.donutChart.updateOptions({}, false, false);
                     if (this.lineChart)  this.lineChart.updateOptions({}, false, false);
                 });
+            }
+            if (val === 'debug') {
+                this.$nextTick(() => this.scrollDebugConsole());
+            }
+            if (val === 'spam' && !this.spamLoaded) {
+                this.loadSpamFilters();
+            }
+        },
+        /** 当控制台行变化且 Debug 标签页可见时自动滚动到底部 */
+        consoleLines() {
+            if (this.activeTab === 'debug') {
+                this.$nextTick(() => this.scrollDebugConsole());
             }
         },
         /** i18n 响应式更新标签页文案 */
@@ -864,10 +1315,44 @@ createApp({
             this.tabs[0].label = this.lang.dashboard;
             this.tabs[1].label = this.lang.config;
             this.tabs[2].label = this.lang.network;
+            this.tabs[3].label = this.lang.debugTab;
         },
 
         /* ==================== 主题切换 ==================== */
         /** 初始化主题：优先 localStorage，回退跟随系统 */
+        /** 解析 URL hash 并跳转到对应标签页。支持 #dashboard, #config, #network, #debug, #welcome */
+        handleHashNavigation() {
+            const hash = window.location.hash.replace('#', '');
+            if (hash === 'welcome') {
+                this.checkWelcome();
+            } else if (hash === 'spam') {
+                this.activeTab = 'spam';
+                if (!this.spamLoaded) this.loadSpamFilters();
+            } else if (hash === 'network' || hash === 'debug' || hash === 'traces') {
+                this.activeTab = 'network';
+            } else if (hash === 'config') {
+                this.activeTab = 'config';
+            } else if (hash === 'dashboard') {
+                this.activeTab = 'dashboard';
+            }
+        },
+
+        /** 检测是否应显示首次欢迎横幅（sessionStorage + URL hash 双重检查） */
+        checkWelcome() {
+            // 仅在 #welcome hash 且本会话未关闭过横幅时显示
+            if (window.location.hash === '#welcome' && !sessionStorage.getItem('translex-welcome-dismissed')) {
+                this.showWelcome = true;
+                // 清除 hash，避免刷新页面再次触发
+                history.replaceState(null, '', window.location.pathname + window.location.search);
+            }
+        },
+
+        /** 关闭欢迎横幅并记住本会话 */
+        dismissWelcome() {
+            this.showWelcome = false;
+            sessionStorage.setItem('translex-welcome-dismissed', '1');
+        },
+
         initTheme() {
             const saved = localStorage.getItem('translex-theme');
             if (saved === 'dark' || saved === 'light') {
@@ -922,8 +1407,9 @@ createApp({
                 this.config.apiUrl                = data.apiUrl                || data.api_url || '';
                 this.config.model                 = data.model                 || '';
                 this.config.systemPrompt          = data.systemPrompt          || data.system_prompt || '';
-                this.config.enableMessageIdSystem = data.enableMessageIdSystem ?? true;
+                this.config.translationMode = data.translationMode || 'auto';
                 this.config.buttonStyle           = data.buttonStyle           || 'NORMAL';
+                this.config.enableTranslateButton = data.enableTranslateButton ?? true;
                 this.config.outputMode            = data.outputMode            || 'chat';
                 this.config.enableCachePersistence = data.enableCachePersistence ?? true;
                 this.config.enablePeriodicSave    = data.enablePeriodicSave    ?? true;
@@ -931,6 +1417,7 @@ createApp({
                 this.config.enableChatCompact     = data.enableChatCompact     ?? true;
                 this.config.compactTimeSeconds    = data.compactTimeSeconds    || 120;
                 this.config.compactColorCode      = data.compactColorCode      || 'GRAY';
+                this.config.debug                = data.debug                ?? false;
             } catch (err) {
                 console.error('[Translex] fetchConfig error:', err);
                 this.showToast(this.lang.loadFailed, 'error');
@@ -951,8 +1438,9 @@ createApp({
                         apiUrl:                this.config.apiUrl,
                         model:                 this.config.model,
                         systemPrompt:          this.config.systemPrompt,
-                        enableMessageIdSystem: this.config.enableMessageIdSystem,
+                        translationMode: this.config.translationMode,
                         buttonStyle:           this.config.buttonStyle,
+                        enableTranslateButton: this.config.enableTranslateButton,
                         outputMode:            this.config.outputMode,
                         enableCachePersistence: this.config.enableCachePersistence,
                         enablePeriodicSave:    this.config.enablePeriodicSave,
@@ -960,6 +1448,7 @@ createApp({
                         enableChatCompact:     this.config.enableChatCompact,
                         compactTimeSeconds:    this.config.compactTimeSeconds,
                         compactColorCode:      this.config.compactColorCode,
+                        debug:                 this.config.debug,
                     }),
                 });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -986,8 +1475,12 @@ createApp({
                 const data = await res.json();
                 this.metrics.localHits            = data.localHits            || data.local_hits || 0;
                 this.metrics.aiRequests           = data.aiRequests           || data.ai_requests || 0;
-                this.metrics.totalEstimatedTokens = data.totalEstimatedTokens || data.total_estimated_tokens || 0;
-                this.metrics.totalSavedTokens     = data.totalSavedTokens     || data.total_saved_tokens || 0;
+                this.metrics.totalEstimatedTokens      = data.totalEstimatedTokens      || data.total_estimated_tokens || 0;
+                this.metrics.totalSavedTokens          = data.totalSavedTokens          || data.total_saved_tokens || 0;
+                this.metrics.totalActualPromptTokens   = data.totalActualPromptTokens   || data.total_actual_prompt_tokens || 0;
+                this.metrics.totalActualCompletionTokens = data.totalActualCompletionTokens || data.total_actual_completion_tokens || 0;
+                this.metrics.totalActualTokens         = data.totalActualTokens         || data.total_actual_tokens || 0;
+                this.metrics.hasActualTokenData      = data.hasActualTokenData      || false;
                 this.metrics.latencyHistory       = data.latencyHistory       || data.latency_history || [];
                 // 更新图表数据
                 this.updateCharts();
@@ -1005,12 +1498,10 @@ createApp({
                 if (!res.ok) return;
                 const data = await res.json();
                 if (Array.isArray(data)) {
-                    // 保留之前的展开状态
                     const oldMap = {};
                     this.traces.forEach(t => { oldMap[t.id] = t.expanded; });
-                    this.traces = data.map((t, i) => ({
+                    this.traces = data.map(t => ({
                         ...t,
-                        id:       t.id || t.timestamp + '_' + i,
                         expanded: oldMap[t.id] || false,
                     }));
                 }
@@ -1227,9 +1718,26 @@ createApp({
             });
         },
 
+        /** 滚动 Debug 控制台到底部 */
+        scrollDebugConsole() {
+            const el = this.$refs.debugConsoleEl;
+            if (el) el.scrollTop = el.scrollHeight;
+        },
+
         /** 清空控制台 */
         clearConsole() {
             this.consoleLines = [];
+        },
+
+        /** 控制台日志级别徽章样式 */
+        levelBadgeClass(level) {
+            switch (level) {
+                case 'ERROR': return 'inline-block text-xs px-1 rounded mr-1 bg-red-900 text-red-300';
+                case 'WARN':  return 'inline-block text-xs px-1 rounded mr-1 bg-amber-900 text-amber-300';
+                case 'INFO':  return 'inline-block text-xs px-1 rounded mr-1 bg-blue-900 text-blue-300';
+                case 'DEBUG': return 'inline-block text-xs px-1 rounded mr-1 bg-gray-700 text-gray-400';
+                default:      return '';
+            }
         },
 
         /* ==================== 网络抓包手风琴 ==================== */
@@ -1262,6 +1770,70 @@ createApp({
         },
     },
 
+        /* ==================== Spam Hider ==================== */
+        async loadSpamFilters() {
+            this.spamLoading = true;
+            try {
+                const res = await fetch(this.apiUrl('/api/spam-filters'));
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                this.spamEnabled = data.enabled ?? true;
+                this.spamFilters = (data.filters || []).map(f => ({
+                    name: f.name || '',
+                    patternString: f.patternString || '',
+                    type: f.type || 'CONTAINS',
+                    state: f.state || 'NORMAL',
+                    formatted: f.formatted ?? false,
+                }));
+                this.spamLoaded = true;
+            } catch (err) {
+                console.error('[Translex] loadSpamFilters error:', err);
+                this.showToast(this.lang.spamLoadFailed, 'error');
+            } finally {
+                this.spamLoading = false;
+            }
+        },
+
+        async saveSpamFilters() {
+            this.spamSaving = true;
+            try {
+                const res = await fetch(this.apiUrl('/api/spam-filters/save'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        enabled: this.spamEnabled,
+                        filters: this.spamFilters,
+                    }),
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const result = await res.json();
+                if (result.success) {
+                    this.showToast(result.message || this.lang.spamSaved, 'success');
+                } else {
+                    throw new Error(result.error || 'unknown');
+                }
+            } catch (err) {
+                console.error('[Translex] saveSpamFilters error:', err);
+                this.showToast(this.lang.spamSaveFailed, 'error');
+            } finally {
+                this.spamSaving = false;
+            }
+        },
+
+        addSpamFilter() {
+            this.spamFilters.push({
+                name: this.lang.spamNewFilter,
+                patternString: '',
+                type: 'CONTAINS',
+                state: 'HIDDEN',
+                formatted: false,
+            });
+        },
+
+        removeSpamFilter(index) {
+            this.spamFilters.splice(index, 1);
+        },
+
     /* ==================== 生命周期 ==================== */
     mounted() {
         // 0. 主题初始化（尽可能早，避免闪烁）
@@ -1283,6 +1855,9 @@ createApp({
         this.metricsTimer = setInterval(() => this.fetchMetrics(), 5000);
         // 6. 定时轮询抓包记录（每 3 秒）
         this.tracesTimer = setInterval(() => this.fetchTraces(), 3000);
+        // 7. URL hash 导航（支持直接打开 #network 等标签页）
+        this.handleHashNavigation();
+        window.addEventListener('hashchange', () => this.handleHashNavigation());
     },
 
     beforeUnmount() {

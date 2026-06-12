@@ -1,15 +1,15 @@
-package top.iencand.translex.client.translate;
+package top.iencand.translex.client.translate.model;
 
 import net.minecraft.item.ItemStack;
-import top.iencand.translex.client.cache.TemporaryTooltipCache;
+import top.iencand.translex.client.translate.cache.TemporaryTooltipCache;
 import top.iencand.translex.client.config.ModConfig;
 import top.iencand.translex.client.util.ItemIdExtractor;
 
 import java.util.List;
 
 /**
- * Shared guard + cache lookup used by ScreenTooltipMixin and DrawContextTooltipMixin.
- * Returns plain {@code List<String>} — styles are applied from original tooltip lines.
+ * 共享的守卫和缓存查找工具类，供 ScreenTooltipMixin 和 DrawContextTooltipMixin 使用。
+ * 返回纯文本 {@code List<String>}，样式在替换时从原始工具提示行中获取。
  */
 public final class TranslexTooltipContext {
 

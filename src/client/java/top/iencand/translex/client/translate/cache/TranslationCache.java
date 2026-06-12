@@ -1,8 +1,9 @@
-package top.iencand.translex.client.translate;
+package top.iencand.translex.client.translate.cache;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
+import top.iencand.translex.client.web.ConsoleBroadcaster;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -25,14 +26,14 @@ public class TranslationCache {
      */
     public void load(File baseDir) {
         if (!baseDir.exists()) {
-            System.out.println("[Translex-Debug] 目录不存在，创建新目录: " + baseDir.getAbsolutePath());
+            ConsoleBroadcaster.broadcast("DEBUG", "Cache dir not found, creating: " + baseDir.getAbsolutePath());
             baseDir.mkdirs();
             return;
         }
 
         File[] files = baseDir.listFiles((dir, name) -> name.startsWith("shard_") && name.endsWith(".json"));
         if (files == null || files.length == 0) {
-            System.out.println("[Translex-Debug] 警告：在目录内未找到任何 shard_*.json 文件！");
+            ConsoleBroadcaster.broadcast("DEBUG", "No shard_*.json files found in cache dir");
             return;
         }
 
@@ -45,15 +46,14 @@ public class TranslationCache {
                 if (shardData != null) {
                     storage.putAll(shardData);
                     totalLoaded += shardData.size();
-                    // 打印前两个 Key 看看长什么样，检查是否有“补丁污染”
                     shardData.keySet().stream().limit(1).forEach(k ->
-                            System.out.println("[Translex-Debug] 样本加载 Key: [" + k + "]"));
+                            ConsoleBroadcaster.broadcast("DEBUG", "Sample cache key: [" + k + "]"));
                 }
             } catch (Exception e) {
-                System.err.println("[Translex-Debug] 加载文件 " + file.getName() + " 失败: " + e.getMessage());
+                ConsoleBroadcaster.broadcast("WARN", "Failed to load shard " + file.getName() + ": " + e.getMessage());
             }
         }
-        System.out.println("[Translex-Debug] 缓存同步就绪！内存条目总数: " + storage.size());
+        ConsoleBroadcaster.broadcast("DEBUG", "Cache sync ready — " + storage.size() + " entries in memory");
     }
 
     /**
@@ -64,11 +64,8 @@ public class TranslationCache {
         String normKey = normalize(original);
         String result = storage.get(normKey);
 
-        // 只有在没命中的时候输出，防止刷屏，或者根据需要开启全量输出
-        if (result == null) {
-            // System.out.println("[Translex-Debug] 缓存未命中: [" + normKey + "]");
-        } else {
-            System.out.println("[Translex-Debug] 缓存命中成功！Key: [" + normKey.substring(0, Math.min(normKey.length(), 20)) + "...]");
+        if (result != null) {
+            ConsoleBroadcaster.broadcast("DEBUG", "Cache hit (legacy): [" + normKey.substring(0, Math.min(normKey.length(), 20)) + "...]");
         }
         return result;
     }
@@ -86,7 +83,7 @@ public class TranslationCache {
         if (normKey == null) return null;
         String result = storage.get(normKey);
         if (result != null) {
-            System.out.println("[Translex-Debug] 缓存命中 (normKey)！Key: [" + normKey.substring(0, Math.min(normKey.length(), 20)) + "...]");
+            ConsoleBroadcaster.broadcast("DEBUG", "Cache hit (normKey): [" + normKey.substring(0, Math.min(normKey.length(), 20)) + "...]");
         }
         return result;
     }
@@ -125,7 +122,7 @@ public class TranslationCache {
                 new FileOutputStream(shardFile), StandardCharsets.UTF_8)) {
             GSON.toJson(data, writer);
         } catch (IOException e) {
-            System.err.println("[Translex] 保存分片 " + shardId + " 失败: " + e.getMessage());
+            ConsoleBroadcaster.broadcast("ERROR", "Failed to save shard " + shardId + ": " + e.getMessage());
         }
     }
 

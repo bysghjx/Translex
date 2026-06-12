@@ -1,4 +1,4 @@
-package top.iencand.translex.client.translate;
+package top.iencand.translex.client.translate.model;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -16,32 +16,40 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
- * Persistent library mapping SkyBlock item IDs to their full translated lore.
- * Used by "permanent" output mode and the tooltip replacement Mixin.
+ * 永久预设库，将 SkyBlock 物品 ID 映射到完整的翻译后说明文本。
+ * 用于 "permanent" 输出模式和工具提示替换 Mixin。
  *
- * <p>Stores {@code Map<String, List<Text>>} in memory and serializes
- * the underlying strings to {@code item_cache.json}.</p>
+ * <p>在内存中存储 {@code Map<String, List<String>>}，并将数据序列化到
+ * {@code item_cache.json} 文件中。</p>
  */
 public class ItemPresetLibrary {
     private static final Logger LOGGER = LoggerFactory.getLogger("ItemPresetLibrary");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    // --- storage: itemId → lore lines (as string for JSON serialization) ---
+    // -------- 存储结构：itemId → 说明行列表（字符串形式用于 JSON 序列化） --------
     private final ConcurrentHashMap<String, List<String>> items = new ConcurrentHashMap<>();
+    private final ExecutorService saveExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "PresetSaver");
+        t.setDaemon(true);
+        return t;
+    });
     private File file;
 
-    // --- singleton for Mixin access ---
+    // -------- Mixin 使用的单例 --------
     private static ItemPresetLibrary INSTANCE;
 
     public static ItemPresetLibrary getInstance() {
         return INSTANCE;
     }
 
-    // ---------------------------------------------------------------
-    // Load / Save
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 加载 / 保存
+    // ===============================================================
 
     public void load() {
         INSTANCE = this;
@@ -61,7 +69,7 @@ public class ItemPresetLibrary {
     }
 
     private void saveAsync() {
-        new Thread(this::save, "PresetSaver").start();
+        saveExecutor.execute(this::save);
     }
 
     private synchronized void save() {
@@ -75,6 +83,17 @@ public class ItemPresetLibrary {
         }
     }
 
+    public void shutdown() {
+        saveExecutor.shutdown();
+        try {
+            if (!saveExecutor.awaitTermination(2, TimeUnit.SECONDS)) {
+                saveExecutor.shutdownNow();
+            }
+        } catch (InterruptedException ignored) {
+            saveExecutor.shutdownNow();
+        }
+    }
+
     private static File getPresetFile() {
         File configDir = FabricLoader.getInstance().getConfigDir().toFile();
         File modDir = new File(configDir, "translex");
@@ -82,13 +101,13 @@ public class ItemPresetLibrary {
         return new File(modDir, "item_cache.json");
     }
 
-    // ---------------------------------------------------------------
-    // Access — for Mixin
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 访问接口 — 供 Mixin 使用
+    // ===============================================================
 
     /**
-     * Returns the full translated tooltip as {@code List<String>} (plain text per line).
-     * Called by the tooltip replacement Mixin — styles are applied from original lines.
+     * 返回完整的翻译后工具提示，以 {@code List<String>} 形式（每行纯文本）。
+     * 由工具提示替换 Mixin 调用，样式从原始行中获取。
      */
     public List<String> getTooltip(String itemId) {
         if (itemId == null || itemId.isEmpty()) return null;
@@ -96,8 +115,8 @@ public class ItemPresetLibrary {
     }
 
     /**
-     * Store the full translated tooltip for a given item ID.
-     * Called by TranslationManager after a successful translation in permanent mode.
+     * 为指定物品 ID 存储完整的翻译后工具提示。
+     * 由 TranslationManager 在 permanent 模式下成功翻译后调用。
      */
     public void putTooltip(String itemId, List<String> lines) {
         if (itemId == null || itemId.isEmpty() || lines == null) return;
@@ -105,11 +124,11 @@ public class ItemPresetLibrary {
         saveAsync();
     }
 
-    // ---------------------------------------------------------------
-    // Legacy compat — used by ChatRenderer / command path
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 旧版兼容 — 由 ChatRenderer / 命令路径使用
+    // ===============================================================
 
-    /** Get preset as joined string (for chat rendering). */
+    /** 获取预设库中的条目（合并后的字符串，用于聊天渲染） */
     public ItemPreset get(String itemId) {
         if (itemId == null || itemId.isEmpty()) return null;
         List<String> lines = items.get(itemId);
@@ -117,7 +136,7 @@ public class ItemPresetLibrary {
         return new ItemPreset(lines.get(0), lines);
     }
 
-    /** Get preset lore as List<Text> with gray formatting (for chat rendering). */
+    /** 获取预设库中的说明文本，以灰色格式化的 List&lt;Text&gt; 返回（用于聊天渲染） */
     public List<Text> getAsText(String itemId) {
         List<String> lines = getTooltip(itemId);
         if (lines == null) return null;
@@ -128,7 +147,7 @@ public class ItemPresetLibrary {
         return result;
     }
 
-    /** Store a single-lore-string preset (backward compat). */
+    /** 存储单字符串格式的预设（向后兼容） */
     public void put(String itemId, String nameZh, String loreZh) {
         if (itemId == null || itemId.isEmpty()) return;
         List<String> lines = (loreZh != null)
@@ -138,29 +157,29 @@ public class ItemPresetLibrary {
         saveAsync();
     }
 
-    /** Store a multi-line lore preset. */
+    /** 存储多行说明文本的预设 */
     public void putLines(String itemId, String nameZh, List<String> loreLines) {
         if (itemId == null || itemId.isEmpty()) return;
         items.put(itemId, loreLines);
         saveAsync();
     }
 
-    /** Remove a single item preset by ID. */
+    /** 按 ID 移除单个物品预设 */
     public void remove(String itemId) {
         if (itemId == null) return;
         items.remove(itemId);
         saveAsync();
     }
 
-    /** Clear all presets. */
+    /** 清空所有预设 */
     public void clear() {
         items.clear();
         saveAsync();
     }
 
-    // ---------------------------------------------------------------
-    // ItemPreset
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 物品预设内部类
+    // ===============================================================
 
     public static class ItemPreset {
         public String name;

@@ -6,18 +6,16 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Extracts and normalizes digit sequences for cache-key deduplication.
- * Replace all digit runs with a single {num} placeholder so that
- * "Deals 100 damage" and "Deals 50 damage" share the same cache key.
+ * 数字提取与规范化工具，用于缓存键去重。
+ * 将所有数字序列替换为 {num} 占位符，使得
+ * "造成 100 点伤害"和"造成 50 点伤害"共享同一个缓存键。
  */
 public class NumberNormalizer {
     private static final Pattern DIGIT_PATTERN = Pattern.compile("\\d+");
 
     private final List<String> originalNumbers = new ArrayList<>();
 
-    /**
-     * Replace all digit sequences with {@code {num}} and record the originals.
-     */
+    /** 将所有数字序列替换为 {@code {num}} 并记录原始数字 */
     public String normalize(String text) {
         if (text == null) return "";
         originalNumbers.clear();
@@ -32,9 +30,8 @@ public class NumberNormalizer {
     }
 
     /**
-     * Restore the original digit sequences back into the translated text.
-     * Walks through the translated string and replaces each {@code {num}}
-     * with the corresponding recorded original number.
+     * 将原始数字序列恢复回翻译文本中。
+     * 遍历翻译后的字符串，将每个 {@code {num}} 替换为对应的原始数字。
      */
     public String restore(String translated) {
         if (translated == null || originalNumbers.isEmpty()) return translated;
@@ -52,7 +49,7 @@ public class NumberNormalizer {
         return sb.toString();
     }
 
-    /** Static convenience: does this text contain any digit? */
+    /** 静态便捷方法：文本是否包含任何数字？ */
     public static boolean containsDigit(String text) {
         return text != null && DIGIT_PATTERN.matcher(text).find();
     }

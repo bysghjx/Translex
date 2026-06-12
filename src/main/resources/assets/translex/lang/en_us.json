@@ -10,6 +10,7 @@
   "translex.info.processing": "Translating...",
   "translex.info.success": "Translation complete",
   "translex.info.config_reloaded": "Config file reloaded successfully!",
+  "translex.info.translation_mode": "Translation mode: %s",
   "translex.info.mode_message_id": "Current mode: Message ID + Button (§eRestart required to switch§r).",
   "translex.info.mode_command_text": "Current mode: Command + Text (§eRestart required to switch§r).",
   "translex.info.request_sent": "§eTranslation request sent, please wait...§r",
@@ -20,6 +21,8 @@
   "translex.error.hover": "§7--- Error Details ---\n§c%s",
 
   "translex.error.api_key_missing": "API Key not set. Please configure it in the mod config!",
+  "translex.error.api_key_unset": "API Key not set! Configure it to enable translation.",
+  "translex.error.api_key_hint": "Open the web panel to set your API key",
   "translex.error.config_load": "Error reloading config file. Check the log for details!",
   "translex.error.invalid_id": "Invalid message ID: %s",
   "translex.error.not_found": "Message not found for translation (ID: %s). It may have expired.",
@@ -69,6 +72,9 @@
   "translex.gui.translate_button_hover_legacy": "§aClick to translate this message",
 
   "translex.info.button_style": "Button style: %s",
+  "translex.info.button_enabled": "ON",
+  "translex.info.button_disabled": "OFF",
+  "translex.info.button_status": "Translation button: %s",
 
   "translex.info.translating_batch": "Translating %s items…",
   "translex.info.preparing": "Preparing translation (%s)…",
@@ -79,5 +85,9 @@
   "translex.info.perm_mode_hint": "§7[Perm mode] Translation saved to preset library permanently.§r",
   "translex.error.invalid_mode": "Invalid output mode '%s'. Options: chat, temporary, permanent",
 
-  "translex.info.config_opened": "Web config panel opened: %s"
+  "translex.info.config_opened": "Web config panel opened: %s",
+
+  "translex.info.debug_enabled": "Debug mode §aenabled§r — translation works without API key, returns original text with [DEBUG] marker",
+  "translex.info.debug_disabled": "Debug mode §cdisabled§r — normal API translation flow restored",
+  "translex.info.debug_hint": "Translated text will have a §e[DEBUG]§r prefix to identify it as mock translation"
 }

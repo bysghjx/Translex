@@ -7,8 +7,9 @@ import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
 /**
- * Accessor for {@link OrderedTextTooltipComponent#text} so the tooltip
- * replacement mixin can read and replace the {@link OrderedText}.
+ * 访问器 Mixin，提供对 {@link OrderedTextTooltipComponent#text} 字段的读写访问。
+ * 在 DrawContextTooltipMixin 中用于读取和替换悬浮提示框中的文本内容，
+ * 同时保留原始行的样式信息。
  */
 @Mixin(OrderedTextTooltipComponent.class)
 public interface OrderedTextTooltipComponentAccessor {

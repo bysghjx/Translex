@@ -1,9 +1,16 @@
 package top.iencand.translex.client.translate;
 
-// 定义一个回调接口，用于在请求完成后报告结果
-@FunctionalInterface // 可以标记为函数式接口，如果只有一个抽象方法
+/**
+ * 翻译请求完成后的回调接口。
+ * 在 {@link TranslationRequester} 收到 AI 响应后调用，将结果传递回请求发起方。
+ */
+@FunctionalInterface
 interface TranslationCallback {
-    // 当翻译请求完成时调用
-    // translatedTextForDisplay 包含翻译结果或错误信息，已经带颜色码和前缀
+    /**
+     * 翻译请求完成时调用。
+     * @param cacheKey 用于缓存查找的键
+     * @param translatedTextForDisplay 翻译结果文本（已带颜色码和前缀，可直接显示）
+     * @param displayIdentifier 显示标识符，用于关联请求与响应
+     */
     void onTranslationComplete(String cacheKey, String translatedTextForDisplay, String displayIdentifier);
 }

@@ -6,47 +6,36 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
 
 /**
- * Extracts the SkyBlock item ID from NBT at {@code ExtraAttributes.id}.
+ * 从物品 NBT 中提取 SkyBlock 物品 ID。
+ * ID 位于 {@code ExtraAttributes.id} 字段，例如 "HYPERION"、"ASPECT_OF_THE_END"。
  */
 public final class ItemIdExtractor {
 
     private ItemIdExtractor() {}
 
     /**
-     * Read the SkyBlock internal item ID (e.g. "HYPERION", "ASPECT_OF_THE_END")
-     * from the item's custom NBT data.
+     * 从物品的自定义 NBT 数据中读取 SkyBlock 内部物品 ID。
      *
-     * @return the item ID, or null if not present
+     * @param stack 物品堆栈
+     * @return 物品 ID，如果不存在则返回 null
      */
     public static String extractSkyBlockItemId(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return null;
 
         NbtComponent customData = stack.get(DataComponentTypes.CUSTOM_DATA);
-        if (customData == null) {
-            System.out.println("[Translex-ItemId] CUSTOM_DATA is null for " + stack.getName().getString());
-            return null;
-        }
+        if (customData == null) return null;
 
         NbtCompound nbt = customData.copyNbt();
 
-        // Path 1: ExtraAttributes.id (older Hypixel format)
         if (nbt.contains("ExtraAttributes")) {
             NbtCompound extraAttrs = nbt.getCompound("ExtraAttributes").orElse(null);
-            if (extraAttrs != null && extraAttrs.contains("id")) {
-                String id = extraAttrs.getString("id").orElse(null);
-                System.out.println("[Translex-ItemId] Extracted from ExtraAttributes.id: " + id);
-                return id;
-            }
+            if (extraAttrs != null && extraAttrs.contains("id"))
+                return extraAttrs.getString("id").orElse(null);
         }
 
-        // Path 2: id directly at root (newer/flat format)
-        if (nbt.contains("id")) {
-            String id = nbt.getString("id").orElse(null);
-            System.out.println("[Translex-ItemId] Extracted from root id: " + id);
-            return id;
-        }
+        if (nbt.contains("id"))
+            return nbt.getString("id").orElse(null);
 
-        System.out.println("[Translex-ItemId] No id found. NBT keys: " + nbt.getKeys());
         return null;
     }
 }

@@ -2,44 +2,38 @@ package top.iencand.translex.client.translate;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonSyntaxException;
-import com.google.gson.reflect.TypeToken;
 import net.minecraft.client.MinecraftClient;
 import top.iencand.translex.client.config.ModConfig;
-import top.iencand.translex.client.net.NetworkConfig;
+import top.iencand.translex.client.config.NetworkConfig;
+import top.iencand.translex.client.translate.render.TranslationProgressTracker;
 import top.iencand.translex.client.util.I18nHelper;
 import top.iencand.translex.client.web.ConsoleBroadcaster;
 import top.iencand.translex.client.web.MetricsCollector;
 import top.iencand.translex.client.web.TokenCounter;
 
-import java.lang.reflect.Type;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.regex.Pattern;
 
 /**
- * Network-layer core: batching, request deduplication, dict-format payloads,
- * defensive response cleaning, and single-item retry on missing entries.
+ * 网络层核心组件：批处理、请求去重、字典格式载荷、防御性响应清理、
+ * 以及缺失条目的单条重试。
  *
- * <p>Callers use {@link #submit(String)} to enqueue a text and receive a
- * {@link CompletableFuture} that completes with the translated result.</p>
+ * <p>调用方通过 {@link #submit(String)} 加入文本队列，返回
+ * {@link CompletableFuture} 在翻译完成后获得结果。</p>
+ *
+ * <p>批处理策略：在 1500ms 窗口内收集多条翻译请求，合并为一个字典格式的
+ * JSON 载荷发送到 AI API，以提高吞吐量。</p>
  */
 public class TranslationDispatcher {
 
     private static final Gson GSON = new Gson();
-    private static final Type MAP_TYPE = new TypeToken<Map<String, String>>() {}.getType();
 
-    /**
-     * Fixes AI responses that use unquoted numeric keys: {@code {0:"text"}} → {@code {"0":"text"}}.
-     */
-    private static final Pattern UNQUOTED_KEY_RE = Pattern.compile("\\{(\\d+):");
-
-    // --- dedup ---
+    // -------- 请求去重 --------
     private final ConcurrentHashMap<String, CompletableFuture<String>> pendingRequests = new ConcurrentHashMap<>();
 
-    // --- batching ---
+    // -------- 批处理队列 --------
     private final List<BatchEntry> batchQueue = Collections.synchronizedList(new ArrayList<>());
     private final ScheduledExecutorService windowScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "Translex-Dispatcher");
@@ -49,24 +43,27 @@ public class TranslationDispatcher {
     private ScheduledFuture<?> windowFuture;
     private static final long WINDOW_MS = 1500;
 
-    // --- components ---
+    // -------- 组件 --------
     private final TranslationRequester requester = new TranslationRequester();
     private final TranslationProgressTracker progressTracker = new TranslationProgressTracker();
     private static final String BATCH_DISPLAY_ID = "TL_BATCH";
 
-    // --- batch state ---
+    // -------- 批处理状态 --------
     private volatile int batchSeq = 0;
+    private volatile boolean shutdown;
     private static final DateTimeFormatter TRACE_TF = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     private record BatchEntry(int index, String text, CompletableFuture<String> future) {}
 
-    // ---------------------------------------------------------------
-    // Public API
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 公开 API
+    // ===============================================================
 
     /**
-     * Submit text for translation. If an identical text is already pending
-     * the returned future is shared (deduplication).
+     * 提交文本进行翻译。如果相同文本已在队列中等待，则返回已存在的 Future（去重）。
+     *
+     * @param text 待翻译文本
+     * @return 翻译完成后的 Future
      */
     public CompletableFuture<String> submit(String text) {
         if (text == null || text.isBlank()) {
@@ -94,9 +91,9 @@ public class TranslationDispatcher {
         return future;
     }
 
-    // ---------------------------------------------------------------
-    // Window timer
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 窗口定时器（延迟刷出，收集批处理）
+    // ===============================================================
 
     private void scheduleWindow() {
         synchronized (this) {
@@ -106,9 +103,9 @@ public class TranslationDispatcher {
         }
     }
 
-    // ---------------------------------------------------------------
-    // Flush: build dict, send, parse, complete futures
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 刷出：构建字典载荷、发送、解析、完成 Future
+    // ===============================================================
 
     private void flush() {
         List<BatchEntry> batch;
@@ -134,8 +131,9 @@ public class TranslationDispatcher {
                 I18nHelper.translate("translex.info.translating_batch", batch.size()));
 
         // ---- 指标采集 + 控制台广播 ----
-        long estimatedTokens = TokenCounter.estimate(ModConfig.get().translationPrompt)
-                + TokenCounter.estimate(payload);
+        long systemPromptTokens = TokenCounter.estimate(ModConfig.get().translationPrompt);
+        long payloadTokens      = TokenCounter.estimate(payload);
+        long estimatedTokens    = systemPromptTokens + payloadTokens;
         MetricsCollector.get().recordAiRequestWithTokens(estimatedTokens);
         final long startTime = System.currentTimeMillis();
         final String apiUrlSnapshot = ModConfig.get().apiUrl;
@@ -154,11 +152,15 @@ public class TranslationDispatcher {
                 (cacheKey, rawResult, displayId) -> {
                     long duration = System.currentTimeMillis() - startTime;
                     MetricsCollector.get().recordLatency(duration);
-                    MetricsCollector.get().recordTrace(new MetricsCollector.TraceEntry(
+                    MetricsCollector.TraceEntry te = new MetricsCollector.TraceEntry(
                             LocalTime.now().format(TRACE_TF),
                             "POST", apiUrlSnapshot,
                             !rawResult.startsWith("§c"), duration,
-                            payload, rawResult));
+                            payload, rawResult);
+                    te.estimatedTokens            = estimatedTokens;
+                    te.estimatedSystemPromptTokens = systemPromptTokens;
+                    te.estimatedPayloadTokens      = payloadTokens;
+                    MetricsCollector.get().recordTrace(te);
                     if (rawResult.startsWith("§c")) {
                         ConsoleBroadcaster.broadcast("ERROR",
                                 "AI batch #" + seq + " FAILED after " + duration + "ms — " + rawResult);
@@ -172,6 +174,7 @@ public class TranslationDispatcher {
     }
 
     private void handleBatchResponse(String rawResult, List<BatchEntry> batch, int seq) {
+        if (shutdown) return;
         MinecraftClient.getInstance().execute(() -> {
             try {
                 Map<Integer, String> parsed = parseDictResponse(rawResult, batch.size());
@@ -204,66 +207,21 @@ public class TranslationDispatcher {
         });
     }
 
-    // ---------------------------------------------------------------
-    // Dict response parsing with defensive cleaning
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 字典响应解析（带防御性清理）
+    // ===============================================================
 
     static Map<Integer, String> parseDictResponse(String raw, int expectedSize) {
-        if (raw == null || raw.isBlank()) return Map.of();
-
-        // 1. Strip Minecraft color codes and markdown fences
-        String cleaned = raw
-                .replaceAll("§[0-9a-fk-or]", "")
-                .replaceAll("```(?:json)?\\s*|```", "")
-                .trim();
-
-        // 2. Extract JSON object
-        cleaned = extractJsonObject(cleaned);
-
-        // 3. Defensive: fix unquoted numeric keys {0:"text"} → {"0":"text"}
-        cleaned = UNQUOTED_KEY_RE.matcher(cleaned).replaceAll("{\"$1\":");
-
-        // 4. Parse
         try {
-            Map<String, String> stringMap = GSON.fromJson(cleaned, MAP_TYPE);
-            Map<Integer, String> result = new LinkedHashMap<>();
-            if (stringMap != null) {
-                for (Map.Entry<String, String> e : stringMap.entrySet()) {
-                    try {
-                        result.put(Integer.parseInt(e.getKey()), e.getValue());
-                    } catch (NumberFormatException ignored) {}
-                }
-            }
-            return result;
-        } catch (JsonSyntaxException e) {
-            // Fallback: try as array
-            try {
-                String[] arr = GSON.fromJson(cleaned, String[].class);
-                Map<Integer, String> result = new LinkedHashMap<>();
-                if (arr != null) {
-                    for (int i = 0; i < arr.length; i++) {
-                        result.put(i, arr[i]);
-                    }
-                }
-                return result;
-            } catch (JsonSyntaxException e2) {
-                return Map.of();
-            }
+            return new TranslationParser().parseDict(raw, expectedSize);
+        } catch (TranslationParser.ParseException e) {
+            return Map.of();
         }
     }
 
-    private static String extractJsonObject(String input) {
-        int first = input.indexOf('{');
-        int last = input.lastIndexOf('}');
-        if (first != -1 && last != -1 && last > first) {
-            return input.substring(first, last + 1);
-        }
-        return input;
-    }
-
-    // ---------------------------------------------------------------
-    // Single-item retry (dict format, id=0)
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 单条重试（字典格式，id=0）
+    // ===============================================================
 
     private void retrySingle(BatchEntry entry) {
         NetworkConfig.RETRY_EXECUTOR.execute(() -> {
@@ -275,8 +233,9 @@ public class TranslationDispatcher {
                 CompletableFuture<String> retryFuture = new CompletableFuture<>();
 
                 // ---- 指标采集 + 控制台广播 ----
-                long estTokens = TokenCounter.estimate(ModConfig.get().translationPrompt)
-                        + TokenCounter.estimate(payload);
+                long sysTokens = TokenCounter.estimate(ModConfig.get().translationPrompt);
+                long payTokens = TokenCounter.estimate(payload);
+                long estTokens = sysTokens + payTokens;
                 MetricsCollector.get().recordAiRequestWithTokens(estTokens);
                 final long startTime = System.currentTimeMillis();
                 final String apiUrlSnapshot = ModConfig.get().apiUrl;
@@ -294,27 +253,39 @@ public class TranslationDispatcher {
                         (cacheKey, rawResult, displayId) -> {
                             long duration = System.currentTimeMillis() - startTime;
                             MetricsCollector.get().recordLatency(duration);
-                            MetricsCollector.get().recordTrace(new MetricsCollector.TraceEntry(
+                            MetricsCollector.TraceEntry te = new MetricsCollector.TraceEntry(
                                     LocalTime.now().format(TRACE_TF),
                                     "POST", apiUrlSnapshot,
                                     !rawResult.startsWith("§c"), duration,
-                                    payload, rawResult));
+                                    payload, rawResult);
+                            te.estimatedTokens            = estTokens;
+                            te.estimatedSystemPromptTokens = sysTokens;
+                            te.estimatedPayloadTokens      = payTokens;
+                            MetricsCollector.get().recordTrace(te);
                             Map<Integer, String> parsed = parseDictResponse(rawResult, 1);
                             String result = parsed.getOrDefault(0, entry.text());
-                            MinecraftClient.getInstance().execute(() ->
-                                    entry.future().complete(result));
+                            if (!shutdown) {
+                                MinecraftClient.getInstance().execute(() ->
+                                        entry.future().complete(result));
+                            } else {
+                                entry.future().complete(result);
+                            }
                         }
                 );
             } catch (Exception e) {
-                MinecraftClient.getInstance().execute(() ->
-                        entry.future().complete(entry.text()));
+                if (!shutdown) {
+                    MinecraftClient.getInstance().execute(() ->
+                            entry.future().complete(entry.text()));
+                } else {
+                    entry.future().complete(entry.text());
+                }
             }
         });
     }
 
-    // ---------------------------------------------------------------
-    // Progress tracking
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 进度跟踪
+    // ===============================================================
 
     private void updateProgress() {
         int count;
@@ -332,11 +303,12 @@ public class TranslationDispatcher {
         progressTracker.updateLoading(BATCH_DISPLAY_ID, msg);
     }
 
-    // ---------------------------------------------------------------
-    // Lifecycle
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // 生命周期管理
+    // ===============================================================
 
     public void shutdown() {
+        shutdown = true;
         windowScheduler.shutdown();
         try {
             if (!windowScheduler.awaitTermination(1, TimeUnit.SECONDS)) {
