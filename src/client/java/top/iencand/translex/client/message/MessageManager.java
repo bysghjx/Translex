@@ -1,7 +1,7 @@
 package top.iencand.translex.client.message;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import top.iencand.translex.client.config.ModConfig;
 import top.iencand.translex.client.ext.IChatHudExt;
 import top.iencand.translex.client.util.ChatProcessor;
@@ -33,7 +33,7 @@ public class MessageManager {
      * @param message 原始消息
      * @return 处理后的消息，或 null 表示静默拦截（不显示）
      */
-    public Text compactMessage(Text message) {
+    public Component compactMessage(Component message) {
         ModConfig config = ModConfig.get();
         if (!config.enableChatCompact || message == null) return message;
         if (!ChatProcessor.shouldProcess(message)) return message;
@@ -72,19 +72,20 @@ public class MessageManager {
     }
 
     /**
-     * 原地静默更新数字：在聊天列表中找到对应行，直接替换其 Text 内容。
+     * 原地静默更新数字：在聊天列表中找到对应行，直接替换其 Component 内容。
      * 不会产生滚动动画，因为不经过 addMessage 流程。
      */
-    private void updateMessageInPlace(String fingerprint, Text baseText, int count) {
+    private void updateMessageInPlace(String fingerprint, Component baseText, int count) {
         var lines = this.chatHud.translex$getMessages();
         for (int i = 0; i < lines.size(); i++) {
             if (ChatProcessor.getFoldFingerprint(lines.get(i).content()).equals(fingerprint)) {
                 var oldLine = lines.get(i);
-                lines.set(i, new net.minecraft.client.gui.hud.ChatHudLine(
-                        oldLine.creationTick(),
+                lines.set(i, new net.minecraft.client.multiplayer.chat.GuiMessage(
+                        oldLine.addedTime(),
                         formatWithCount(baseText, count),
                         oldLine.signature(),
-                        oldLine.indicator()
+                        oldLine.source(),
+                        oldLine.tag()
                 ));
                 this.chatHud.translex$refreshMessages();
                 return;
@@ -101,9 +102,9 @@ public class MessageManager {
     }
 
     /** 格式化带计数的消息文本 */
-    private Text formatWithCount(Text base, int count) {
+    private Component formatWithCount(Component base, int count) {
         if (count <= 1) return base;
-        return base.copy().append(Text.literal(" (x" + count + ")").formatted(ModConfig.get().getCompactColor()));
+        return base.copy().append(Component.literal(" (x" + count + ")").withStyle(ModConfig.get().getCompactColor()));
     }
 
     /** 清空所有折叠缓存 */

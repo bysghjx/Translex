@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.moandjiezana.toml.Toml;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.util.Formatting;
+import net.minecraft.ChatFormatting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,13 +47,13 @@ public class ModConfig {
 
     /**
      * 获取折叠计数使用的颜色。
-     * @return Formatting 枚举值，解析失败时返回 GRAY
+     * @return ChatFormatting 枚举值，解析失败时返回 GRAY
      */
-    public Formatting getCompactColor() {
+    public ChatFormatting getCompactColor() {
         try {
-            return Formatting.byName(compactColorCode.toUpperCase());
+            return ChatFormatting.getByName(compactColorCode.toUpperCase());
         } catch (Exception e) {
-            return Formatting.GRAY;
+            return ChatFormatting.GRAY;
         }
     }
 

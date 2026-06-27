@@ -1,7 +1,7 @@
 package top.iencand.translex.client.translate.model;
 
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.Component;
 
 import java.util.*;
 import java.util.regex.Matcher;
@@ -29,7 +29,7 @@ import java.util.regex.Pattern;
  *   // 缓存命中（可能跨会话）
  *   LineTemplate tmpl = LineTemplate.fromText(original);
  *   String cacheVal = cache.get(key);
- *   Text styled = tmpl.buildFromCache(cacheVal);
+ *   Component styled = tmpl.buildFromCache(cacheVal);
  *   // 数字段使用当前物品的样式；
  *   // 非数字段使用缓存的快照。
  * }</pre>
@@ -65,13 +65,13 @@ public class LineTemplate {
     }
 
     /**
-     * 从 Minecraft {@link Text} 行构建 LineTemplate。
+     * 从 Minecraft {@link Component} 行构建 LineTemplate。
      * <ol>
      *   <li>通过 {@link StyleCodec} 提取样式 → {@code <sN>} 标签</li>
      *   <li>扫描标记文本中的数字段 → 替换为 {@code {i}}</li>
      * </ol>
      */
-    public static LineTemplate fromText(Text text) {
+    public static LineTemplate fromText(Component text) {
         StyleCodec.ExtractionResult r = StyleCodec.extract(text);
 
         StringBuilder tmpl = new StringBuilder();
@@ -119,26 +119,26 @@ public class LineTemplate {
     /** 此行是否包含任何数字变量。 */
     public boolean hasVariables() { return values.length > 0; }
 
-    // ---- build translated Text --------------------------------------
+    // ---- build translated Component --------------------------------------
 
     /**
-     * 从 AI 返回的模板构建带样式的 {@link Text}。
+     * 从 AI 返回的模板构建带样式的 {@link Component}。
      *
      * <p>所有样式来自<em>当前</em>提取（实时会话）。
      * 对于缓存命中，请优先使用 {@link #buildFromCache(String)}，
      * 它合并了缓存的非数字快照和当前的数字样式。</p>
      */
-    public Text buildText(String translatedTemplate) {
+    public Component buildText(String translatedTemplate) {
         return buildWithStyleMap(translatedTemplate, buildLiveStyleMap());
     }
 
     /**
-     * 从缓存条目构建带样式的 {@link Text}，合并缓存的非数字快照
+     * 从缓存条目构建带样式的 {@link Component}，合并缓存的非数字快照
      * 和当前物品的数字段样式。
      *
      * @param cacheJson 之前由 {@link #toCacheEntry(String)} 返回的值
      */
-    public Text buildFromCache(String cacheJson) {
+    public Component buildFromCache(String cacheJson) {
         if (cacheJson == null || cacheJson.isBlank()) {
             return apply(translatedFallback());
         }
@@ -208,12 +208,12 @@ public class LineTemplate {
      * 快速回退：从原始文本中取第一个颜色，应用到整个翻译字符串。
      * 在没有更好的样式信息时使用。
      */
-    public Text apply(String translated) {
+    public Component apply(String translated) {
         Style first = extractFirstColor();
         if (hasObfuscatedStyle()) {
-            return net.minecraft.text.Text.literal("✦ " + translated + " ✦").setStyle(first);
+            return net.minecraft.network.chat.Component.literal("✦ " + translated + " ✦").setStyle(first);
         }
-        return net.minecraft.text.Text.literal(translated).setStyle(first);
+        return net.minecraft.network.chat.Component.literal(translated).setStyle(first);
     }
 
     // -------- 内部辅助方法 -------------------------------------------
@@ -233,7 +233,7 @@ public class LineTemplate {
     }
 
     /** 核心构建：填充数字，重新应用样式。 */
-    private Text buildWithStyleMap(String translatedTemplate, Map<Integer, Style> styleMap) {
+    private Component buildWithStyleMap(String translatedTemplate, Map<Integer, Style> styleMap) {
         String filled = fillNumbers(translatedTemplate);
         return StyleCodec.reapply(filled, styleMap);
     }
@@ -246,10 +246,10 @@ public class LineTemplate {
     private Style extractFirstColor() {
         for (var entry : styles.styleMap().entrySet()) {
             if (entry.getValue().getColor() != null) {
-                return net.minecraft.text.Style.EMPTY.withColor(entry.getValue().getColor());
+                return net.minecraft.network.chat.Style.EMPTY.withColor(entry.getValue().getColor());
             }
         }
-        return net.minecraft.text.Style.EMPTY;
+        return net.minecraft.network.chat.Style.EMPTY;
     }
 
     /** 检查原始文本是否包含混淆标志（Hypixel 特殊升级标记）。 */

@@ -1,9 +1,9 @@
 package top.iencand.translex.client.util;
 
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.NbtComponent;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NbtCompound;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.nbt.CompoundTag;
 
 /**
  * 从物品 NBT 中提取 SkyBlock 物品 ID。
@@ -22,13 +22,13 @@ public final class ItemIdExtractor {
     public static String extractSkyBlockItemId(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return null;
 
-        NbtComponent customData = stack.get(DataComponentTypes.CUSTOM_DATA);
+        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
         if (customData == null) return null;
 
-        NbtCompound nbt = customData.copyNbt();
+        CompoundTag nbt = customData.copyTag();
 
         if (nbt.contains("ExtraAttributes")) {
-            NbtCompound extraAttrs = nbt.getCompound("ExtraAttributes").orElse(null);
+            CompoundTag extraAttrs = nbt.getCompound("ExtraAttributes").orElse(null);
             if (extraAttrs != null && extraAttrs.contains("id"))
                 return extraAttrs.getString("id").orElse(null);
         }

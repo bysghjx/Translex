@@ -4,10 +4,10 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
-import net.minecraft.text.TextColor;
-import net.minecraft.util.Formatting;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TextColor;
+import net.minecraft.ChatFormatting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import top.iencand.translex.client.config.ModConfig;
@@ -82,7 +82,7 @@ public final class SpamHider {
      * @param message 进入聊天栏的原始消息（含样式信息）
      * @return 处理结果 — NORMAL 放行，HIDDEN 丢弃，SEPARATE 转入浮动层
      */
-    public SpamFilterData.FilterState checkMessage(Text message) {
+    public SpamFilterData.FilterState checkMessage(Component message) {
         if (!enabled || message == null) {
             return SpamFilterData.FilterState.NORMAL;
         }
@@ -251,22 +251,22 @@ public final class SpamHider {
     }
 
     // ================================================================
-    // Text → § 格式码字符串转换
+    // Component → § 格式码字符串转换
     // ================================================================
 
     /**
-     * 将 Minecraft {@link Text} 组件树转换为含 § 颜色码的字符串。
+     * 将 Minecraft {@link Component} 组件树转换为含 § 颜色码的字符串。
      *
-     * <p>遍历 Text 树的每个带样式的片段，在每个片段前插入对应的 § 格式码。
+     * <p>遍历 Component 树的每个带样式的片段，在每个片段前插入对应的 § 格式码。
      * 结果可直接用于 {@link SpamFilterData.FilterType#STARTSWITH startsWith}、
      * {@link SpamFilterData.FilterType#CONTAINS contains} 等匹配方式。
      *
      * <p>示例输出：{@code "§r§cThere are no enemies nearby!§r"}
      *
-     * @param text Minecraft Text 组件
+     * @param text Minecraft Component 组件
      * @return 带 § 格式码的传统样式字符串
      */
-    public static String toLegacyString(Text text) {
+    public static String toLegacyString(Component text) {
         if (text == null) return "";
 
         StringBuilder sb = new StringBuilder();
@@ -285,13 +285,13 @@ public final class SpamHider {
     private static void appendStyleCodes(StringBuilder sb, Style style) {
         TextColor color = style.getColor();
         if (color != null) {
-            // 判断是否为 16 种标准颜色之一（Formatting.BLACK ~ Formatting.WHITE）
-            Formatting fmt = findFormattingByColor(color);
+            // 判断是否为 16 种标准颜色之一（ChatFormatting.BLACK ~ ChatFormatting.WHITE）
+            ChatFormatting fmt = findFormattingByColor(color);
             if (fmt != null) {
-                sb.append('§').append(fmt.getCode());
+                sb.append('§').append(fmt.getChar());
             } else {
                 // RGB 颜色 → §x§R§R§G§G§B§B
-                int rgb = color.getRgb();
+                int rgb = color.getValue();
                 sb.append("§x");
                 String hex = String.format("%06X", rgb);
                 for (char c : hex.toCharArray()) {
@@ -310,11 +310,11 @@ public final class SpamHider {
      * 在 16 种标准 Minecraft 颜色中查找与给定 TextColor 匹配的 Formatting。
      * 匹配失败（如 RGB 自定义色）返回 null，上游需回退到十六进制 §x 格式。
      */
-    private static Formatting findFormattingByColor(TextColor color) {
-        for (Formatting f : Formatting.values()) {
+    private static ChatFormatting findFormattingByColor(TextColor color) {
+        for (ChatFormatting f : ChatFormatting.values()) {
             if (f.isColor()) {
-                Integer colorValue = f.getColorValue();
-                if (colorValue != null && colorValue == color.getRgb()) {
+                Integer colorValue = f.getColor();
+                if (colorValue != null && colorValue == color.getValue()) {
                     return f;
                 }
             }

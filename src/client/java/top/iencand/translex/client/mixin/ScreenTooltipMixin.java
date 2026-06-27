@@ -1,9 +1,9 @@
 package top.iencand.translex.client.mixin;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -18,7 +18,7 @@ import java.util.List;
 /**
  * 主工具提示替换 Mixin。注入到 {@link Screen#getTooltipFromItem} 的 RETURN 点，
  * 直接接收 {@link ItemStack}，并用缓存的翻译结果替换物品说明行，
- * 同时保留每行的原始 {@link net.minecraft.text.Style}。
+ * 同时保留每行的原始 {@link net.minecraft.network.chat.Style}。
  *
  * <p>工作流程：
  * <ol>
@@ -38,14 +38,14 @@ public abstract class ScreenTooltipMixin {
     private static final ThreadLocal<Boolean> BUILDING = ThreadLocal.withInitial(() -> false);
 
     @Inject(
-            method = "getTooltipFromItem(Lnet/minecraft/client/MinecraftClient;Lnet/minecraft/item/ItemStack;)Ljava/util/List;",
+            method = "getTooltipFromItem(Lnet/minecraft/client/Minecraft;Lnet/minecraft/world/item/ItemStack;)Ljava/util/List;",
             at = @At("RETURN"),
             cancellable = true
     )
     private static void translex$replaceItemTooltip(
-            MinecraftClient client,
+            Minecraft client,
             ItemStack stack,
-            CallbackInfoReturnable<List<Text>> cir
+            CallbackInfoReturnable<List<Component>> cir
     ) {
         if (BUILDING.get()) return;
         if (stack == null || stack.isEmpty()) return;
@@ -57,7 +57,7 @@ public abstract class ScreenTooltipMixin {
         List<String> replacement = TranslexTooltipContext.lookupReplacement(stack, mode);
         if (replacement == null || replacement.isEmpty()) return;
 
-        List<Text> original = cir.getReturnValue();
+        List<Component> original = cir.getReturnValue();
 
         BUILDING.set(true);
         try {

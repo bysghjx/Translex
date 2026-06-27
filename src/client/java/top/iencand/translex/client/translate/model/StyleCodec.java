@@ -2,11 +2,11 @@ package top.iencand.translex.client.translate.model;
 
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
-import net.minecraft.text.TextColor;
-import net.minecraft.util.Formatting;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TextColor;
+import net.minecraft.ChatFormatting;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -14,7 +14,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 从 {@link Text} 对象中提取 Minecraft {@link Style} 元数据，并在 AI 翻译后重新应用，
+ * 从 {@link Component} 对象中提取 Minecraft {@link Style} 元数据，并在 AI 翻译后重新应用，
  * 确保颜色、格式和交互事件在通过纯文本 LLM 的往返过程中得以保留。
  *
  * <h3>缓存感知工作流</h3>
@@ -27,7 +27,7 @@ import java.util.regex.Pattern;
  *
  * // 缓存命中 — 反序列化 + 重新应用
  * ExtractionResult r = ExtractionResult.fromCacheJson(cachedJson);
- * Text result = StyleCodec.reapply(translatedText, r.snapshots());
+ * Component result = StyleCodec.reapply(translatedText, r.snapshots());
  * }</pre>
  *
  * <h3>标签格式</h3>
@@ -62,10 +62,10 @@ public final class StyleCodec {
     // ================================================================
 
     /**
-     * 遍历 {@link Text} 树，将每个带样式的段替换为编号标签，
+     * 遍历 {@link Component} 树，将每个带样式的段替换为编号标签，
      * 例如 {@code <s0>segment</s0>}。无样式的段保持为纯文本。
      */
-    public static ExtractionResult extract(Text text) {
+    public static ExtractionResult extract(Component text) {
         StringBuilder out = new StringBuilder();
         Map<Integer, Style> styleMap = new HashMap<>();
         Map<Integer, StyleSnapshot> snapshots = new HashMap<>();
@@ -120,12 +120,12 @@ public final class StyleCodec {
     }
 
     /** 从完整的样式映射表重新应用样式（内存中，同一会话）。 */
-    public static Text reapply(String translated, Map<Integer, Style> styleMap) {
+    public static Component reapply(String translated, Map<Integer, Style> styleMap) {
         return reapplyInternal(translated, styleMap);
     }
 
     /** 从可序列化的快照重新应用样式（缓存命中，跨会话）。 */
-    public static Text reapplyFromSnapshots(String translated, Map<Integer, StyleSnapshot> snapshots) {
+    public static Component reapplyFromSnapshots(String translated, Map<Integer, StyleSnapshot> snapshots) {
         Map<Integer, Style> map = new HashMap<>();
         for (var e : snapshots.entrySet()) {
             map.put(e.getKey(), e.getValue().toStyle());
@@ -133,30 +133,30 @@ public final class StyleCodec {
         return reapplyInternal(translated, map);
     }
 
-    private static Text reapplyInternal(String translated, Map<Integer, Style> styleMap) {
+    private static Component reapplyInternal(String translated, Map<Integer, Style> styleMap) {
         if (translated == null || translated.isEmpty()) {
-            return Text.empty();
+            return Component.empty();
         }
 
-        MutableText result = Text.empty();
+        MutableComponent result = Component.empty();
         Matcher m = STYLE_TAG.matcher(translated);
         int lastEnd = 0;
 
         while (m.find()) {
             if (m.start() > lastEnd) {
-                result.append(Text.literal(translated.substring(lastEnd, m.start())));
+                result.append(Component.literal(translated.substring(lastEnd, m.start())));
             }
 
             int id = Integer.parseInt(m.group(1));
             String content = m.group(2);
             Style style = styleMap.getOrDefault(id, Style.EMPTY);
-            result.append(Text.literal(content).setStyle(style));
+            result.append(Component.literal(content).setStyle(style));
 
             lastEnd = m.end();
         }
 
         if (lastEnd < translated.length()) {
-            result.append(Text.literal(translated.substring(lastEnd)));
+            result.append(Component.literal(translated.substring(lastEnd)));
         }
 
         return result;
@@ -172,12 +172,12 @@ public final class StyleCodec {
     // 旧版 §-码辅助方法（独立于标签往返）
     // ================================================================
 
-    /** 将旧版 § 格式的字符串转换为 Minecraft {@link Text}。 */
-    public static Text fromLegacyString(String text) {
-        if (text == null || text.isEmpty()) return Text.empty();
+    /** 将旧版 § 格式的字符串转换为 Minecraft {@link Component}。 */
+    public static Component fromLegacyString(String text) {
+        if (text == null || text.isEmpty()) return Component.empty();
 
-        MutableText result = Text.empty();
-        MutableText current = Text.literal("");
+        MutableComponent result = Component.empty();
+        MutableComponent current = Component.literal("");
         Style currentStyle = Style.EMPTY;
         int i = 0;
 
@@ -186,15 +186,15 @@ public final class StyleCodec {
             if (c == '§' && i + 1 < text.length()) {
                 if (!current.getString().isEmpty()) {
                     result.append(current.setStyle(currentStyle));
-                    current = Text.literal("");
+                    current = Component.literal("");
                 }
                 char fc = Character.toLowerCase(text.charAt(i + 1));
-                Formatting f = Formatting.byCode(fc);
+                ChatFormatting f = ChatFormatting.getByCode(fc);
                 if (f != null) {
-                    if (f.isColor() || f == Formatting.RESET) {
-                        currentStyle = Style.EMPTY.withFormatting(f);
+                    if (f.isColor() || f == ChatFormatting.RESET) {
+                        currentStyle = Style.EMPTY.applyFormat(f);
                     } else {
-                        currentStyle = currentStyle.withFormatting(f);
+                        currentStyle = currentStyle.applyFormat(f);
                     }
                 }
                 i += 2;
@@ -210,8 +210,8 @@ public final class StyleCodec {
         return result;
     }
 
-    /** 将 {@link Text} 树转换回旧版 § 格式的字符串。 */
-    public static String toLegacyString(Text text) {
+    /** 将 {@link Component} 树转换回旧版 § 格式的字符串。 */
+    public static String toLegacyString(Component text) {
         if (text == null) return "";
 
         StringBuilder sb = new StringBuilder();
@@ -230,10 +230,10 @@ public final class StyleCodec {
 
         StringBuilder sb = new StringBuilder();
         if (style.getColor() != null) {
-            for (Formatting f : Formatting.values()) {
-                if (f.isColor() && f.getColorValue() != null
-                        && f.getColorValue().equals(style.getColor().getRgb())) {
-                    sb.append('§').append(f.getCode());
+            for (ChatFormatting f : ChatFormatting.values()) {
+                if (f.isColor() && f.getColor() != null
+                        && f.getColor().equals(style.getColor().getValue())) {
+                    sb.append('§').append(f.getChar());
                     break;
                 }
             }
@@ -278,7 +278,7 @@ public final class StyleCodec {
         static StyleSnapshot from(Style style) {
             if (style == null || style.isEmpty()) return EMPTY;
             return new StyleSnapshot(
-                    style.getColor() != null ? String.format("#%06X", style.getColor().getRgb()) : null,
+                    style.getColor() != null ? String.format("#%06X", style.getColor().getValue()) : null,
                     style.isBold(),
                     style.isItalic(),
                     style.isUnderlined(),
@@ -292,7 +292,7 @@ public final class StyleCodec {
             Style s = Style.EMPTY
                     .withBold(bold)
                     .withItalic(italic)
-                    .withUnderline(underlined)
+                    .withUnderlined(underlined)
                     .withStrikethrough(strikethrough)
                     .withObfuscated(obfuscated);
             if (colorHex != null && colorHex.length() == 7) {
@@ -312,7 +312,7 @@ public final class StyleCodec {
     // ================================================================
 
     /**
-     * {@link #extract(Text)} 的结果。
+     * {@link #extract(Component)} 的结果。
      *
      * @param markedText 包含 {@code <sN>…</sN>} 标签的文本，可直接发给 AI
      * @param styleMap   实时 Style 对象（同一会话使用，不可序列化）

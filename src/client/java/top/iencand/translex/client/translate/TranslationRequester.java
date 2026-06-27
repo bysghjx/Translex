@@ -9,7 +9,7 @@ import java.net.UnknownHostException;
 import javax.net.ssl.SSLHandshakeException;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 import top.iencand.translex.client.config.ModConfig;
 import top.iencand.translex.client.util.I18nHelper;
 import top.iencand.translex.client.web.ConsoleBroadcaster;
@@ -60,7 +60,7 @@ public class TranslationRequester {
             String mockResult = buildDebugMockResponse(userContent);
             ConsoleBroadcaster.broadcast("DEBUG",
                     "Debug mock translation — " + cacheKey + " (" + displayIdentifier + ")");
-            MinecraftClient.getInstance().execute(() ->
+            Minecraft.getInstance().execute(() ->
                     callback.onTranslationComplete(cacheKey, mockResult, displayIdentifier));
             return;
         }
@@ -101,7 +101,7 @@ public class TranslationRequester {
                             "Request failed (" + e.getClass().getSimpleName() + "), retry "
                             + (retryCount + 1) + "/" + MAX_RETRIES + " in " + delay + "ms");
 
-                    MinecraftClient.getInstance().execute(() ->
+                    Minecraft.getInstance().execute(() ->
                             callback.onTranslationComplete(cacheKey,
                                     "§e" + I18nHelper.translate("translex.info.retrying"), displayIdentifier));
 
@@ -125,7 +125,7 @@ public class TranslationRequester {
 
                 String errorMsg = "§c" + I18nHelper.translate("translex.error.network.io", detail);
                 ConsoleBroadcaster.broadcast("ERROR", "Network error — " + detail);
-                MinecraftClient.getInstance().execute(() -> callback.onTranslationComplete(cacheKey, errorMsg, displayIdentifier));
+                Minecraft.getInstance().execute(() -> callback.onTranslationComplete(cacheKey, errorMsg, displayIdentifier));
             }
 
             @Override
@@ -189,7 +189,7 @@ public class TranslationRequester {
                     resultMessage = "§c" + I18nHelper.translate("translex.error.api.json_syntax");
                 } finally {
                     final String finalRes = resultMessage;
-                    MinecraftClient.getInstance().execute(() -> callback.onTranslationComplete(cacheKey, finalRes, displayIdentifier));
+                    Minecraft.getInstance().execute(() -> callback.onTranslationComplete(cacheKey, finalRes, displayIdentifier));
                 }
             }
         });

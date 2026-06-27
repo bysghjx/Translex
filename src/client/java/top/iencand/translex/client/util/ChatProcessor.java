@@ -1,6 +1,6 @@
 package top.iencand.translex.client.util;
 
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 import java.util.regex.Pattern;
 
 /**
@@ -19,7 +19,7 @@ public class ChatProcessor {
      * 生成用于消息折叠的指纹。
      * 先剥离按钮前缀和颜色码，然后根据是否包含坐标选择不同的指纹策略。
      */
-    public static String getFoldFingerprint(Text text) {
+    public static String getFoldFingerprint(Component text) {
         if (text == null) return "";
         String s = text.getString().trim();
 
@@ -40,7 +40,7 @@ public class ChatProcessor {
     }
 
     /** 判断消息是否应该被折叠处理（必须包含翻译按钮标记） */
-    public static boolean shouldProcess(Text text) {
+    public static boolean shouldProcess(Component text) {
         if (text == null) return false;
         String s = text.getString();
         return s.contains("[翻译]") || s.contains("[Translate]") || s.contains("[T]");

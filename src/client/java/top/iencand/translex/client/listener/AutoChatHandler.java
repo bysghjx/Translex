@@ -1,11 +1,11 @@
 package top.iencand.translex.client.listener;
 
-import net.minecraft.text.Text;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Style;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.HoverEvent;
-import net.minecraft.util.Formatting;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.ChatFormatting;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import top.iencand.translex.client.config.ButtonStyleManager;
 import top.iencand.translex.client.config.ModConfig;
@@ -35,10 +35,10 @@ public class AutoChatHandler implements MessageLookup {
     private static final String TEXT_COMMAND_BASE = "translex text";
 
     /** LRU 缓存：最近收到的消息，按消息 ID 索引，最多 100 条 */
-    private final Map<Integer, Text> recentMessages = new LinkedHashMap<Integer, Text>(100, 0.75f, true) {
+    private final Map<Integer, Component> recentMessages = new LinkedHashMap<Integer, Component>(100, 0.75f, true) {
         private static final int MAX_ENTRIES = 100;
         @Override
-        protected boolean removeEldestEntry(Map.Entry<Integer, Text> eldest) {
+        protected boolean removeEldestEntry(Map.Entry<Integer, Component> eldest) {
             return size() > MAX_ENTRIES;
         }
     };
@@ -74,16 +74,16 @@ public class AutoChatHandler implements MessageLookup {
 
             // Build button
             String buttonText;
-            Formatting buttonColor;
+            ChatFormatting buttonColor;
             if (ButtonStyleManager.isCompact()) {
                 buttonText = I18nHelper.translate("translex.gui.translate_button_compact");
-                buttonColor = Formatting.GREEN;
+                buttonColor = ChatFormatting.GREEN;
             } else {
                 buttonText = I18nHelper.translate("translex.gui.translate_button");
-                buttonColor = Formatting.GREEN;
+                buttonColor = ChatFormatting.GREEN;
             }
 
-            MutableText translateButton = Text.literal(buttonText)
+            MutableComponent translateButton = Component.literal(buttonText)
                     .setStyle(Style.EMPTY.withColor(buttonColor));
 
             ClickEvent clickEvent;
@@ -100,20 +100,20 @@ public class AutoChatHandler implements MessageLookup {
             }
 
             String hoverText = I18nHelper.translate(hoverKey, messageId);
-            HoverEvent hoverEvent = new HoverEvent.ShowText(Text.literal(hoverText));
+            HoverEvent hoverEvent = new HoverEvent.ShowText(Component.literal(hoverText));
 
             translateButton = translateButton.copy().setStyle(translateButton.getStyle()
                     .withClickEvent(clickEvent)
                     .withHoverEvent(hoverEvent));
 
-            MutableText finalMessageToShow = Text.empty();
+            MutableComponent finalMessageToShow = Component.empty();
             if (ButtonStyleManager.isCompact()) {
                 finalMessageToShow.append(message);
-                finalMessageToShow.append(Text.literal(" "));
+                finalMessageToShow.append(Component.literal(" "));
                 finalMessageToShow.append(translateButton);
             } else {
                 finalMessageToShow.append(translateButton);
-                finalMessageToShow.append(Text.literal(" "));
+                finalMessageToShow.append(Component.literal(" "));
                 finalMessageToShow.append(message);
             }
 
@@ -122,7 +122,7 @@ public class AutoChatHandler implements MessageLookup {
     }
 
     @Override
-    public Text getMessageById(int messageId) {
+    public Component getMessageById(int messageId) {
         return recentMessages.get(messageId);
     }
 }

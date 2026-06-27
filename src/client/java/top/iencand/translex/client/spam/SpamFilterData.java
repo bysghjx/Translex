@@ -113,7 +113,7 @@ public final class SpamFilterData {
         /**
          * 是否按格式化文本（含 § 颜色码）匹配。
          * {@code true} 时对带 § 格式码的文本做匹配，
-         * {@code false} 时对纯文本（{@link net.minecraft.text.Text#getString()}）做匹配。
+         * {@code false} 时对纯文本（{@link net.minecraft.network.chat.Component#getString()}）做匹配。
          */
         public boolean formatted = false;
 

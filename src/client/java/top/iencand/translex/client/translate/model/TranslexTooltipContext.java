@@ -1,6 +1,6 @@
 package top.iencand.translex.client.translate.model;
 
-import net.minecraft.item.ItemStack;
+import net.minecraft.world.item.ItemStack;
 import top.iencand.translex.client.translate.cache.TemporaryTooltipCache;
 import top.iencand.translex.client.config.ModConfig;
 import top.iencand.translex.client.util.ItemIdExtractor;

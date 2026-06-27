@@ -110,7 +110,11 @@ public class TranslexClient implements ClientModInitializer {
                 int port = WebServer.getPort();
                 String token = WebServer.getToken();
                 String url = "http://127.0.0.1:" + port + "/?token=" + token + "#debug";
-                net.minecraft.util.Util.getOperatingSystem().open(java.net.URI.create(url));
+                try {
+                    java.awt.Desktop.getDesktop().browse(java.net.URI.create(url));
+                } catch (Exception e) {
+                    LOGGER.error("[{}] 无法打开调试控制台: {}", MOD_ID, url, e);
+                }
                 LOGGER.info("[{}] 调试模式：已打开调试控制台 {}", MOD_ID, url);
             }, "Translex-DebugOpener").start();
         }
@@ -124,7 +128,11 @@ public class TranslexClient implements ClientModInitializer {
                 int port = WebServer.getPort();
                 String token = WebServer.getToken();
                 String url = "http://127.0.0.1:" + port + "/?token=" + token + "#welcome";
-                net.minecraft.util.Util.getOperatingSystem().open(java.net.URI.create(url));
+                try {
+                    java.awt.Desktop.getDesktop().browse(java.net.URI.create(url));
+                } catch (Exception e) {
+                    LOGGER.error("[{}] 无法打开配置面板: {}", MOD_ID, url, e);
+                }
                 LOGGER.info("[{}] 首次启动：已自动打开配置面板 {}", MOD_ID, url);
             }, "Translex-FirstLaunchOpener").start();
         }

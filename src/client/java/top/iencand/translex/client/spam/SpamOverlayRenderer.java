@@ -1,10 +1,12 @@
 package top.iencand.translex.client.spam;
 
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.text.Text;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import top.iencand.translex.client.config.ModConfig;
@@ -96,12 +98,17 @@ public final class SpamOverlayRenderer {
      */
     public void init() {
         if (!registered) {
-            HudRenderCallback.EVENT.register(this::onHudRender);
+            // 26.x：HudRenderCallback 已移除，改用 HudElementRegistry 在 CHAT 元素之后附加自定义 HUD 元素
+            HudElementRegistry.attachElementAfter(
+                    VanillaHudElements.CHAT,
+                    Identifier.fromNamespaceAndPath("translex", "spam_overlay"),
+                    this::onHudRender
+            );
             registered = true;
-            LOGGER.info("[Overlay] HudRenderCallback 已注册");
+            LOGGER.info("[Overlay] HUD 元素已注册");
             if (ModConfig.get().debug) {
                 ConsoleBroadcaster.broadcast("INFO",
-                        "[Overlay] HudRenderCallback registered — anchor=("
+                        "[Overlay] HUD element registered — anchor=("
                         + anchorX + "," + anchorY + ")");
             }
         }
@@ -113,7 +120,7 @@ public final class SpamOverlayRenderer {
      *
      * @param text 原始聊天消息（含样式信息）
      */
-    public void addMessage(Text text) {
+    public void addMessage(Component text) {
         if (text == null) return;
         messages.add(new SpamMessage(text));
         while (messages.size() > MAX_MESSAGES) {
@@ -137,15 +144,15 @@ public final class SpamOverlayRenderer {
      * 每帧 HUD 渲染回调。
      * 遍历消息队列，清理过期消息，渲染剩余消息的动画。
      */
-    private void onHudRender(DrawContext context, RenderTickCounter tickCounter) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.options.hudHidden) return; // F1 模式下不渲染
+    private void onHudRender(GuiGraphicsExtractor context, DeltaTracker tickCounter) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.options.hideGui) return; // F1 模式下不渲染
 
         if (messages.isEmpty()) return;
 
         final long now = System.currentTimeMillis();
-        final int screenW = client.getWindow().getScaledWidth();
-        final int screenH = client.getWindow().getScaledHeight();
+        final int screenW = client.getWindow().getGuiScaledWidth();
+        final int screenH = client.getWindow().getGuiScaledHeight();
         final int baseX = (int) (screenW * anchorX);
         final int baseY = (int) (screenH * anchorY);
 
@@ -172,9 +179,9 @@ public final class SpamOverlayRenderer {
             double anim = computeAnimationOffset(elapsed);
 
             // 剥离 Translex 翻译按钮，只显示原始消息
-            Text displayText = stripButton(msg.text);
-            net.minecraft.text.OrderedText ordered = displayText.asOrderedText();
-            int textWidth = client.textRenderer.getWidth(ordered);
+            Component displayText = stripButton(msg.text);
+            net.minecraft.util.FormattedCharSequence ordered = displayText.getVisualOrderText();
+            int textWidth = client.font.width(ordered);
             String plainText = displayText.getString();
 
             // 右对齐：文本结束于 baseX。动画期间向右偏移产生滑入/滑出
@@ -182,9 +189,9 @@ public final class SpamOverlayRenderer {
             int drawX = baseX - textWidth + (int) (anim * animRange);
             int drawY = baseY - line * LINE_SPACING;
 
-            // OrderedText 版本 — 每个字符保留其原始颜色
-            context.drawText(
-                    client.textRenderer,
+            // FormattedCharSequence 版本 — 每个字符保留其原始颜色
+            context.text(
+                    client.font,
                     ordered,
                     drawX,
                     drawY,
@@ -233,7 +240,7 @@ public final class SpamOverlayRenderer {
      * 剥离 Translex 附加的翻译按钮（[翻译] / [T] / [Translate] + 空格），
      * 返回原始聊天消息 Text，在浮动 HUD 中不显示按钮。
      */
-    private static Text stripButton(Text text) {
+    private static Component stripButton(Component text) {
         var siblings = text.getSiblings();
         if (siblings.size() < 3) return text;
 
@@ -263,10 +270,10 @@ public final class SpamOverlayRenderer {
     // ================================================================
 
     private static final class SpamMessage {
-        final Text text;
+        final Component text;
         final long createTime;
 
-        SpamMessage(Text text) {
+        SpamMessage(Component text) {
             this.text = text;
             this.createTime = System.currentTimeMillis();
         }

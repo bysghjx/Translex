@@ -1,7 +1,7 @@
 package top.iencand.translex.client.translate;
 
-import net.minecraft.item.ItemStack;
-import net.minecraft.text.Text;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.network.chat.Component;
 import top.iencand.translex.client.translate.cache.TemporaryTooltipCache;
 import top.iencand.translex.client.translate.cache.TranslationCacheManager;
 import top.iencand.translex.client.translate.model.ItemPresetLibrary;
@@ -68,12 +68,12 @@ public class TranslationManager {
      * 每行先检查是否为纯中文（无需翻译），再查缓存，最后提交 AI。
      * 支持并行处理各行，并在全部完成后统一渲染。
      */
-    public void translateItemLoreTemplates(List<Text> originalLines, String itemId,
+    public void translateItemLoreTemplates(List<Component> originalLines, String itemId,
                                             String itemDisplayName, ItemStack stack) {
         if (originalLines == null || originalLines.isEmpty()) return;
         int n = originalLines.size();
 
-        Text[] result = new Text[n];
+        Component[] result = new Component[n];
         String[] storedTemplates = new String[n];  // plain translated template for output modes
         String displayId = "IL_" + System.currentTimeMillis();
 
@@ -87,7 +87,7 @@ public class TranslationManager {
             String glossed = cacheManager.applyGlossary(lineText);
 
             if (!containsEnglish(glossed)) {
-                result[i] = Text.literal(glossed).setStyle(
+                result[i] = Component.literal(glossed).setStyle(
                         originalLines.get(i).getStyle().getColor() != null
                                 ? originalLines.get(i).getStyle()
                                 : findColor(originalLines.get(i)));
@@ -246,16 +246,16 @@ public class TranslationManager {
     /**
      * 递归查找文本中第一个非空的颜色样式。
      */
-    private static net.minecraft.text.Style findColor(Text text) {
-        for (Text child : text.getSiblings()) {
-            net.minecraft.text.Style cs = findColor(child);
+    private static net.minecraft.network.chat.Style findColor(Component text) {
+        for (Component child : text.getSiblings()) {
+            net.minecraft.network.chat.Style cs = findColor(child);
             if (cs.getColor() != null) return cs;
         }
         return text.getStyle();
     }
 
-    /** 将 Text 列表拼接为带换行符的字符串 */
-    private static String joinTexts(List<Text> lines) {
+    /** 将 Component 列表拼接为带换行符的字符串 */
+    private static String joinTexts(List<Component> lines) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < lines.size(); i++) {
             sb.append(lines.get(i).getString());

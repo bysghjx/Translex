@@ -4,8 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.network.chat.Component;
+import net.minecraft.ChatFormatting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -136,13 +136,13 @@ public class ItemPresetLibrary {
         return new ItemPreset(lines.get(0), lines);
     }
 
-    /** 获取预设库中的说明文本，以灰色格式化的 List&lt;Text&gt; 返回（用于聊天渲染） */
-    public List<Text> getAsText(String itemId) {
+    /** 获取预设库中的说明文本，以灰色格式化的 List&lt;Component&gt; 返回（用于聊天渲染） */
+    public List<Component> getAsText(String itemId) {
         List<String> lines = getTooltip(itemId);
         if (lines == null) return null;
-        List<Text> result = new ArrayList<>(lines.size());
+        List<Component> result = new ArrayList<>(lines.size());
         for (String line : lines) {
-            result.add(Text.literal(line).formatted(Formatting.GRAY));
+            result.add(Component.literal(line).withStyle(ChatFormatting.GRAY));
         }
         return result;
     }

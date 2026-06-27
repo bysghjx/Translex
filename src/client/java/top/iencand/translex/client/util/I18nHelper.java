@@ -1,6 +1,6 @@
 package top.iencand.translex.client.util;
 
-import net.minecraft.client.resource.language.I18n;
+import net.minecraft.client.resources.language.I18n;
 
 /**
  * 国际化（I18n）辅助工具类。
@@ -14,7 +14,7 @@ public class I18nHelper {
      * @return 翻译后的文本
      */
     public static String translate(String key, Object... args) {
-        return I18n.translate(key, args);
+        return I18n.get(key, args);
     }
 
     /**

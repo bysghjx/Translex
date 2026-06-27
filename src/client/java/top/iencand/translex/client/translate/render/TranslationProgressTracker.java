@@ -1,10 +1,10 @@
 package top.iencand.translex.client.translate.render;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.hud.ChatHudLine;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.chat.GuiMessage;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.ChatFormatting;
 import top.iencand.translex.client.ext.IChatHudExt;
 import top.iencand.translex.client.util.I18nHelper;
 
@@ -20,18 +20,18 @@ public class TranslationProgressTracker {
 
     /** 显示新的加载中消息 */
     public void showLoading(String displayId) {
-        MinecraftClient.getInstance().execute(() -> {
-            if (MinecraftClient.getInstance().inGameHud == null) return;
+        Minecraft.getInstance().execute(() -> {
+            if (Minecraft.getInstance().gui == null) return;
 
-            IChatHudExt chatHud = (IChatHudExt) MinecraftClient.getInstance().inGameHud.getChatHud();
+            IChatHudExt chatHud = (IChatHudExt) Minecraft.getInstance().gui.getChat();
 
-            MutableText prefix = Text.literal(I18nHelper.translate("translex.prefix.name")).formatted(Formatting.GREEN)
-                    .append(Text.literal(I18nHelper.translate("translex.prefix.separator")).formatted(Formatting.BLUE));
+            MutableComponent prefix = Component.literal(I18nHelper.translate("translex.prefix.name")).withStyle(ChatFormatting.GREEN)
+                    .append(Component.literal(I18nHelper.translate("translex.prefix.separator")).withStyle(ChatFormatting.BLUE));
 
-            MutableText status = Text.literal(I18nHelper.translate("translex.info.processing"))
-                    .append(Text.literal("... "))
-                    .append(Text.literal(LOADING_MARKER_PREFIX + displayId + LOADING_MARKER_SUFFIX).formatted(Formatting.DARK_GRAY))
-                    .formatted(Formatting.YELLOW);
+            MutableComponent status = Component.literal(I18nHelper.translate("translex.info.processing"))
+                    .append(Component.literal("... "))
+                    .append(Component.literal(LOADING_MARKER_PREFIX + displayId + LOADING_MARKER_SUFFIX).withStyle(ChatFormatting.DARK_GRAY))
+                    .withStyle(ChatFormatting.YELLOW);
 
             chatHud.translex$forceAddMessage(prefix.append(status));
         });
@@ -42,11 +42,11 @@ public class TranslationProgressTracker {
      * 删除旧的标记后添加一条带有更新文本的新消息。
      */
     public void updateLoading(String displayId, String newText) {
-        MinecraftClient.getInstance().execute(() -> {
-            if (MinecraftClient.getInstance().inGameHud == null) return;
+        Minecraft.getInstance().execute(() -> {
+            if (Minecraft.getInstance().gui == null) return;
 
-            IChatHudExt chatHud = (IChatHudExt) MinecraftClient.getInstance().inGameHud.getChatHud();
-            List<ChatHudLine> messages = chatHud.translex$getMessages();
+            IChatHudExt chatHud = (IChatHudExt) Minecraft.getInstance().gui.getChat();
+            List<GuiMessage> messages = chatHud.translex$getMessages();
 
             String targetTag = LOADING_MARKER_PREFIX + displayId + "]";
 
@@ -54,13 +54,13 @@ public class TranslationProgressTracker {
             messages.removeIf(line -> line.content().getString().contains(targetTag));
 
             // Add updated message
-            MutableText prefix = Text.literal(I18nHelper.translate("translex.prefix.name")).formatted(Formatting.GREEN)
-                    .append(Text.literal(I18nHelper.translate("translex.prefix.separator")).formatted(Formatting.BLUE));
+            MutableComponent prefix = Component.literal(I18nHelper.translate("translex.prefix.name")).withStyle(ChatFormatting.GREEN)
+                    .append(Component.literal(I18nHelper.translate("translex.prefix.separator")).withStyle(ChatFormatting.BLUE));
 
-            MutableText status = Text.literal(newText)
-                    .append(Text.literal(" "))
-                    .append(Text.literal(LOADING_MARKER_PREFIX + displayId + LOADING_MARKER_SUFFIX).formatted(Formatting.DARK_GRAY))
-                    .formatted(Formatting.YELLOW);
+            MutableComponent status = Component.literal(newText)
+                    .append(Component.literal(" "))
+                    .append(Component.literal(LOADING_MARKER_PREFIX + displayId + LOADING_MARKER_SUFFIX).withStyle(ChatFormatting.DARK_GRAY))
+                    .withStyle(ChatFormatting.YELLOW);
 
             chatHud.translex$forceAddMessage(prefix.append(status));
             chatHud.translex$refreshMessages();
@@ -69,11 +69,11 @@ public class TranslationProgressTracker {
 
     /** 通过显示 ID 移除加载中消息 */
     public void removeLoading(String displayId) {
-        MinecraftClient.getInstance().execute(() -> {
-            if (MinecraftClient.getInstance().inGameHud == null) return;
+        Minecraft.getInstance().execute(() -> {
+            if (Minecraft.getInstance().gui == null) return;
 
-            IChatHudExt chatHud = (IChatHudExt) MinecraftClient.getInstance().inGameHud.getChatHud();
-            List<ChatHudLine> messages = chatHud.translex$getMessages();
+            IChatHudExt chatHud = (IChatHudExt) Minecraft.getInstance().gui.getChat();
+            List<GuiMessage> messages = chatHud.translex$getMessages();
 
             String targetTag = LOADING_MARKER_PREFIX + displayId + "]";
 

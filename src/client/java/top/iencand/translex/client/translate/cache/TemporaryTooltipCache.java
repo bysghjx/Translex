@@ -1,7 +1,7 @@
 package top.iencand.translex.client.translate.cache;
 
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.registries.BuiltInRegistries;
 import top.iencand.translex.client.util.ItemIdExtractor;
 
 import java.util.List;
@@ -19,7 +19,7 @@ public class TemporaryTooltipCache {
         if (stack == null || stack.isEmpty()) return null;
         String sbId = ItemIdExtractor.extractSkyBlockItemId(stack);
         if (sbId != null) return sbId;
-        return Registries.ITEM.getId(stack.getItem()).toString();
+        return BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
     }
 
     public static void put(ItemStack stack, List<String> translatedLines) {

@@ -2,7 +2,7 @@ package top.iencand.translex.client.translate;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 import top.iencand.translex.client.config.ModConfig;
 import top.iencand.translex.client.config.NetworkConfig;
 import top.iencand.translex.client.translate.render.TranslationProgressTracker;
@@ -175,7 +175,7 @@ public class TranslationDispatcher {
 
     private void handleBatchResponse(String rawResult, List<BatchEntry> batch, int seq) {
         if (shutdown) return;
-        MinecraftClient.getInstance().execute(() -> {
+        Minecraft.getInstance().execute(() -> {
             try {
                 Map<Integer, String> parsed = parseDictResponse(rawResult, batch.size());
 
@@ -265,7 +265,7 @@ public class TranslationDispatcher {
                             Map<Integer, String> parsed = parseDictResponse(rawResult, 1);
                             String result = parsed.getOrDefault(0, entry.text());
                             if (!shutdown) {
-                                MinecraftClient.getInstance().execute(() ->
+                                Minecraft.getInstance().execute(() ->
                                         entry.future().complete(result));
                             } else {
                                 entry.future().complete(result);
@@ -274,7 +274,7 @@ public class TranslationDispatcher {
                 );
             } catch (Exception e) {
                 if (!shutdown) {
-                    MinecraftClient.getInstance().execute(() ->
+                    Minecraft.getInstance().execute(() ->
                             entry.future().complete(entry.text()));
                 } else {
                     entry.future().complete(entry.text());

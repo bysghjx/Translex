@@ -6,9 +6,8 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.Text;
-import net.minecraft.util.Util;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import top.iencand.translex.client.translate.cache.TemporaryTooltipCache;
@@ -24,8 +23,8 @@ import java.net.URI;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.argument;
-import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal;
+import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.argument;
+import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal;
 
 /**
  * /translex 命令系统的注册与执行。
@@ -96,17 +95,17 @@ public class TranslexCommand {
 
     private int executeHelp(CommandContext<FabricClientCommandSource> context) {
         FabricClientCommandSource source = context.getSource();
-        source.sendFeedback(Text.literal("§a━━━ Translex Help ━━━"));
-        source.sendFeedback(Text.literal("§e/translex §7— Show this help"));
-        source.sendFeedback(Text.literal("§e/translex translate <id> §7— Translate message by ID"));
-        source.sendFeedback(Text.literal("§e/translex text <message> §7— Translate arbitrary text"));
-        source.sendFeedback(Text.literal("§e/translex reload §7— Reload configuration from disk"));
-        source.sendFeedback(Text.literal("§e/translex compat §7— Toggle button style [翻译]/[T]"));
-        source.sendFeedback(Text.literal("§e/translex button §7— Toggle translation button on/off"));
-        source.sendFeedback(Text.literal("§e/translex mode <chat|temporary|permanent> §7— Set output mode"));
-        source.sendFeedback(Text.literal("§e/translex reset [itemId] §7— Clear preset library entries"));
-        source.sendFeedback(Text.literal("§e/translex debug §7— Toggle debug mode (no API key needed)"));
-        source.sendFeedback(Text.literal("§e/translex config §7— Open web configuration panel"));
+        source.sendFeedback(Component.literal("§a━━━ Translex Help ━━━"));
+        source.sendFeedback(Component.literal("§e/translex §7— Show this help"));
+        source.sendFeedback(Component.literal("§e/translex translate <id> §7— Translate message by ID"));
+        source.sendFeedback(Component.literal("§e/translex text <message> §7— Translate arbitrary text"));
+        source.sendFeedback(Component.literal("§e/translex reload §7— Reload configuration from disk"));
+        source.sendFeedback(Component.literal("§e/translex compat §7— Toggle button style [翻译]/[T]"));
+        source.sendFeedback(Component.literal("§e/translex button §7— Toggle translation button on/off"));
+        source.sendFeedback(Component.literal("§e/translex mode <chat|temporary|permanent> §7— Set output mode"));
+        source.sendFeedback(Component.literal("§e/translex reset [itemId] §7— Clear preset library entries"));
+        source.sendFeedback(Component.literal("§e/translex debug §7— Toggle debug mode (no API key needed)"));
+        source.sendFeedback(Component.literal("§e/translex config §7— Open web configuration panel"));
         return Command.SINGLE_SUCCESS;
     }
 
@@ -120,20 +119,20 @@ public class TranslexCommand {
      */
     private int executeTranslate(CommandContext<FabricClientCommandSource> context) {
         int messageId = IntegerArgumentType.getInteger(context, "message_id");
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
 
         if (messageLookup == null) {
             client.execute(() -> context.getSource().sendError(
-                    Text.literal(I18nHelper.getPrefixed("translex.error.mode_not_available"))));
+                    Component.literal(I18nHelper.getPrefixed("translex.error.mode_not_available"))));
             return 0;
         }
 
-        Text originalMessage = messageLookup.getMessageById(messageId);
+        Component originalMessage = messageLookup.getMessageById(messageId);
         if (originalMessage == null) {
             client.execute(() -> {
                 String errorMsg = I18nHelper.translate("translex.error.not_found", messageId);
                 context.getSource().sendError(
-                        Text.literal(I18nHelper.translate("translex.prefix") + errorMsg));
+                        Component.literal(I18nHelper.translate("translex.prefix") + errorMsg));
             });
             return 0;
         }
@@ -174,14 +173,14 @@ public class TranslexCommand {
         try {
             fullMessageText = StringArgumentType.getString(context, "message");
         } catch (IllegalArgumentException e) {
-            source.sendError(Text.literal(I18nHelper.getPrefixed("translex.error.usage_legacy")));
+            source.sendError(Component.literal(I18nHelper.getPrefixed("translex.error.usage_legacy")));
             return 0;
         }
 
         String cleanedMessageText = removeColorCodes(fullMessageText).trim();
 
         if (cleanedMessageText.isEmpty()) {
-            source.sendError(Text.literal(I18nHelper.getPrefixed("translex.error.content_empty")));
+            source.sendError(Component.literal(I18nHelper.getPrefixed("translex.error.content_empty")));
             return 0;
         }
 
@@ -204,19 +203,19 @@ public class TranslexCommand {
             ModConfig.reload();
             ModConfig config = ModConfig.get();
 
-            source.sendFeedback(Text.literal(I18nHelper.getPrefixed("translex.info.config_reloaded")));
+            source.sendFeedback(Component.literal(I18nHelper.getPrefixed("translex.info.config_reloaded")));
 
             // 显示当前翻译模式
             String modeName = switch (config.translationMode) {
                 case "message_id" -> "Message ID";
-                case "text" -> "Text";
+                case "text" -> "Component";
                 default -> "Auto";
             };
-            source.sendFeedback(Text.literal(I18nHelper.getPrefixed(
+            source.sendFeedback(Component.literal(I18nHelper.getPrefixed(
                     "translex.info.translation_mode", modeName)));
 
         } catch (Exception e) {
-            source.sendError(Text.literal(I18nHelper.getPrefixed("translex.error.config_load")));
+            source.sendError(Component.literal(I18nHelper.getPrefixed("translex.error.config_load")));
             LOGGER.error("Error reloading config via command", e);
             return 0;
         }
@@ -232,7 +231,7 @@ public class TranslexCommand {
         FabricClientCommandSource source = context.getSource();
         String newStyle = ButtonStyleManager.toggle();
         String styleName = "COMPACT".equals(newStyle) ? "[T]" : "[翻译]";
-        source.sendFeedback(Text.literal(
+        source.sendFeedback(Component.literal(
                 I18nHelper.getPrefixed("translex.info.button_style", styleName)));
         return Command.SINGLE_SUCCESS;
     }
@@ -247,7 +246,7 @@ public class TranslexCommand {
         String status = enabled
                 ? I18nHelper.translate("translex.info.button_enabled")
                 : I18nHelper.translate("translex.info.button_disabled");
-        source.sendFeedback(Text.literal(
+        source.sendFeedback(Component.literal(
                 I18nHelper.getPrefixed("translex.info.button_status", status)));
         return Command.SINGLE_SUCCESS;
     }
@@ -264,10 +263,10 @@ public class TranslexCommand {
             case "chat", "temporary", "permanent" -> {
                 ModConfig.get().outputMode = mode;
                 ModConfig.forceSave();
-                source.sendFeedback(Text.literal(
+                source.sendFeedback(Component.literal(
                         I18nHelper.getPrefixed("translex.info.output_mode", mode)));
             }
-            default -> source.sendError(Text.literal(
+            default -> source.sendError(Component.literal(
                     I18nHelper.getPrefixed("translex.error.invalid_mode", mode)));
         }
         return Command.SINGLE_SUCCESS;
@@ -282,7 +281,7 @@ public class TranslexCommand {
         String itemId = StringArgumentType.getString(context, "itemId");
 
         translationManager.getPresetLibrary().remove(itemId);
-        source.sendFeedback(Text.literal(
+        source.sendFeedback(Component.literal(
                 I18nHelper.getPrefixed("translex.info.preset_reset", itemId)));
         return Command.SINGLE_SUCCESS;
     }
@@ -292,7 +291,7 @@ public class TranslexCommand {
 
         translationManager.getPresetLibrary().clear();
         TemporaryTooltipCache.clear();
-        source.sendFeedback(Text.literal(
+        source.sendFeedback(Component.literal(
                 I18nHelper.getPrefixed("translex.info.preset_reset_all")));
         return Command.SINGLE_SUCCESS;
     }
@@ -308,12 +307,12 @@ public class TranslexCommand {
         ModConfig.forceSave();
 
         if (config.debug) {
-            source.sendFeedback(Text.literal(
+            source.sendFeedback(Component.literal(
                     I18nHelper.getPrefixed("translex.info.debug_enabled")));
-            source.sendFeedback(Text.literal(
+            source.sendFeedback(Component.literal(
                     "  §7— " + I18nHelper.translate("translex.info.debug_hint")));
         } else {
-            source.sendFeedback(Text.literal(
+            source.sendFeedback(Component.literal(
                     I18nHelper.getPrefixed("translex.info.debug_disabled")));
         }
         return Command.SINGLE_SUCCESS;
@@ -329,8 +328,12 @@ public class TranslexCommand {
         String token = WebServer.getToken();
         String url = "http://127.0.0.1:" + port + "/?token=" + token;
 
-        Util.getOperatingSystem().open(URI.create(url));
-        source.sendFeedback(Text.literal(
+        try {
+            java.awt.Desktop.getDesktop().browse(URI.create(url));
+        } catch (Exception e) {
+            LOGGER.error("无法打开浏览器: {}", url, e);
+        }
+        source.sendFeedback(Component.literal(
                 I18nHelper.getPrefixed("translex.info.config_opened", url)));
         return Command.SINGLE_SUCCESS;
     }
@@ -349,9 +352,9 @@ public class TranslexCommand {
     /** 显示 API Key 未配置的提示消息 */
     private static int showApiKeyHint(CommandContext<FabricClientCommandSource> context) {
         FabricClientCommandSource source = context.getSource();
-        source.sendError(Text.literal(
+        source.sendError(Component.literal(
                 I18nHelper.getPrefixed("translex.error.api_key_unset")));
-        source.sendFeedback(Text.literal(
+        source.sendFeedback(Component.literal(
                 "  §e/translex config §7— " + I18nHelper.translate("translex.error.api_key_hint")));
         return 0;
     }

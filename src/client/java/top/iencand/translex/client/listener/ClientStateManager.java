@@ -5,13 +5,13 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenKeyboardEvents;
 import net.fabricmc.fabric.api.client.item.v1.ItemTooltipCallback;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.text.Text;
-import net.minecraft.client.input.KeyInput;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.network.chat.Component;
+import net.minecraft.client.input.KeyEvent;
 import org.jetbrains.annotations.NotNull;
 import top.iencand.translex.client.translate.cache.TemporaryTooltipCache;
 import top.iencand.translex.client.config.ModConfig;
@@ -74,7 +74,7 @@ public class ClientStateManager {
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
             lastHoveredItem = null;
 
-            if (screen instanceof HandledScreen) {
+            if (screen instanceof AbstractContainerScreen) {
                 ScreenKeyboardEvents.afterKeyPress(screen).register(this::onGuiKeyPress);
             }
 
@@ -88,12 +88,12 @@ public class ClientStateManager {
     // Key press handling (translate lore on hotkey)
     // ---------------------------------------------------------------
 
-    private void onGuiKeyPress(Screen screen, KeyInput input) {
-        if (ModKeybindings.TRANSLATE_LORE_KEY.matchesKey(input)) {
-            MinecraftClient mc = MinecraftClient.getInstance();
-            ClientPlayerEntity player = mc.player;
+    private void onGuiKeyPress(Screen screen, KeyEvent input) {
+        if (ModKeybindings.TRANSLATE_LORE_KEY.matches(input)) {
+            Minecraft mc = Minecraft.getInstance();
+            LocalPlayer player = mc.player;
 
-            if (screen instanceof HandledScreen) {
+            if (screen instanceof AbstractContainerScreen) {
                 if (lastHoveredItem != null && !lastHoveredItem.isEmpty()) {
 
                     // Check API key before doing any work (skip in debug mode)
@@ -101,16 +101,16 @@ public class ClientStateManager {
                         String key = ModConfig.get().apiKey;
                         if (key == null || key.isBlank() || key.equals("YOUR_API_KEY_HERE")) {
                             if (player != null) {
-                                player.sendMessage(Text.literal(
-                                        I18nHelper.getPrefixed("translex.error.api_key_unset")), false);
-                                player.sendMessage(Text.literal(
-                                        "  §e/translex config §7— " + I18nHelper.translate("translex.error.api_key_hint")), false);
+                                player.sendSystemMessage(Component.literal(
+                                        I18nHelper.getPrefixed("translex.error.api_key_unset")));
+                                player.sendSystemMessage(Component.literal(
+                                        "  §e/translex config §7— " + I18nHelper.translate("translex.error.api_key_hint")));
                             }
                             return;
                         }
                     }
 
-                    String itemDisplayName = lastHoveredItem.getName().getString();
+                    String itemDisplayName = lastHoveredItem.getHoverName().getString();
 
                     // 0. Check ItemPresetLibrary first
                     String itemId = ItemIdExtractor.extractSkyBlockItemId(lastHoveredItem);
@@ -118,11 +118,11 @@ public class ClientStateManager {
                         ItemPresetLibrary.ItemPreset preset = translationManager.getPresetLibrary().get(itemId);
                         if (preset != null) {
                             if (player != null) {
-                                player.sendMessage(Text.literal(
-                                        I18nHelper.getPrefixed("translex.info.preset_hit")), false);
-                                player.sendMessage(Text.literal("§a" + preset.name), false);
+                                player.sendSystemMessage(Component.literal(
+                                        I18nHelper.getPrefixed("translex.info.preset_hit")));
+                                player.sendSystemMessage(Component.literal("§a" + preset.name));
                                 for (String line : preset.loreLines) {
-                                    player.sendMessage(Text.literal("§7" + line), false);
+                                    player.sendSystemMessage(Component.literal("§7" + line));
                                 }
                             }
                             return;
@@ -131,11 +131,11 @@ public class ClientStateManager {
 
                     // 1. 通过 getTooltipFromItem 获取完整工具提示（与 Mixin 使用相同方法）
                     //    确保翻译行数与替换时的行数一致
-                    List<Text> fullTooltip = Screen.getTooltipFromItem(mc, lastHoveredItem);
+                    List<Component> fullTooltip = Screen.getTooltipFromItem(mc, lastHoveredItem);
 
                     if (fullTooltip.isEmpty()) {
-                        if (player != null) player.sendMessage(Text.literal(
-                                I18nHelper.getPrefixed("translex.error.content_empty")), false);
+                        if (player != null) player.sendSystemMessage(Component.literal(
+                                I18nHelper.getPrefixed("translex.error.content_empty")));
                         return;
                     }
 
@@ -143,33 +143,33 @@ public class ClientStateManager {
                     String fullText = concatenateTooltip(fullTooltip);
 
                     if (fullText.isBlank()) {
-                        if (player != null) player.sendMessage(Text.literal(
-                                I18nHelper.getPrefixed("translex.error.content_empty")), false);
+                        if (player != null) player.sendSystemMessage(Component.literal(
+                                I18nHelper.getPrefixed("translex.error.content_empty")));
                         return;
                     }
 
-                    // 3. 提交翻译，传入原始 Text 对象用于模板提取
+                    // 3. 提交翻译，传入原始 Component 对象用于模板提取
                     this.translationManager.translateItemLoreTemplates(
                             fullTooltip, itemId, itemDisplayName, lastHoveredItem);
 
                     if (player != null) {
-                        player.sendMessage(Text.literal(
-                                I18nHelper.getPrefixed("translex.info.request_sent")), false);
+                        player.sendSystemMessage(Component.literal(
+                                I18nHelper.getPrefixed("translex.info.request_sent")));
 
                         String mode = ModConfig.get().outputMode;
                         if ("temporary".equals(mode)) {
-                            player.sendMessage(Text.literal(
-                                    I18nHelper.getPrefixed("translex.info.temp_mode_hint")), false);
+                            player.sendSystemMessage(Component.literal(
+                                    I18nHelper.getPrefixed("translex.info.temp_mode_hint")));
                         } else if ("permanent".equals(mode)) {
-                            player.sendMessage(Text.literal(
-                                    I18nHelper.getPrefixed("translex.info.perm_mode_hint")), false);
+                            player.sendSystemMessage(Component.literal(
+                                    I18nHelper.getPrefixed("translex.info.perm_mode_hint")));
                         }
                     }
 
                 } else {
                     if (player != null) {
-                        player.sendMessage(Text.literal(
-                                I18nHelper.getPrefixed("translex.error.no_item_hovered")), false);
+                        player.sendSystemMessage(Component.literal(
+                                I18nHelper.getPrefixed("translex.error.no_item_hovered")));
                     }
                 }
             }
@@ -180,7 +180,7 @@ public class ClientStateManager {
     // 辅助方法
     // ===============================================================
 
-    private static String concatenateTooltip(List<Text> tooltip) {
+    private static String concatenateTooltip(List<Component> tooltip) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < tooltip.size(); i++) {
             String line = tooltip.get(i).getString();

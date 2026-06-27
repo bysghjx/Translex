@@ -1,10 +1,10 @@
 package top.iencand.translex.client.translate.render;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.HoverEvent;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.ChatFormatting;
 import top.iencand.translex.client.util.I18nHelper;
 
 /**
@@ -36,19 +36,19 @@ public class ChatRenderer {
      * 核心渲染逻辑
      */
     private void render(String original, String content, String id, boolean isError) {
-        MinecraftClient.getInstance().execute(() -> {
-            if (MinecraftClient.getInstance().inGameHud == null) return;
+        Minecraft.getInstance().execute(() -> {
+            if (Minecraft.getInstance().gui == null) return;
 
             // 1. 构造前缀 [Translex » ]
-            MutableText prefix = Text.literal(I18nHelper.translate("translex.prefix.name")).formatted(Formatting.GREEN)
-                    .append(Text.literal(I18nHelper.translate("translex.prefix.separator")).formatted(Formatting.BLUE));
+            MutableComponent prefix = Component.literal(I18nHelper.translate("translex.prefix.name")).withStyle(ChatFormatting.GREEN)
+                    .append(Component.literal(I18nHelper.translate("translex.prefix.separator")).withStyle(ChatFormatting.BLUE));
 
             // 2. 构造悬停内容 (任务 ID + 原句预览)
             String hoverKey = isError ? "translex.error.hover" : "translex.hover.metadata";
-            MutableText hoverText = Text.literal(I18nHelper.translate(hoverKey, id));
+            MutableComponent hoverText = Component.literal(I18nHelper.translate(hoverKey, id));
 
             if (!isError && original != null) {
-                hoverText.append(Text.literal("\n\n").append(Text.literal(original).formatted(Formatting.GRAY)));
+                hoverText.append(Component.literal("\n\n").append(Component.literal(original).withStyle(ChatFormatting.GRAY)));
             }
 
             // 仅保留悬停事件，移除 ClickEvent
@@ -57,10 +57,10 @@ public class ChatRenderer {
             );
 
             // 3. 构造正文 (错误为红色，正常为白色)
-            MutableText body = Text.literal(content).formatted(isError ? Formatting.RED : Formatting.WHITE);
+            MutableComponent body = Component.literal(content).withStyle(isError ? ChatFormatting.RED : ChatFormatting.WHITE);
 
             // 4. 发送到聊天框
-            MinecraftClient.getInstance().inGameHud.getChatHud().addMessage(prefix.append(body));
+            Minecraft.getInstance().gui.getChat().addClientSystemMessage(prefix.append(body));
         });
     }
 }

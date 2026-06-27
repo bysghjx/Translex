@@ -3,12 +3,12 @@ package top.iencand.translex.client.listener;
 import net.fabricmc.api.Environment;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
-import net.minecraft.text.Text;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Style;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.HoverEvent;
-import net.minecraft.util.Formatting;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.ChatFormatting;
 import top.iencand.translex.client.config.ButtonStyleManager;
 import top.iencand.translex.client.util.I18nHelper;
 import top.iencand.translex.client.web.ConsoleBroadcaster;
@@ -42,20 +42,20 @@ public class LegacyChatHandler {
 
             // 2. 根据样式创建按钮
             String buttonText;
-            Formatting buttonColor;
+            ChatFormatting buttonColor;
             if (ButtonStyleManager.isCompact()) {
                 buttonText = I18nHelper.translate("translex.gui.translate_button_compact");
-                buttonColor = Formatting.GREEN;
+                buttonColor = ChatFormatting.GREEN;
             } else {
                 buttonText = I18nHelper.translate("translex.gui.translate_button");
-                buttonColor = Formatting.GREEN;
+                buttonColor = ChatFormatting.GREEN;
             }
-            MutableText translateButton = Text.literal(buttonText)
+            MutableComponent translateButton = Component.literal(buttonText)
                     .setStyle(Style.EMPTY.withColor(buttonColor));
 
             // 3. 设置悬停事件
             String hoverText = I18nHelper.translate("translex.gui.translate_button_hover_legacy");
-            HoverEvent hoverEvent = new HoverEvent.ShowText(Text.literal(hoverText));
+            HoverEvent hoverEvent = new HoverEvent.ShowText(Component.literal(hoverText));
 
             // 4. 设置点击事件（直接发送完整消息文本到命令）
             ClickEvent clickEvent = new ClickEvent.RunCommand(
@@ -68,14 +68,14 @@ public class LegacyChatHandler {
                     .withClickEvent(clickEvent));
 
             // 6. 组合消息
-            MutableText newMessageWithButton = Text.empty();
+            MutableComponent newMessageWithButton = Component.empty();
             if (ButtonStyleManager.isCompact()) {
                 newMessageWithButton.append(message);
-                newMessageWithButton.append(Text.literal(" "));
+                newMessageWithButton.append(Component.literal(" "));
                 newMessageWithButton.append(translateButton);
             } else {
                 newMessageWithButton.append(translateButton);
-                newMessageWithButton.append(Text.literal(" "));
+                newMessageWithButton.append(Component.literal(" "));
                 newMessageWithButton.append(message);
             }
 
