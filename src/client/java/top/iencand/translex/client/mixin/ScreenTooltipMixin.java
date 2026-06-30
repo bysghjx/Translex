@@ -54,10 +54,9 @@ public abstract class ScreenTooltipMixin {
         String mode = ModConfig.get().outputMode;
         if ("chat".equals(mode)) return;
 
-        List<String> replacement = TranslexTooltipContext.lookupReplacement(stack, mode);
-        if (replacement == null || replacement.isEmpty()) return;
-
         List<Component> original = cir.getReturnValue();
+        List<String> replacement = TranslexTooltipContext.lookupReplacement(stack, mode, original);
+        if (replacement == null || replacement.isEmpty()) return;
 
         BUILDING.set(true);
         try {

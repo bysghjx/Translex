@@ -8,6 +8,7 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallba
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import java.awt.Desktop; import java.net.URI;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import top.iencand.translex.client.translate.cache.TemporaryTooltipCache;
@@ -54,6 +55,10 @@ public class TranslexCommand {
                     .then(literal("text")
                             .then(argument("message", StringArgumentType.greedyString())
                                     .executes(this::executeText)))
+                    // /translex say <chinese_message> — 中译英并自动发送到聊天
+                    .then(literal("say")
+                            .then(argument("message", StringArgumentType.greedyString())
+                                    .executes(this::executeSay)))
                     // /translex reload
                     .then(literal("reload")
                             .executes(this::executeReload))
@@ -86,7 +91,7 @@ public class TranslexCommand {
                             .executes(this::executeConfig))
             );
         });
-        LOGGER.info("Translex command registered (translate, text, reload, compat, button, mode, reset, config).");
+        LOGGER.info("Translex command registered (translate, text, say, reload, compat, button, mode, reset, config).");
     }
 
     // ===============================================================
@@ -99,6 +104,7 @@ public class TranslexCommand {
         source.sendFeedback(Component.literal("§e/translex §7— Show this help"));
         source.sendFeedback(Component.literal("§e/translex translate <id> §7— Translate message by ID"));
         source.sendFeedback(Component.literal("§e/translex text <message> §7— Translate arbitrary text"));
+        source.sendFeedback(Component.literal("§e/translex say <message> §7— Translate to English & send to chat"));
         source.sendFeedback(Component.literal("§e/translex reload §7— Reload configuration from disk"));
         source.sendFeedback(Component.literal("§e/translex compat §7— Toggle button style [翻译]/[T]"));
         source.sendFeedback(Component.literal("§e/translex button §7— Toggle translation button on/off"));
@@ -177,6 +183,10 @@ public class TranslexCommand {
             return 0;
         }
 
+        // 去掉一对包裹整段的引号（AutoChatHandler 短消息按钮会把文本包成 "..." 传入；
+        // Brigadier 的 greedyString 不会自动去引号，否则引号会被当作内容一起翻译）。
+        fullMessageText = stripWrappingQuotes(fullMessageText);
+
         String cleanedMessageText = removeColorCodes(fullMessageText).trim();
 
         if (cleanedMessageText.isEmpty()) {
@@ -189,6 +199,39 @@ public class TranslexCommand {
         }
 
         translationManager.translateTextAsync(cleanedMessageText, "TX_" + System.currentTimeMillis());
+        return Command.SINGLE_SUCCESS;
+    }
+
+    // ===============================================================
+    // 反向翻译并发送（/translex say &lt;message&gt;）
+    // ===============================================================
+
+    /**
+     * 把用户输入译成英文并自动发送到服务器聊天（与翻译别人消息为中文反向）。
+     */
+    private int executeSay(CommandContext<FabricClientCommandSource> context) {
+        FabricClientCommandSource source = context.getSource();
+        String message;
+
+        try {
+            message = StringArgumentType.getString(context, "message");
+        } catch (IllegalArgumentException e) {
+            source.sendError(Component.literal(I18nHelper.getPrefixed("translex.error.usage_legacy")));
+            return 0;
+        }
+
+        message = stripWrappingQuotes(message).trim();
+        if (message.isEmpty()) {
+            source.sendError(Component.literal(I18nHelper.getPrefixed("translex.error.content_empty")));
+            return 0;
+        }
+
+        if (isApiKeyMissing()) {
+            return showApiKeyHint(context);
+        }
+
+        source.sendFeedback(Component.literal(I18nHelper.getPrefixed("translex.say.translating")));
+        translationManager.sayAsync(message);
         return Command.SINGLE_SUCCESS;
     }
 
@@ -280,7 +323,8 @@ public class TranslexCommand {
         FabricClientCommandSource source = context.getSource();
         String itemId = StringArgumentType.getString(context, "itemId");
 
-        translationManager.getPresetLibrary().remove(itemId);
+        // 移除该 itemId 下的所有 lore 变体（组合键以 itemId# 开头）
+        int removed = translationManager.getPresetLibrary().removeByItemId(itemId);
         source.sendFeedback(Component.literal(
                 I18nHelper.getPrefixed("translex.info.preset_reset", itemId)));
         return Command.SINGLE_SUCCESS;
@@ -329,9 +373,9 @@ public class TranslexCommand {
         String url = "http://127.0.0.1:" + port + "/?token=" + token;
 
         try {
-            java.awt.Desktop.getDesktop().browse(URI.create(url));
+            Desktop.getDesktop().browse(URI.create(url));
         } catch (Exception e) {
-            LOGGER.error("无法打开浏览器: {}", url, e);
+            LOGGER.warn("Failed to open config URL in browser: {}", e.getMessage());
         }
         source.sendFeedback(Component.literal(
                 I18nHelper.getPrefixed("translex.info.config_opened", url)));
@@ -364,5 +408,21 @@ public class TranslexCommand {
         if (text == null) return null;
         Matcher matcher = COLOR_CODE_PATTERN.matcher(text);
         return matcher.replaceAll("");
+    }
+
+    /**
+     * 去掉包裹整段文本的一对引号，并还原 \" \\ 转义。
+     * AutoChatHandler 短消息按钮把文本 escape 后包成 {@code "..."} 拼进命令，
+     * Brigadier greedyString 不会自动剥离，需在此还原，避免引号被当内容翻译。
+     */
+    private static String stripWrappingQuotes(String text) {
+        if (text == null) return null;
+        String t = text.trim();
+        if (t.length() >= 2 && t.charAt(0) == '"' && t.charAt(t.length() - 1) == '"') {
+            t = t.substring(1, t.length() - 1);
+            // 还原按钮拼接时做的转义（先 \\ → \，再 \" → "）
+            t = t.replace("\\\"", "\"").replace("\\\\", "\\");
+        }
+        return t;
     }
 }

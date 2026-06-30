@@ -51,6 +51,7 @@ public class TranslexClient implements ClientModInitializer {
         // 3. 初始化缓存持久化层（debug 模式下跳过缓存以方便观察原始 API 调用）
         if (config.enableCachePersistence && !config.debug) {
             translationManager.initializePersistence(ModConfig.getCacheFile());
+            ModConfig.addListener(cfg -> translationManager.getCacheManager().applyConfig());
             LOGGER.info("[{}] 缓存持久化已启用并初始化。", MOD_ID);
         } else if (config.debug) {
             LOGGER.info("[{}] 缓存已禁用（调试模式）。", MOD_ID);

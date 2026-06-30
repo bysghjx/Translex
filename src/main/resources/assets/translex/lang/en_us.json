@@ -29,6 +29,8 @@
   "translex.error.content_empty": "Message content is empty, nothing to translate.",
   "translex.error.no_item_hovered": "No item hovered! Hover over an item first, then press the key.",
   "translex.error.usage_legacy": "Usage: /translex text <message>",
+  "translex.say.translating": "Translating to English & sending...",
+  "translex.say.failed": "Translation failed; message not sent.",
   "translex.error.mode_not_available": "Message ID mode is not enabled. Use /translex text instead.",
 
   "translex.error.network.io": "Network I/O error: %s",

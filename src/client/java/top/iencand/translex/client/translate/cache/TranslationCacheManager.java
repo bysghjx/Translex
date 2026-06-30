@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import top.iencand.translex.client.config.ModConfig;
 import top.iencand.translex.client.translate.model.SkyBlockTerm;
@@ -43,7 +44,13 @@ public class TranslationCacheManager {
 
     public void init(File file) {
         this.cacheFile = file;
+        cache.setMaxSize(ModConfig.get().cacheMaxEntries);
         cache.load(file);
+    }
+
+    /** 配置重载后刷新内存上限（供 ConfigReloadListener 调用）。 */
+    public void applyConfig() {
+        cache.setMaxSize(ModConfig.get().cacheMaxEntries);
     }
 
     // ===============================================================
@@ -51,6 +58,11 @@ public class TranslationCacheManager {
     // ===============================================================
 
     public String applyGlossary(String text) {
+        return applyGlossaryStatic(text);
+    }
+
+    /** 静态词库替换：供不持有缓存管理器的聊天管线复用（词库为静态、无状态）。 */
+    public static String applyGlossaryStatic(String text) {
         if (text == null) return null;
         String result = text;
         for (Map.Entry<Pattern, String> entry : GLOSSARY_PATTERNS.entrySet()) {
@@ -92,6 +104,47 @@ public class TranslationCacheManager {
         dirtyShards.add(cache.getShardId(cacheKey));
     }
 
+    /** 删除指定缓存键的条目（用于清除损坏的缓存数据）。 */
+    public void removeByCacheKey(String cacheKey) {
+        if (cacheKey == null) return;
+        cache.removeByNormKey(cacheKey);
+    }
+
+    // ===============================================================
+    // 模板内词库替换（保留 &lt;sN&gt; 颜色结构）
+    // ===============================================================
+
+    private static final Pattern TEMPLATE_TAG = Pattern.compile("<s(\\d+)>(.*?)</s\\1>", Pattern.DOTALL);
+
+    /**
+     * 对带 &lt;sN&gt; 标签的模板文本应用词库替换，仅替换标签内的可见文本，
+     * 保留所有标签和占位符结构。这样词库处理完的行可以直接走
+     * {@code LineTemplate.buildText()} 渲染，颜色完整。
+     *
+     * @param template 带样式标签的模板，如 {@code <s0>Defense: </s0><s1>{0}</s1><s2>(+30)</s2>}
+     * @return 标签间内容经词库替换后的模板，如 {@code <s0>防御力: </s0><s1>{0}</s1><s2>(+30)</s2>}
+     */
+    public static String applyGlossaryToTemplate(String template) {
+        if (template == null) return null;
+        StringBuilder result = new StringBuilder(template.length() + 32);
+        Matcher m = TEMPLATE_TAG.matcher(template);
+        while (m.find()) {
+            String content = m.group(2);
+            String glossed = applyGlossaryStatic(content);
+            m.appendReplacement(result,
+                    "<s" + m.group(1) + ">" + Matcher.quoteReplacement(glossed) + "</s" + m.group(1) + ">");
+        }
+        m.appendTail(result);
+        return result.toString();
+    }
+
+    /** 检查带标签的模板经词库替换后是否仍含英文（决定是否需要 AI 翻译）。 */
+    public static boolean templateStillHasEnglish(String template) {
+        if (template == null) return false;
+        // 去掉所有 <sN> 标签，检查剩余文本是否含英文字母
+        return Pattern.compile("[a-zA-Z]").matcher(template.replaceAll("</?s\\d+>", "")).find();
+    }
+
     // ===============================================================
     // 旧版兼容（不含数字规范化）
     // ===============================================================
@@ -125,9 +178,10 @@ public class TranslationCacheManager {
 
     public void forceSave() {
         if (cacheFile == null || dirtyShards.isEmpty()) return;
+        Map<String, String> snapshot = cache.snapshot();
         for (int shardId : dirtyShards) {
             Map<String, String> shardData = new HashMap<>();
-            cache.getCacheMap().forEach((k, v) -> {
+            snapshot.forEach((k, v) -> {
                 if (cache.getShardId(k) == shardId) {
                     shardData.put(k, v);
                 }
@@ -135,10 +189,7 @@ public class TranslationCacheManager {
             cache.saveShard(cacheFile, shardId, shardData);
         }
         dirtyShards.clear();
-
-        if (cache.getCacheMap().size() > 10000) {
-            cache.getCacheMap().clear();
-        }
+        // 内存上限由 TranslationCache 的 LRU 淘汰自动维护，无需在此粗暴全清。
     }
 
     public void shutdown() {

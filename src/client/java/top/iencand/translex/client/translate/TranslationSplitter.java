@@ -27,6 +27,15 @@ public class TranslationSplitter {
     private static final Pattern HAS_ENGLISH = Pattern.compile("[a-zA-Z]");
 
     public SplitResult split(String original, Function<String, String> glossaryApplier) {
+        return split(original, glossaryApplier, true);
+    }
+
+    /**
+     * @param normalizeNumbers 是否把数字规范化为 {@code {num}} 占位符。
+     *        仅在需要"按内容缓存去重"时有意义；聊天管线不走缓存，应传 {@code false}
+     *        以免 {@code {num}} 占位符泄漏到结果（restore 从未被调用）。
+     */
+    public SplitResult split(String original, Function<String, String> glossaryApplier, boolean normalizeNumbers) {
         if (original == null || original.isEmpty()) {
             return new SplitResult("", List.of(), List.of(), new NumberNormalizer());
         }
@@ -58,7 +67,7 @@ public class TranslationSplitter {
 
         String rawText = String.join("\n", untranslatedLines);
         NumberNormalizer normalizer = new NumberNormalizer();
-        String untranslatedText = normalizer.normalize(rawText);
+        String untranslatedText = normalizeNumbers ? normalizer.normalize(rawText) : rawText;
         SplitResult result = new SplitResult(untranslatedText, preTranslated, untranslatedLines, normalizer);
 
         int glossaried = (int) preTranslated.stream().filter(l -> l != null).count();

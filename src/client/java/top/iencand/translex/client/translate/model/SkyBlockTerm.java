@@ -5,11 +5,11 @@ public enum SkyBlockTerm {
     STRENGTH("Strength", "力量"),
     CRIT_CHANCE("Crit Chance", "暴击率"),
     CRIT_DAMAGE("Crit Damage", "暴击伤害"),
-    HEALTH("Health", "生命值"),
-    DEFENSE("Defense", "防御力"),
+    HEALTH("Health", "生命"),
+    DEFENSE("Defense", "防御"),
     SPEED("Speed", "速度"),
-    INTELLIGENCE("Intelligence", "智力/魔法值"),
-    TRUE_DEFENSE("True Defense", "真·防御力"),
+    INTELLIGENCE("Intelligence", "智力"),
+    TRUE_DEFENSE("True Defense", "真防"),
     FEROCITY("Ferocity", "残暴"),
 
     // 采集与特殊
@@ -17,11 +17,11 @@ public enum SkyBlockTerm {
     PET_LUCK("Pet Luck", "宠物幸运"),
     SEA_CREATURE_CHANCE("Sea Creature Chance", "海生生物概率"),
     MINING_SPEED("Mining Speed", "采矿速度"),
-    MINING_FORTUNE("Mining Fortune", "采矿幸运"),
+    MINING_FORTUNE("Mining Fortune", "采矿时运"),
     PRISTINE("Pristine", "精纯"),
 
     // 战斗属性
-    ATTACK_SPEED("Bonus Attack Speed", "奖励攻击速度"),
+    ATTACK_SPEED("Bonus Attack Speed", "攻击速度"),
     ABILITY_DAMAGE("Ability Damage", "技能伤害"),
     MENDING("Mending", "治疗效率"),
     VITALITY("Vitality", "生命活力");

@@ -11,6 +11,10 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import net.minecraft.client.Minecraft;
 import top.iencand.translex.client.config.ModConfig;
+import top.iencand.translex.client.translate.provider.AiProvider;
+import top.iencand.translex.client.translate.provider.AiProviders;
+import top.iencand.translex.client.translate.provider.AiRequest;
+import top.iencand.translex.client.translate.provider.AiResponse;
 import top.iencand.translex.client.util.I18nHelper;
 import top.iencand.translex.client.web.ConsoleBroadcaster;
 import top.iencand.translex.client.web.MetricsCollector;
@@ -18,8 +22,14 @@ import top.iencand.translex.client.web.MetricsCollector;
 /**
  * AI API 的底层 HTTP 通信客户端。
  * 使用 OkHttp 发送请求，支持超时设置、错误码分类和重试策略。
+ *
+ * <p>请求体构造、请求头、响应解析全部委托给 {@link AiProvider} 适配器
+ * （由 {@link ModConfig#provider} 选定，经 {@link AiProviders} 解析），
+ * 因此本类不再绑定任何特定供应商格式。</p>
  */
 public class TranslationRequester {
+    /** 禁用 HTML 转义的 Gson：避免 &lt;s0&gt; 被序列化为 \\u003cs0\\u003e，浪费 token。 */
+    private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
     private static final OkHttpClient CLIENT = new OkHttpClient.Builder()
@@ -36,11 +46,12 @@ public class TranslationRequester {
             String apiUrl,
             String model,
             String systemPrompt,
+            String optionalUserPrompt,
             String userContent,
             String cacheKey,
             String displayIdentifier,
             TranslationCallback callback) {
-        requestTranslationInternal(apiKey, apiUrl, model, systemPrompt, userContent,
+        requestTranslationInternal(apiKey, apiUrl, model, systemPrompt, optionalUserPrompt, userContent,
                 cacheKey, displayIdentifier, callback, 0);
     }
 
@@ -49,6 +60,7 @@ public class TranslationRequester {
             String apiUrl,
             String model,
             String systemPrompt,
+            String optionalUserPrompt,
             String userContent,
             String cacheKey,
             String displayIdentifier,
@@ -61,35 +73,22 @@ public class TranslationRequester {
             ConsoleBroadcaster.broadcast("DEBUG",
                     "Debug mock translation — " + cacheKey + " (" + displayIdentifier + ")");
             Minecraft.getInstance().execute(() ->
-                    callback.onTranslationComplete(cacheKey, mockResult, displayIdentifier));
+                    callback.onTranslationComplete(cacheKey, mockResult, displayIdentifier, mockResult));
             return;
         }
 
         if (apiKey == null || apiKey.isEmpty()) {
-            callback.onTranslationComplete(cacheKey, "§c" + I18nHelper.translate("translex.error.api_key_missing"), displayIdentifier);
+            callback.onTranslationComplete(cacheKey, "§c" + I18nHelper.translate("translex.error.api_key_missing"), displayIdentifier, null);
             return;
         }
 
-        JsonObject requestBodyJson = new JsonObject();
-        requestBodyJson.addProperty("model", model);
-        JsonArray messages = new JsonArray();
+        ModConfig cfg = ModConfig.get();
+        AiProvider provider = AiProviders.get(cfg.provider);
+        AiRequest aiReq = new AiRequest(apiKey, apiUrl, model, systemPrompt, optionalUserPrompt,
+                userContent, cfg.maxTokens, cfg.anthropicVersion);
 
-        messages.add(createMsg("system", systemPrompt));
-        messages.add(createMsg("user", userContent));
-
-        requestBodyJson.add("messages", messages);
-
-        // 禁用 reasoning/thinking 模式（避免输出 token 数暴涨 5-10 倍）
-        JsonObject thinking = new JsonObject();
-        thinking.addProperty("type", "disabled");
-        requestBodyJson.add("thinking", thinking);
-
-        RequestBody body = RequestBody.create(requestBodyJson.toString(), JSON);
-        Request request = new Request.Builder()
-                .url(apiUrl)
-                .post(body)
-                .addHeader("Authorization", "Bearer " + apiKey)
-                .build();
+        RequestBody body = RequestBody.create(provider.buildRequestBody(aiReq), JSON);
+        Request request = provider.buildRequest(aiReq, body);
 
         CLIENT.newCall(request).enqueue(new Callback() {
             @Override
@@ -103,9 +102,9 @@ public class TranslationRequester {
 
                     Minecraft.getInstance().execute(() ->
                             callback.onTranslationComplete(cacheKey,
-                                    "§e" + I18nHelper.translate("translex.info.retrying"), displayIdentifier));
+                                    "§e" + I18nHelper.translate("translex.info.retrying"), displayIdentifier, null));
 
-                    scheduleRetry(delay, apiKey, apiUrl, model, systemPrompt, userContent,
+                    scheduleRetry(delay, apiKey, apiUrl, model, systemPrompt, optionalUserPrompt, userContent,
                             cacheKey, displayIdentifier, callback, retryCount + 1);
                     return;
                 }
@@ -125,15 +124,19 @@ public class TranslationRequester {
 
                 String errorMsg = "§c" + I18nHelper.translate("translex.error.network.io", detail);
                 ConsoleBroadcaster.broadcast("ERROR", "Network error — " + detail);
-                Minecraft.getInstance().execute(() -> callback.onTranslationComplete(cacheKey, errorMsg, displayIdentifier));
+                final String netDetail = detail;
+                Minecraft.getInstance().execute(() -> callback.onTranslationComplete(cacheKey, errorMsg, displayIdentifier,
+                        "[network error] " + netDetail));
             }
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 String resultMessage = "§c" + I18nHelper.translate("translex.error.api.processing");
+                String rawBody = "";
 
                 try (ResponseBody responseBody = response.body()) {
                     String bodyString = responseBody != null ? responseBody.string() : "";
+                    rawBody = bodyString;
 
                     int httpCode = response.code();
 
@@ -145,43 +148,33 @@ public class TranslationRequester {
                                 "HTTP " + httpCode + ", retry " + (retryCount + 1) + "/"
                                 + MAX_RETRIES + " in " + delay + "ms");
                         response.close();
-                        scheduleRetry(delay, apiKey, apiUrl, model, systemPrompt, userContent,
+                        scheduleRetry(delay, apiKey, apiUrl, model, systemPrompt, optionalUserPrompt, userContent,
                                 cacheKey, displayIdentifier, callback, retryCount + 1);
                         return;
                     }
 
                     if (response.isSuccessful() && !bodyString.isEmpty()) {
-                        JsonObject jsonResponse = JsonParser.parseString(bodyString).getAsJsonObject();
-                        if (jsonResponse.has("choices") && jsonResponse.getAsJsonArray("choices").size() > 0) {
-                            String content = jsonResponse.getAsJsonArray("choices").get(0)
-                                    .getAsJsonObject().getAsJsonObject("message")
-                                    .get("content").getAsString().trim();
-
-                            resultMessage = content.isEmpty() ? "§c" + I18nHelper.translate("translex.error.api.empty_content") : content;
-
-                            // 提取 API 返回的全部 token 用量
-                            if (jsonResponse.has("usage")) {
-                                JsonObject usage = jsonResponse.getAsJsonObject("usage");
-                                long prompt     = usage.has("prompt_tokens")     ? usage.get("prompt_tokens").getAsLong()     : 0;
-                                long completion = usage.has("completion_tokens") ? usage.get("completion_tokens").getAsLong() : 0;
-                                long total      = usage.has("total_tokens")      ? usage.get("total_tokens").getAsLong()      : prompt + completion;
-                                long cached     = 0;
-                                long reasoning  = 0;
-                                if (usage.has("prompt_tokens_details")) {
-                                    JsonObject details = usage.getAsJsonObject("prompt_tokens_details");
-                                    cached = details.has("cached_tokens") ? details.get("cached_tokens").getAsLong() : 0;
-                                }
-                                if (usage.has("completion_tokens_details")) {
-                                    JsonObject details = usage.getAsJsonObject("completion_tokens_details");
-                                    reasoning = details.has("reasoning_tokens") ? details.get("reasoning_tokens").getAsLong() : 0;
-                                }
-                                if (prompt > 0 || completion > 0) {
-                                    MetricsCollector.get().recordActualTokenUsage(prompt, completion);
-                                    MetricsCollector.get().stageTokenData(prompt, completion, total, cached, reasoning);
-                                }
+                        AiResponse parsed = provider.parseResponse(bodyString);
+                        if (parsed.success()) {
+                            resultMessage = parsed.content();
+                            if (parsed.prompt() > 0 || parsed.completion() > 0) {
+                                MetricsCollector.get().recordActualTokenUsage(parsed.prompt(), parsed.completion());
+                                MetricsCollector.get().stageTokenData(parsed.prompt(), parsed.completion(),
+                                        parsed.total(), parsed.cached(), parsed.reasoning());
                             }
+                        } else {
+                            // 解析不出内容：把原始响应体（截断）暴露出来，便于定位是模型错误/空content/error JSON
+                            String snippet = bodyString.length() > 800 ? bodyString.substring(0, 800) + "…" : bodyString;
+                            ConsoleBroadcaster.broadcast("ERROR",
+                                    "Empty/unparseable content from provider '" + provider.id()
+                                    + "' (HTTP " + response.code() + "). Raw body: " + snippet);
+                            resultMessage = "§c" + I18nHelper.translate("translex.error.api.empty_content");
                         }
                     } else {
+                        String snippet = bodyString.length() > 800 ? bodyString.substring(0, 800) + "…" : bodyString;
+                        ConsoleBroadcaster.broadcast("ERROR",
+                                "HTTP " + response.code() + " from provider '" + provider.id()
+                                + "'. Raw body: " + snippet);
                         String httpDetail = getHttpErrorDetail(response.code());
                         resultMessage = "§c" + I18nHelper.translate("translex.error.network.http", httpDetail);
                     }
@@ -189,7 +182,9 @@ public class TranslationRequester {
                     resultMessage = "§c" + I18nHelper.translate("translex.error.api.json_syntax");
                 } finally {
                     final String finalRes = resultMessage;
-                    Minecraft.getInstance().execute(() -> callback.onTranslationComplete(cacheKey, finalRes, displayIdentifier));
+                    final String finalRawBody = rawBody;
+                    Minecraft.getInstance().execute(() ->
+                            callback.onTranslationComplete(cacheKey, finalRes, displayIdentifier, finalRawBody));
                 }
             }
         });
@@ -197,13 +192,13 @@ public class TranslationRequester {
 
     private void scheduleRetry(long delayMs,
             String apiKey, String apiUrl, String model, String systemPrompt,
-            String userContent, String cacheKey, String displayIdentifier,
+            String optionalUserPrompt, String userContent, String cacheKey, String displayIdentifier,
             TranslationCallback callback, int retryCount) {
         new java.util.Timer().schedule(new java.util.TimerTask() {
             @Override
             public void run() {
                 requestTranslationInternal(apiKey, apiUrl, model, systemPrompt,
-                        userContent, cacheKey, displayIdentifier, callback, retryCount);
+                        optionalUserPrompt, userContent, cacheKey, displayIdentifier, callback, retryCount);
             }
         }, delayMs);
     }
@@ -237,14 +232,6 @@ public class TranslationRequester {
             case 504 -> I18nHelper.translate("translex.error.http.504");
             default -> String.valueOf(code);
         };
-    }
-
-    /** 创建一条聊天消息的 JSON 对象（角色 + 内容） */
-    private JsonObject createMsg(String role, String content) {
-        JsonObject obj = new JsonObject();
-        obj.addProperty("role", role);
-        obj.addProperty("content", content);
-        return obj;
     }
 
     /**

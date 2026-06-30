@@ -6,19 +6,42 @@ import com.google.gson.reflect.TypeToken;
 import top.iencand.translex.client.web.ConsoleBroadcaster;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.lang.reflect.Type;
 
 /**
  * 负责缓存的底层存储与磁盘 IO。
  * 采用分片存储 (Sharding) 以优化大批量数据的读写性能。
+ *
+ * <p>内存存储为访问顺序 (access-order) 的 {@link LinkedHashMap}，超过上限时按 LRU
+ * 淘汰最久未访问的条目，取代旧的"超 1 万条全清"策略。该 Map 非线程安全，
+ * 所有读写（含 {@code get} 触发的顺序调整）均通过 {@link #lock} 同步。</p>
  */
 public class TranslationCache {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    // 内存核心存储：Key 为标准化后的原文，Value 为译文
-    private final Map<String, String> storage = new ConcurrentHashMap<>();
+    /** 默认内存上限，可被 {@link #setMaxSize} 覆盖。 */
+    public static final int DEFAULT_MAX_SIZE = 20000;
+
+    /** 同步 {@link #storage} 所有访问的锁（LinkedHashMap 非线程安全，且 get 会改动访问顺序）。 */
+    private final Object lock = new Object();
+
+    private volatile int maxSize = DEFAULT_MAX_SIZE;
+
+    // 内存核心存储：Key 为标准化后的原文，Value 为译文。访问顺序，满则 LRU 淘汰。
+    private final LinkedHashMap<String, String> storage = new LinkedHashMap<>(256, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
+            return size() > maxSize;
+        }
+    };
+
+    /** 设置内存上限（条目数）。下次插入时若超限则按 LRU 淘汰。 */
+    public void setMaxSize(int maxSize) {
+        this.maxSize = Math.max(100, maxSize);
+    }
 
     /**
      * 同步加载所有分片文件
@@ -44,7 +67,9 @@ public class TranslationCache {
                 Map<String, String> shardData = GSON.fromJson(reader, type);
 
                 if (shardData != null) {
-                    storage.putAll(shardData);
+                    synchronized (lock) {
+                        storage.putAll(shardData);
+                    }
                     totalLoaded += shardData.size();
                     shardData.keySet().stream().limit(1).forEach(k ->
                             ConsoleBroadcaster.broadcast("DEBUG", "Sample cache key: [" + k + "]"));
@@ -53,7 +78,7 @@ public class TranslationCache {
                 ConsoleBroadcaster.broadcast("WARN", "Failed to load shard " + file.getName() + ": " + e.getMessage());
             }
         }
-        ConsoleBroadcaster.broadcast("DEBUG", "Cache sync ready — " + storage.size() + " entries in memory");
+        ConsoleBroadcaster.broadcast("DEBUG", "Cache sync ready — " + size() + " entries in memory");
     }
 
     /**
@@ -62,7 +87,10 @@ public class TranslationCache {
     public String get(String original) {
         if (original == null) return null;
         String normKey = normalize(original);
-        String result = storage.get(normKey);
+        String result;
+        synchronized (lock) {
+            result = storage.get(normKey);
+        }
 
         if (result != null) {
             ConsoleBroadcaster.broadcast("DEBUG", "Cache hit (legacy): [" + normKey.substring(0, Math.min(normKey.length(), 20)) + "...]");
@@ -75,13 +103,26 @@ public class TranslationCache {
      */
     public void put(String original, String translated) {
         if (original == null || translated == null) return;
-        storage.put(normalize(original), translated);
+        synchronized (lock) {
+            storage.put(normalize(original), translated);
+        }
+    }
+
+    /** 删除指定规范化键的缓存条目。用于清除损坏的缓存数据。 */
+    public void removeByNormKey(String normKey) {
+        if (normKey == null) return;
+        synchronized (lock) {
+            storage.remove(normKey);
+        }
     }
 
     /** Get by already-normalized key (skip normalization). */
     public String getByNormKey(String normKey) {
         if (normKey == null) return null;
-        String result = storage.get(normKey);
+        String result;
+        synchronized (lock) {
+            result = storage.get(normKey);
+        }
         if (result != null) {
             ConsoleBroadcaster.broadcast("DEBUG", "Cache hit (normKey): [" + normKey.substring(0, Math.min(normKey.length(), 20)) + "...]");
         }
@@ -91,7 +132,9 @@ public class TranslationCache {
     /** Put by already-normalized key (skip normalization). */
     public void putByNormKey(String normKey, String translated) {
         if (normKey == null || translated == null) return;
-        storage.put(normKey, translated);
+        synchronized (lock) {
+            storage.put(normKey, translated);
+        }
     }
 
     /**
@@ -126,7 +169,16 @@ public class TranslationCache {
         }
     }
 
-    public Map<String, String> getCacheMap() {
-        return storage;
+    public int size() {
+        synchronized (lock) {
+            return storage.size();
+        }
+    }
+
+    /** 返回当前内存条目的快照副本，供持久化遍历（避免对内部 Map 的并发访问）。 */
+    public Map<String, String> snapshot() {
+        synchronized (lock) {
+            return new HashMap<>(storage);
+        }
     }
 }

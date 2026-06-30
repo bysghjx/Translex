@@ -78,9 +78,6 @@ public abstract class DrawContextTooltipMixin {
         ItemStack stack = ClientStateManager.getLastHoveredItem();
         if (stack == null || stack.isEmpty()) return;
 
-        List<String> replacement = TranslexTooltipContext.lookupReplacement(stack, mode);
-        if (replacement == null || replacement.isEmpty()) return;
-
         // 收集所有可替换的 ClientTextTooltip
         record Slot(int index, OrderedTextTooltipComponentAccessor accessor, Component originalText) {}
         List<Slot> slots = new ArrayList<>();
@@ -94,6 +91,12 @@ public abstract class DrawContextTooltipMixin {
             }
         }
         if (slots.isEmpty()) return;
+
+        // 收集当前 tooltip 行用于 Slot 门控的 loreHash 校验（与 lookupReplacement 同源）
+        List<Component> currentLines = new ArrayList<>(slots.size());
+        for (Slot s : slots) currentLines.add(s.originalText());
+        List<String> replacement = TranslexTooltipContext.lookupReplacement(stack, mode, currentLines);
+        if (replacement == null || replacement.isEmpty()) return;
 
         PROCESSING.set(true);
         try {

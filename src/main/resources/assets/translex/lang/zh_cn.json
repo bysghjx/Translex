@@ -29,6 +29,8 @@
   "translex.error.content_empty": "消息内容为空，无需翻译。",
   "translex.error.no_item_hovered": "未检测到悬停物品！请先将鼠标指向物品再按键。",
   "translex.error.usage_legacy": "用法: /translex text <消息>",
+  "translex.say.translating": "正在译成英文并发送…",
+  "translex.say.failed": "翻译失败，消息未发送。",
   "translex.error.mode_not_available": "消息 ID 模式未启用，请使用 /translex text。",
 
   "translex.error.network.io": "网络传输故障: %s",

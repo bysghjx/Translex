@@ -108,20 +108,40 @@ public class ItemPresetLibrary {
     /**
      * 返回完整的翻译后工具提示，以 {@code List<String>} 形式（每行纯文本）。
      * 由工具提示替换 Mixin 调用，样式从原始行中获取。
+     *
+     * @param key 组合键 {@code itemId#loreHash}（由 TooltipKeyUtil 生成）
      */
-    public List<String> getTooltip(String itemId) {
-        if (itemId == null || itemId.isEmpty()) return null;
-        return items.get(itemId);
+    public List<String> getTooltip(String key) {
+        if (key == null || key.isEmpty()) return null;
+        return items.get(key);
     }
 
     /**
-     * 为指定物品 ID 存储完整的翻译后工具提示。
-     * 由 TranslationManager 在 permanent 模式下成功翻译后调用。
+     * 为指定组合键存储完整的翻译后工具提示。
+     * 由 ItemTranslationPipeline 在 permanent 模式下成功翻译后调用。
+     *
+     * @param key 组合键 {@code itemId#loreHash}（由 TooltipKeyUtil 生成）
      */
-    public void putTooltip(String itemId, List<String> lines) {
-        if (itemId == null || itemId.isEmpty() || lines == null) return;
-        items.put(itemId, lines);
+    public void putTooltip(String key, List<String> lines) {
+        if (key == null || key.isEmpty() || lines == null) return;
+        items.put(key, lines);
         saveAsync();
+    }
+
+    /**
+     * 移除某物品 ID 下的所有 lore 变体（组合键以 {@code itemId#} 开头）。
+     * 供 {@code /translex reset <itemId>} 使用。
+     *
+     * @return 被移除的条目数
+     */
+    public int removeByItemId(String itemId) {
+        if (itemId == null || itemId.isEmpty()) return 0;
+        String prefix = itemId + "#";
+        int before = items.size();
+        items.keySet().removeIf(k -> k.equals(itemId) || k.startsWith(prefix));
+        int removed = before - items.size();
+        if (removed > 0) saveAsync();
+        return removed;
     }
 
     // ===============================================================

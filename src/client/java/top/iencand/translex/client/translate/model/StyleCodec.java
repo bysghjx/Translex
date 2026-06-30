@@ -1,12 +1,17 @@
 package top.iencand.translex.client.translate.model;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.annotations.SerializedName;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TextColor;
 import net.minecraft.ChatFormatting;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import top.iencand.translex.client.config.ModConfig;
+import top.iencand.translex.client.web.ConsoleBroadcaster;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -44,9 +49,75 @@ import java.util.regex.Pattern;
  */
 public final class StyleCodec {
 
-    private static final Gson GSON = new Gson();
+    private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
+
+    private static final Logger LOGGER = LoggerFactory.getLogger("Translex/StyleCodec");
+    /** 样式回退诊断节流：避免 tooltip 每帧调用时灌爆 SSE 把网页卡死。 */
+    private static volatile long lastFallbackLogMs = 0L;
+    private static final long FALLBACK_LOG_THROTTLE_MS = 2000L;
 
     private StyleCodec() {}
+
+    // ================================================================
+    // 调试：完整样式颜色转储
+    // ================================================================
+
+    /**
+     * 将一条物品 tooltip 行的原始样式信息格式化为多行可读字符串，
+     * 用于调试多行属性行的颜色错位问题。
+     *
+     * @param lineIndex  行号（0 = 物品名）
+     * @param styleMap   从 {@link #extract(Component)} 得到的样式表
+     * @param taggedText 带 {@code <sN>} 标签的文本（提取结果）
+     * @return 人类可读的样式信息字符串
+     */
+    public static String formatLineStyle(int lineIndex, Map<Integer, Style> styleMap, String taggedText) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("  Line %2d: ", lineIndex));
+
+        // 解析 taggedText 中的每个 <sN> 段
+        Matcher m = STYLE_TAG.matcher(taggedText);
+        boolean first = true;
+        while (m.find()) {
+            int id = Integer.parseInt(m.group(1));
+            String content = m.group(2);
+            Style style = styleMap.get(id);
+            if (!first) sb.append("\n           ");
+            first = false;
+            sb.append(String.format("s%d=%-20s → \"%s\"",
+                    id, formatStyle(style), content));
+        }
+        return sb.toString();
+    }
+
+    /** 将提取后的样式和模板序列化为完整的调试字符串（JSON 格式，便于搜索）。 */
+    public static String dumpExtraction(String label, Map<Integer, Style> styleMap, String taggedText) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[StyleDump] ").append(label).append(" | ");
+        for (Map.Entry<Integer, Style> e : styleMap.entrySet()) {
+            if (e.getKey() > 0) sb.append(", ");
+            sb.append("s").append(e.getKey()).append("=").append(formatStyle(e.getValue()));
+        }
+        sb.append(" | raw=").append(taggedText);
+        return sb.toString();
+    }
+
+    /** 格式化单个 Style 为 "#RRGGBB|B|I|U|S|O..." 的紧凑形式。 */
+    private static String formatStyle(Style style) {
+        if (style == null || style.isEmpty()) return "EMPTY";
+        StringBuilder sb = new StringBuilder();
+        if (style.getColor() != null) {
+            sb.append(String.format("#%06X", style.getColor().getValue()));
+        } else {
+            sb.append("NOCOLOR");
+        }
+        if (style.isBold())          sb.append("|B");
+        if (style.isItalic())        sb.append("|I");
+        if (style.isUnderlined())    sb.append("|U");
+        if (style.isStrikethrough()) sb.append("|S");
+        if (style.isObfuscated())    sb.append("|O");
+        return sb.toString();
+    }
 
     // ---- Tag markers ---------------------------------------------------
 
@@ -141,22 +212,62 @@ public final class StyleCodec {
         MutableComponent result = Component.empty();
         Matcher m = STYLE_TAG.matcher(translated);
         int lastEnd = 0;
+        int bareSegments = 0;       // 标签外的裸文本片段数（会渲染成无样式=白色）
+        int missingTagIds = 0;      // 引用了 styleMap 里不存在的标签 id 的次数
 
         while (m.find()) {
             if (m.start() > lastEnd) {
-                result.append(Component.literal(translated.substring(lastEnd, m.start())));
+                String bare = translated.substring(lastEnd, m.start());
+                if (!bare.isBlank()) bareSegments++;
+                result.append(Component.literal(bare));
             }
 
             int id = Integer.parseInt(m.group(1));
             String content = m.group(2);
+            if (!styleMap.containsKey(id)) missingTagIds++;
             Style style = styleMap.getOrDefault(id, Style.EMPTY);
+            if (style == Style.EMPTY && !styleMap.isEmpty()) {
+                // 译文标签 id 不在实时 styleMap 中（AI 拆分/重组了样式段）。
+                // 用 ID 距离最近的已有样式回退：AI 创建的 &lt;s4&gt; 通常应该跟 &lt;s3&gt; 同色，
+                // 比取任意第一个样式更合理。
+                int nearestId = -1;
+                int bestDist = Integer.MAX_VALUE;
+                for (int validId : styleMap.keySet()) {
+                    int dist = Math.abs(validId - id);
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        nearestId = validId;
+                    }
+                }
+                if (nearestId >= 0) {
+                    style = styleMap.get(nearestId);
+                }
+            }
             result.append(Component.literal(content).setStyle(style));
 
             lastEnd = m.end();
         }
 
         if (lastEnd < translated.length()) {
-            result.append(Component.literal(translated.substring(lastEnd)));
+            String bare = translated.substring(lastEnd);
+            if (!bare.isBlank()) bareSegments++;
+            result.append(Component.literal(bare));
+        }
+
+        // ⑤ 物品 lore "部分变白" 诊断：标签外裸文本或缺失标签 id 都会导致该片段无样式（白色）。
+        // 注意：本方法被 tooltip Mixin 每帧调用，必须节流 + 走日志文件（而非每帧 SSE 广播），
+        // 否则会瞬间灌爆 SSE 把 Web 控制台页面卡死。
+        if ((bareSegments > 0 || missingTagIds > 0) && ModConfig.get().debug) {
+            long now = System.currentTimeMillis();
+            if (now - lastFallbackLogMs >= FALLBACK_LOG_THROTTLE_MS) {
+                lastFallbackLogMs = now;
+                String msg = "[StyleCodec] 样式回退(白色) — bareSegments=" + bareSegments
+                        + ", missingTagIds=" + missingTagIds
+                        + ", styleMapIds=" + styleMap.keySet()
+                        + ", text=" + translated;
+                LOGGER.info(msg);                 // 写日志文件，便于事后排查
+                ConsoleBroadcaster.broadcast("DEBUG", msg);  // 节流后才广播一条，不再每帧刷
+            }
         }
 
         return result;

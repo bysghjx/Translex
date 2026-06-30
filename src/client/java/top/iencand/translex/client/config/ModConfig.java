@@ -13,6 +13,7 @@ import top.iencand.translex.client.web.ConsoleBroadcaster;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -22,7 +23,59 @@ public class ModConfig {
     public String apiKey = "YOUR_API_KEY_HERE";
     public String apiUrl = "https://api.deepseek.com/chat/completions";
     public String modelName = "deepseek-v4-flash";
-    public String translationPrompt = "You are a translator. Translate each value in the JSON object to Simplified Chinese (简体中文). Preserve placeholders like {0} {1} exactly as-is. Keep proper names and item names in English. Keep § color codes. Reply with a JSON object with the same keys.";
+
+    /** AI 供应商适配器 id（见 AiProviders）：openai / anthropic。决定请求/响应格式。 */
+    public String provider = "openai";
+
+    /** 最大输出 token。Anthropic 必填；OpenAI 兼容端点忽略。 */
+    public int maxTokens = 4096;
+
+    /** anthropic-version 请求头取值，仅 Anthropic 供应商使用。 */
+    public String anthropicVersion = "2023-06-01";
+
+    /** 已保存的连接预设库。当前激活的连接由上面的 apiKey/apiUrl/modelName/provider 等字段持有。 */
+    public List<Preset> presets = new ArrayList<>();
+
+    /** 当前激活的预设名（为空表示使用自定义、未保存为预设的连接）。 */
+    public String activePreset = "";
+
+    /**
+     * 一套可命名、可切换的连接配置。
+     */
+    public static class Preset {
+        public String name = "";
+        public String provider = "openai";
+        public String apiUrl = "";
+        public String apiKey = "";
+        public String model = "";
+        public int maxTokens = 4096;
+        public String anthropicVersion = "2023-06-01";
+
+        public Preset() {}
+
+        public Preset(String name, String provider, String apiUrl, String apiKey,
+                      String model, int maxTokens, String anthropicVersion) {
+            this.name = name;
+            this.provider = provider;
+            this.apiUrl = apiUrl;
+            this.apiKey = apiKey;
+            this.model = model;
+            this.maxTokens = maxTokens;
+            this.anthropicVersion = anthropicVersion;
+        }
+    }
+
+    /** 目标语言，聊天/物品共用，注入强制 system prompt 的 "translate into X"。 */
+    public String targetLanguage = "Simplified Chinese (简体中文)";
+
+    /** 用户可选的聊天翻译补充指令，非空才作为独立 user 消息发送。 */
+    public String userChatPrompt = "";
+
+    /** 用户可选的物品翻译补充指令，非空才作为独立 user 消息发送。 */
+    public String userItemPrompt = "";
+
+    /** 专有名词处理模式：keep(保留英文)/translate(全部翻译)/item_only(只留物品名)。 */
+    public String properNounMode = "keep";
 
     /** 翻译模式："auto"（自动）、"message_id"（基于消息ID）或 "text"（纯文本）。默认为 "auto"。 */
     public String translationMode = "auto";
@@ -30,6 +83,9 @@ public class ModConfig {
     public boolean enableCachePersistence = true;
     public boolean enablePeriodicSave = true;
     public int periodicSaveInterval = 24000;
+
+    /** 文本翻译内存缓存上限（条目数）。超过后按 LRU 淘汰最久未访问的条目。 */
+    public int cacheMaxEntries = 20000;
 
     public boolean enableChatCompact = true;
     public int compactTimeSeconds = 120;
@@ -152,8 +208,13 @@ public class ModConfig {
             } else {
                 LOGGER.info("Config file not found, creating default.");
                 instance = new ModConfig();
+                instance.presets = new ArrayList<>(builtinPresets());
                 saveConfig();
             }
+        }
+        // 首次启动或迁移后，预设库里至少填上两个内置预设
+        if (instance.presets == null || instance.presets.isEmpty()) {
+            instance.presets = new ArrayList<>(builtinPresets());
         }
     }
 
@@ -171,7 +232,18 @@ public class ModConfig {
             instance.apiKey = toml.getString("apiKey", instance.apiKey);
             instance.apiUrl = toml.getString("apiUrl", instance.apiUrl);
             instance.modelName = toml.getString("modelName", instance.modelName);
-            instance.translationPrompt = toml.getString("translationPrompt", instance.translationPrompt);
+            instance.provider = toml.getString("provider", instance.provider);
+            instance.maxTokens = toml.getLong("maxTokens", (long) instance.maxTokens).intValue();
+            instance.anthropicVersion = toml.getString("anthropicVersion", instance.anthropicVersion);
+            instance.activePreset = toml.getString("activePreset", instance.activePreset);
+            loadPresets(toml);
+            if (instance.presets.isEmpty()) {
+                instance.presets.addAll(builtinPresets());
+            }
+            instance.targetLanguage = toml.getString("targetLanguage", instance.targetLanguage);
+            instance.userChatPrompt = toml.getString("userChatPrompt", instance.userChatPrompt);
+            instance.userItemPrompt = toml.getString("userItemPrompt", instance.userItemPrompt);
+            instance.properNounMode = toml.getString("properNounMode", instance.properNounMode);
             // translationMode: new string field, with backward compat for old boolean enableMessageIdSystem
             if (toml.contains("translationMode")) {
                 instance.translationMode = toml.getString("translationMode", instance.translationMode);
@@ -182,6 +254,7 @@ public class ModConfig {
             instance.enableCachePersistence = toml.getBoolean("enableCachePersistence", instance.enableCachePersistence);
             instance.enablePeriodicSave = toml.getBoolean("enablePeriodicSave", instance.enablePeriodicSave);
             instance.periodicSaveInterval = toml.getLong("periodicSaveInterval", (long) instance.periodicSaveInterval).intValue();
+            instance.cacheMaxEntries = toml.getLong("cacheMaxEntries", (long) instance.cacheMaxEntries).intValue();
             instance.enableChatCompact = toml.getBoolean("enableChatCompact", instance.enableChatCompact);
             instance.compactTimeSeconds = toml.getLong("compactTimeSeconds", (long) instance.compactTimeSeconds).intValue();
             instance.compactColorCode = toml.getString("compactColorCode", instance.compactColorCode);
@@ -190,7 +263,7 @@ public class ModConfig {
             instance.outputMode = toml.getString("outputMode", instance.outputMode);
             instance.debug = toml.getBoolean("debug", instance.debug);
 
-            checkAndUpgradePrompt();
+            migrateLegacyPrompt(toml);
             LOGGER.info("Config loaded successfully.");
             saveConfig();
         } catch (Exception e) {
@@ -199,13 +272,47 @@ public class ModConfig {
         }
     }
 
+    private static void loadPresets(Toml toml) {
+        instance.presets = new ArrayList<>();
+        try {
+            List<Toml> tables = toml.getTables("presets");
+            if (tables != null) {
+                for (Toml t : tables) {
+                    Preset p = new Preset();
+                    p.name = t.getString("name", "");
+                    p.provider = t.getString("provider", "openai");
+                    p.apiUrl = t.getString("apiUrl", "");
+                    p.apiKey = t.getString("apiKey", "");
+                    p.model = t.getString("model", "");
+                    p.maxTokens = t.getLong("maxTokens", 4096L).intValue();
+                    p.anthropicVersion = t.getString("anthropicVersion", "2023-06-01");
+                    if (!p.name.isBlank()) instance.presets.add(p);
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.warn("Failed to load presets from config: {}", e.getMessage());
+        }
+    }
+
+    /** 内置两个预设（DeepSeek + Anthropic），含默认端点 URL。 */
+    private static List<Preset> builtinPresets() {
+        List<Preset> list = new ArrayList<>();
+        list.add(new Preset("DeepSeek", "openai",
+                "https://api.deepseek.com/chat/completions", "YOUR_API_KEY_HERE",
+                "deepseek-v4-flash", 4096, "2023-06-01"));
+        list.add(new Preset("Anthropic (Claude)", "anthropic",
+                "https://api.anthropic.com/v1/messages", "YOUR_API_KEY_HERE",
+                "claude-sonnet-4-6", 4096, "2023-06-01"));
+        return list;
+    }
+
     private static void loadFromLegacyJson(File file) {
         try (Reader reader = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)) {
             instance = GSON.fromJson(reader, ModConfig.class);
             if (instance == null) {
                 instance = new ModConfig();
             }
-            checkAndUpgradePrompt();
+            // 旧 JSON 里的 translationPrompt/itemTranslationPrompt 字段已不存在于新类，GSON 自动忽略。
             LOGGER.info("Successfully migrated from legacy JSON config.");
             LOGGER.info("Config will be saved in TOML format at: {}", getConfigFile().getAbsolutePath());
         } catch (Exception e) {
@@ -214,45 +321,22 @@ public class ModConfig {
         }
     }
 
-    private static void checkAndUpgradePrompt() {
-        // Every previous factory-default or upgrade-target prompt that should
-        // be refreshed to the current default when detected.
-        String[] oldDefaults = {
-            // v1.x — original deepseek prompt
-            "Translate the following Hypixel SkyBlock message to Simplified Chinese. Keep item names (e.g., \"Hyperion\") in English. Only provide the translation.",
-            // v1.x — professional SkyBlock translator (long)
-            "You are a professional Hypixel SkyBlock translator. ### CRITICAL RULES: 1. Target Language: Always translate to **Simplified Chinese (简体中文)**. NEVER use Korean, Japanese, or any other languages. 2. Input Format: If the input is a JSON array, return ONLY a JSON string array of the SAME length. 3. Style: Keep item names (e.g., \"Hyperion\") in English. Keep Minecraft color codes (e.g. §7, §a) unchanged. 4. Format: No markdown, no conversation, no explanations. Reply ONLY with the translated content.",
-            // v1.x — short JSON-array variant
-            "Translate to Simplified Chinese (简体中文). Keep item names in English. Keep Minecraft color codes (§) unchanged. Reply with a JSON string array only.",
-            // v1.x — minimal JSON-object variant
-            "Translate to Simplified Chinese. Preserve: item names, color codes (§), line breaks. Output JSON only.",
-            // v1.6.x — previous upgrade target (stale, needs re-upgrade)
-            "You are a translator. Translate each value in the JSON object to Simplified Chinese (简体中文). Keep proper names and item names in English. Keep color codes (§). Reply with a JSON object with the same keys — every value translated.",
-        };
-
-        if (instance.translationPrompt == null) return;
-        String current = normalize(instance.translationPrompt);
-
-        // Auto-skip: if already at the current default, nothing to do
-        String currentDefault = normalize(new ModConfig().translationPrompt);
-        if (current.equals(currentDefault)) return;
-
-        for (String old : oldDefaults) {
-            if (current.equals(normalize(old))) {
-                LOGGER.info("Detected old default prompt. Upgrading to current version...");
-                instance.translationPrompt = new ModConfig().translationPrompt;
-                saveConfig();
-                return;
-            }
-        }
-    }
-
     /**
-     * 折叠所有空白字符到单个空格，用于消除 TOML 多行字符串和 JSON 转义之间的格式差异，
-     * 以便准确比较提示词内容是否匹配旧版本默认值。
+     * 一次性迁移旧版 prompt 字段。
+     *
+     * <p>旧 {@code translationPrompt}/{@code itemTranslationPrompt} 把"格式约束 + 目标语言 + 个性化"
+     * 混在一起。重构后格式约束已固化进 {@link top.iencand.translex.client.translate.TranslationPrompts}
+     * 的强制 system prompt，目标语言抽到 {@code targetLanguage}。旧值无法可靠剥离出"纯个性化补充"，
+     * 强行当 user prompt 发送会与强制 system 冲突（双重约束/双重语言），因此一律丢弃，
+     * 让用户在新 UI 的"附加指令"里按需重填。仅记录日志提示。</p>
      */
-    private static String normalize(String s) {
-        return s.replaceAll("\\s+", " ").trim();
+    private static void migrateLegacyPrompt(Toml toml) {
+        boolean hadLegacy = toml.contains("translationPrompt") || toml.contains("itemTranslationPrompt");
+        if (hadLegacy) {
+            LOGGER.info("Detected legacy translationPrompt/itemTranslationPrompt; format constraints have "
+                    + "moved to the system prompt and were dropped. Set userChatPrompt/userItemPrompt in the "
+                    + "dashboard if you need extra instructions.");
+        }
     }
 
     public static void saveConfig() {
@@ -288,8 +372,27 @@ public class ModConfig {
         sb.append("modelName = \"").append(escapeToml(instance.modelName)).append("\"\n");
         sb.append("\n");
 
-        sb.append("# System prompt sent to the AI — keep it concise to save tokens\n");
-        writeTomlString(sb, "translationPrompt", instance.translationPrompt);
+        sb.append("# AI provider adapter: \"openai\" (OpenAI-compatible) or \"anthropic\" (Claude native)\n");
+        sb.append("provider = \"").append(escapeToml(instance.provider)).append("\"\n");
+        sb.append("# Max output tokens (required by Anthropic; ignored by OpenAI-compatible endpoints)\n");
+        sb.append("maxTokens = ").append(instance.maxTokens).append("\n");
+        sb.append("# anthropic-version header value (Anthropic only)\n");
+        sb.append("anthropicVersion = \"").append(escapeToml(instance.anthropicVersion)).append("\"\n");
+        sb.append("# Name of the currently active saved preset (empty = custom connection)\n");
+        sb.append("activePreset = \"").append(escapeToml(instance.activePreset)).append("\"\n");
+        sb.append("\n");
+
+        sb.append("# Target language for all translations (chat & items). Injected into the forced system prompt.\n");
+        sb.append("targetLanguage = \"").append(escapeToml(instance.targetLanguage)).append("\"\n");
+        sb.append("\n");
+
+        sb.append("# Optional extra user instructions. Leave empty to send nothing. Format constraints are handled internally.\n");
+        writeTomlString(sb, "userChatPrompt", instance.userChatPrompt);
+        writeTomlString(sb, "userItemPrompt", instance.userItemPrompt);
+        sb.append("\n");
+
+        sb.append("# Proper noun handling: \"keep\" (English), \"translate\" (all), or \"item_only\" (keep item names)\n");
+        sb.append("properNounMode = \"").append(escapeToml(instance.properNounMode)).append("\"\n");
         sb.append("\n");
 
         sb.append("# Translation mode: \"auto\" (default), \"message_id\", or \"text\"\n");
@@ -303,6 +406,8 @@ public class ModConfig {
         sb.append("enablePeriodicSave = ").append(instance.enablePeriodicSave).append("\n");
         sb.append("# Auto-save interval in ticks (24000 ticks = 20 minutes)\n");
         sb.append("periodicSaveInterval = ").append(instance.periodicSaveInterval).append("\n");
+        sb.append("# Max in-memory cache entries; oldest unused entries are evicted (LRU) beyond this\n");
+        sb.append("cacheMaxEntries = ").append(instance.cacheMaxEntries).append("\n");
         sb.append("\n");
 
         sb.append("# --- Chat Compact ---\n");
@@ -328,6 +433,23 @@ public class ModConfig {
 
         sb.append("# Debug mode: auto-open web dashboard to network traces tab on startup\n");
         sb.append("debug = ").append(instance.debug).append("\n");
+
+        // ── 连接预设库（TOML array of tables）──
+        if (instance.presets != null && !instance.presets.isEmpty()) {
+            sb.append("\n");
+            sb.append("# --- Saved connection presets ---\n");
+            for (Preset p : instance.presets) {
+                if (p == null || p.name == null || p.name.isBlank()) continue;
+                sb.append("\n[[presets]]\n");
+                sb.append("name = \"").append(escapeToml(p.name)).append("\"\n");
+                sb.append("provider = \"").append(escapeToml(p.provider)).append("\"\n");
+                sb.append("apiUrl = \"").append(escapeToml(p.apiUrl)).append("\"\n");
+                sb.append("apiKey = \"").append(escapeToml(p.apiKey)).append("\"\n");
+                sb.append("model = \"").append(escapeToml(p.model)).append("\"\n");
+                sb.append("maxTokens = ").append(p.maxTokens).append("\n");
+                sb.append("anthropicVersion = \"").append(escapeToml(p.anthropicVersion)).append("\"\n");
+            }
+        }
 
         return sb.toString();
     }

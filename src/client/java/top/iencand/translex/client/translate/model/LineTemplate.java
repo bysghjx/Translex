@@ -40,9 +40,9 @@ public class LineTemplate {
     private static final Pattern STYLE_TAG = Pattern.compile(
             "<s(\\d+)>(.*?)</s\\1>", Pattern.DOTALL);
 
-    /** 至少一个 ASCII 数字。 */
+    /** 至少一个 ASCII 数字。涵盖 (+30)、-5、2.5s、+250% 等 SkyBlock 常见数值格式。 */
     private static final Pattern NUMBER = Pattern.compile(
-            "[\\d,+.%kmb\\s]+", Pattern.CASE_INSENSITIVE);
+            "[\\d,+.%kmb\\-\\s()s]+", Pattern.CASE_INSENSITIVE);
 
     /** {@code {0}}、{@code {1}}、… 标记。 */
     private static final Pattern MARKER = Pattern.compile("\\{(\\d+)\\}");
@@ -118,6 +118,9 @@ public class LineTemplate {
 
     /** 此行是否包含任何数字变量。 */
     public boolean hasVariables() { return values.length > 0; }
+
+    /** 调试用：返回原始样式提取结果。 */
+    public StyleCodec.ExtractionResult extractionResult() { return styles; }
 
     // ---- build translated Component --------------------------------------
 

@@ -2,6 +2,8 @@ package top.iencand.translex.client.web;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
@@ -13,6 +15,8 @@ import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import top.iencand.translex.client.config.ModConfig;
+import top.iencand.translex.client.translate.provider.AiProvider;
+import top.iencand.translex.client.translate.provider.AiProviders;
 
 import java.io.*;
 import java.net.InetSocketAddress;
@@ -20,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -147,7 +152,16 @@ public class WebServer {
         json.addProperty("apiKey",                cfg.apiKey);
         json.addProperty("apiUrl",                cfg.apiUrl);
         json.addProperty("model",                 cfg.modelName);
-        json.addProperty("systemPrompt",          cfg.translationPrompt);
+        json.addProperty("provider",              cfg.provider);
+        json.addProperty("maxTokens",             cfg.maxTokens);
+        json.addProperty("anthropicVersion",      cfg.anthropicVersion);
+        json.addProperty("activePreset",          cfg.activePreset);
+        json.add("presets",                       GSON.toJsonTree(cfg.presets));
+        json.add("availableProviders",            buildProvidersJson());
+        json.addProperty("targetLanguage",        cfg.targetLanguage);
+        json.addProperty("userChatPrompt",        cfg.userChatPrompt);
+        json.addProperty("userItemPrompt",        cfg.userItemPrompt);
+        json.addProperty("properNounMode",        cfg.properNounMode);
         json.addProperty("translationMode", cfg.translationMode);
         json.addProperty("buttonStyle",           cfg.buttonStyle);
         json.addProperty("enableTranslateButton",  cfg.enableTranslateButton);
@@ -155,6 +169,7 @@ public class WebServer {
         json.addProperty("enableCachePersistence",cfg.enableCachePersistence);
         json.addProperty("enablePeriodicSave",    cfg.enablePeriodicSave);
         json.addProperty("periodicSaveInterval",  cfg.periodicSaveInterval);
+        json.addProperty("cacheMaxEntries",       cfg.cacheMaxEntries);
         json.addProperty("enableChatCompact",     cfg.enableChatCompact);
         json.addProperty("compactTimeSeconds",    cfg.compactTimeSeconds);
         json.addProperty("compactColorCode",      cfg.compactColorCode);
@@ -178,7 +193,24 @@ public class WebServer {
             if (input.has("apiKey"))       { cfg.apiKey = input.get("apiKey").getAsString(); changed = true; }
             if (input.has("apiUrl"))       { cfg.apiUrl = input.get("apiUrl").getAsString(); changed = true; }
             if (input.has("model"))        { cfg.modelName = input.get("model").getAsString(); changed = true; }
-            if (input.has("systemPrompt")) { cfg.translationPrompt = input.get("systemPrompt").getAsString(); changed = true; }
+            if (input.has("provider"))     { cfg.provider = input.get("provider").getAsString(); changed = true; }
+            if (input.has("maxTokens"))    { cfg.maxTokens = input.get("maxTokens").getAsInt(); changed = true; }
+            if (input.has("anthropicVersion")) { cfg.anthropicVersion = input.get("anthropicVersion").getAsString(); changed = true; }
+            if (input.has("activePreset")) { cfg.activePreset = input.get("activePreset").getAsString(); changed = true; }
+            if (input.has("presets") && input.get("presets").isJsonArray()) {
+                cfg.presets = parsePresets(input.getAsJsonArray("presets"));
+                changed = true;
+            }
+            if (input.has("targetLanguage")) {
+                String tl = input.get("targetLanguage").getAsString();
+                cfg.targetLanguage = (tl == null || tl.isBlank())
+                        ? top.iencand.translex.client.translate.TranslationPrompts.DEFAULT_TARGET_LANGUAGE
+                        : tl;
+                changed = true;
+            }
+            if (input.has("userChatPrompt")) { cfg.userChatPrompt = input.get("userChatPrompt").getAsString(); changed = true; }
+            if (input.has("userItemPrompt")) { cfg.userItemPrompt = input.get("userItemPrompt").getAsString(); changed = true; }
+            if (input.has("properNounMode")) { cfg.properNounMode = input.get("properNounMode").getAsString(); changed = true; }
             if (input.has("translationMode"))    { cfg.translationMode = input.get("translationMode").getAsString(); changed = true; }
             if (input.has("buttonStyle"))   { cfg.buttonStyle = input.get("buttonStyle").getAsString(); changed = true; }
             if (input.has("enableTranslateButton")) { cfg.enableTranslateButton = input.get("enableTranslateButton").getAsBoolean(); changed = true; }
@@ -186,6 +218,7 @@ public class WebServer {
             if (input.has("enableCachePersistence")) { cfg.enableCachePersistence = input.get("enableCachePersistence").getAsBoolean(); changed = true; }
             if (input.has("enablePeriodicSave"))     { cfg.enablePeriodicSave = input.get("enablePeriodicSave").getAsBoolean(); changed = true; }
             if (input.has("periodicSaveInterval"))   { cfg.periodicSaveInterval = input.get("periodicSaveInterval").getAsInt(); changed = true; }
+            if (input.has("cacheMaxEntries"))        { cfg.cacheMaxEntries = input.get("cacheMaxEntries").getAsInt(); changed = true; }
             if (input.has("enableChatCompact"))      { cfg.enableChatCompact = input.get("enableChatCompact").getAsBoolean(); changed = true; }
             if (input.has("compactTimeSeconds"))     { cfg.compactTimeSeconds = input.get("compactTimeSeconds").getAsInt(); changed = true; }
             if (input.has("compactColorCode"))       { cfg.compactColorCode = input.get("compactColorCode").getAsString(); changed = true; }
@@ -206,6 +239,43 @@ public class WebServer {
             LOGGER.error("[Web] Failed to save config", e);
             sendJson(ex, 500, errorJson(e.getMessage()));
         }
+    }
+
+    /** 构造可用供应商列表 JSON：[{id, name}] */
+    private static JsonArray buildProvidersJson() {
+        JsonArray arr = new JsonArray();
+        for (AiProvider p : AiProviders.all().values()) {
+            JsonObject o = new JsonObject();
+            o.addProperty("id", p.id());
+            o.addProperty("name", p.displayName());
+            arr.add(o);
+        }
+        return arr;
+    }
+
+    /** 把前端传来的预设数组解析为 ModConfig.Preset 列表。 */
+    private static List<ModConfig.Preset> parsePresets(JsonArray arr) {
+        List<ModConfig.Preset> list = new ArrayList<>();
+        for (JsonElement el : arr) {
+            if (!el.isJsonObject()) continue;
+            JsonObject o = el.getAsJsonObject();
+            ModConfig.Preset p = new ModConfig.Preset();
+            p.name = optString(o, "name", "");
+            if (p.name.isBlank()) continue;
+            p.provider = optString(o, "provider", "openai");
+            p.apiUrl = optString(o, "apiUrl", "");
+            p.apiKey = optString(o, "apiKey", "");
+            p.model = optString(o, "model", "");
+            p.maxTokens = o.has("maxTokens") && !o.get("maxTokens").isJsonNull()
+                    ? o.get("maxTokens").getAsInt() : 4096;
+            p.anthropicVersion = optString(o, "anthropicVersion", "2023-06-01");
+            list.add(p);
+        }
+        return list;
+    }
+
+    private static String optString(JsonObject o, String key, String def) {
+        return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : def;
     }
 
     /** GET /api/metrics */

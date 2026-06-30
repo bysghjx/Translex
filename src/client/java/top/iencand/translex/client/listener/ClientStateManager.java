@@ -10,16 +10,18 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.network.chat.Component;
 import net.minecraft.client.input.KeyEvent;
 import org.jetbrains.annotations.NotNull;
+import top.iencand.translex.client.mixin.HandledScreenAccessor;
 import top.iencand.translex.client.translate.cache.TemporaryTooltipCache;
 import top.iencand.translex.client.config.ModConfig;
 import top.iencand.translex.client.keybinding.ModKeybindings;
-import top.iencand.translex.client.translate.model.ItemPresetLibrary;
 import top.iencand.translex.client.translate.TranslationManager;
 import top.iencand.translex.client.util.I18nHelper;
 import top.iencand.translex.client.util.ItemIdExtractor;
+import top.iencand.translex.client.util.TooltipKeyUtil;
 
 import java.util.List;
 import java.util.regex.Pattern;
@@ -55,31 +57,40 @@ public class ClientStateManager {
     }
 
     public void registerEvents() {
-        // 工具提示回调：追踪悬停物品 + 清理临时缓存
-        // 实际的文本替换由 ScreenTooltipMixin 和 DrawContextTooltipMixin 完成
+        // 工具提示回调：追踪悬停物品。
+        // 实际的文本替换由 ScreenTooltipMixin 和 DrawContextTooltipMixin 完成。
+        // 注：temporary 缓存的清理改为在关闭 GUI 时统一 clear（见 ScreenEvents.remove），
+        // 不再按"悬停切换"逐条清理 —— 这样切到空格子/别的物品都不会残留旧翻译。
         ItemTooltipCallback.EVENT.register((stack, context, type, lines) -> {
-            // Clean up temp cache when hover changes (compare by stable key, not identity)
-            if (lastHoveredItem != null && lastHoveredItem != stack) {
-                String lastKey = TemporaryTooltipCache.keyOf(lastHoveredItem);
-                String curKey = TemporaryTooltipCache.keyOf(stack);
-                if (lastKey != null && !lastKey.equals(curKey)) {
-                    TemporaryTooltipCache.remove(lastHoveredItem);
-                }
-            }
             lastHoveredItem = stack;
         });
 
-        // Screen events for key bindings (DO NOT clean temp cache here —
-        // screen refresh would wipe the just-stored translation).
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
             lastHoveredItem = null;
+            HoverSlotTracker.clearAll();
 
             if (screen instanceof AbstractContainerScreen) {
                 ScreenKeyboardEvents.afterKeyPress(screen).register(this::onGuiKeyPress);
+
+                // 每帧读 hoveredSlot，维护"当前悬停槽位 + loreHash"供 tooltip 替换门控
+                // 注：26.1.2 / fabric-screen-api v1 5.0 移除了 afterRender，改用 afterExtract
+                ScreenEvents.afterExtract(screen).register((scr, gge, mouseX, mouseY, delta) -> {
+                    Slot focused = ((HandledScreenAccessor) scr).translex$getHoveredSlot();
+                    if (focused != null && focused.hasItem()) {
+                        HoverSlotTracker.updateHover(focused.index, focused.getItem());
+                    } else {
+                        HoverSlotTracker.updateHover(-1, null);
+                    }
+                });
             }
 
+            // 关闭 GUI 时清空临时翻译缓存：temporary 模式本就是会话内临时，
+            // 关 GUI 全清最符合语义，也顺手压住无界增长。
+            // remove 是关闭事件（非 refresh），不会误清同一 GUI 内刚存的翻译。
             ScreenEvents.remove(screen).register((removedScreen) -> {
                 lastHoveredItem = null;
+                HoverSlotTracker.clearAll();
+                TemporaryTooltipCache.clear();
             });
         });
     }
@@ -111,32 +122,33 @@ public class ClientStateManager {
                     }
 
                     String itemDisplayName = lastHoveredItem.getHoverName().getString();
-
-                    // 0. Check ItemPresetLibrary first
                     String itemId = ItemIdExtractor.extractSkyBlockItemId(lastHoveredItem);
-                    if (itemId != null) {
-                        ItemPresetLibrary.ItemPreset preset = translationManager.getPresetLibrary().get(itemId);
-                        if (preset != null) {
-                            if (player != null) {
-                                player.sendSystemMessage(Component.literal(
-                                        I18nHelper.getPrefixed("translex.info.preset_hit")));
-                                player.sendSystemMessage(Component.literal("§a" + preset.name));
-                                for (String line : preset.loreLines) {
-                                    player.sendSystemMessage(Component.literal("§7" + line));
-                                }
-                            }
-                            return;
-                        }
-                    }
 
                     // 1. 通过 getTooltipFromItem 获取完整工具提示（与 Mixin 使用相同方法）
-                    //    确保翻译行数与替换时的行数一致
+                    //    确保翻译行数与替换时的行数一致，也用于组合键哈希
                     List<Component> fullTooltip = Screen.getTooltipFromItem(mc, lastHoveredItem);
 
                     if (fullTooltip.isEmpty()) {
                         if (player != null) player.sendSystemMessage(Component.literal(
                                 I18nHelper.getPrefixed("translex.error.content_empty")));
                         return;
+                    }
+
+                    // 0. 先用组合键检查永久预设库（itemId#loreHash），命中则直接回显
+                    String presetKey = TooltipKeyUtil.buildKey(lastHoveredItem, fullTooltip);
+                    if (presetKey != null) {
+                        List<String> presetLines =
+                                translationManager.getPresetLibrary().getTooltip(presetKey);
+                        if (presetLines != null && !presetLines.isEmpty()) {
+                            if (player != null) {
+                                player.sendSystemMessage(Component.literal(
+                                        I18nHelper.getPrefixed("translex.info.preset_hit")));
+                                for (String line : presetLines) {
+                                    player.sendSystemMessage(Component.literal("§7" + line));
+                                }
+                            }
+                            return;
+                        }
                     }
 
                     // 2. Concatenate all lines — includes item name + lore + rarity etc.
@@ -151,6 +163,14 @@ public class ClientStateManager {
                     // 3. 提交翻译，传入原始 Component 对象用于模板提取
                     this.translationManager.translateItemLoreTemplates(
                             fullTooltip, itemId, itemDisplayName, lastHoveredItem);
+
+                    // temporary 模式：激活当前悬停槽位的译文显示门控（#3）。
+                    // 用按 P 当帧的悬停槽位号 + 本次 tooltip 的 loreHash，与异步翻译解耦。
+                    if ("temporary".equals(ModConfig.get().outputMode)) {
+                        HoverSlotTracker.activate(
+                                HoverSlotTracker.getHoverSlotId(),
+                                TooltipKeyUtil.loreHash(fullTooltip));
+                    }
 
                     if (player != null) {
                         player.sendSystemMessage(Component.literal(

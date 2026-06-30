@@ -4,200 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Translex Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    /* === Tailwind 自定义主题：赛博朋克暗色系 === */
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    'cyber-dark':  '#0a0a0f',
+                    'cyber-card':  '#111118',
+                    'cyber-hover': '#16161f',
+                    'cyber-border':'#1e1e2e',
+                    'cyber-green': '#00ff41',
+                    'cyber-blue':  '#00d4ff',
+                    'cyber-amber': '#fbbf24',
+                    'cyber-red':   '#ff4444',
+                },
+                fontFamily: {
+                    mono: ['"JetBrains Mono"', '"Fira Code"', '"Cascadia Code"', 'Consolas', 'monospace'],
+                },
+            },
+        },
+    }
+    </script>
     <style>
-    /* ============================================================
-       Tailwind-lite 工具类（替代 cdn.tailwindcss.com）
-       涵盖布局/间距/排版/颜色/响应式等高频 Tailwind class
-       ============================================================ */
-
-    /* ── Reset & Base ── */
-    *,::before,::after{box-sizing:border-box;border-width:0;border-style:solid;border-color:var(--border-color)}
-    body{margin:0;line-height:1.5}
-
-    /* ── Container / Max-width ── */
-    .mx-auto{margin-left:auto;margin-right:auto}
-    .max-w-7xl{max-width:80rem}
-
-    /* ── Flex ── */
-    .flex{display:flex}.inline-flex{display:inline-flex}
-    .flex-col{flex-direction:column}.flex-1{flex:1 1 0%}.shrink-0{flex-shrink:0}
-    .items-center{align-items:center}.items-start{align-items:flex-start}
-    .justify-center{justify-content:center}.justify-between{justify-content:space-between}.justify-end{justify-content:flex-end}
-    .flex-wrap{flex-wrap:wrap}
-
-    /* ── Grid ── */
-    .grid{display:grid}
-    .grid-cols-1{grid-template-columns:repeat(1,minmax(0,1fr))}
-    .grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
-    .grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
-    .grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}
-    .grid-cols-6{grid-template-columns:repeat(6,minmax(0,1fr))}
-    .gap-0{gap:0}.gap-1{gap:.25rem}.gap-1\.5{gap:.375rem}.gap-2{gap:.5rem}.gap-3{gap:.75rem}
-    .gap-4{gap:1rem}.gap-6{gap:1.5rem}.gap-8{gap:2rem}
-    .gap-x-4{column-gap:1rem}.gap-y-1{row-gap:.25rem}
-
-    /* ── Spacing: padding (常用值) ── */
-    .p-0{padding:0}.p-1{padding:.25rem}.p-1\.5{padding:.375rem}.p-2{padding:.5rem}
-    .p-3{padding:.75rem}.p-4{padding:1rem}.p-5{padding:1.25rem}.p-8{padding:2rem}
-    .px-0{padding-left:0;padding-right:0}
-    .px-1{padding-left:.25rem;padding-right:.25rem}
-    .px-2{padding-left:.5rem;padding-right:.5rem}
-    .px-3{padding-left:.75rem;padding-right:.75rem}
-    .px-4{padding-left:1rem;padding-right:1rem}
-    .px-5{padding-left:1.25rem;padding-right:1.25rem}
-    .py-1{padding-top:.25rem;padding-bottom:.25rem}
-    .py-1\.5{padding-top:.375rem;padding-bottom:.375rem}
-    .py-2{padding-top:.5rem;padding-bottom:.5rem}
-    .py-3{padding-top:.75rem;padding-bottom:.75rem}
-    .py-3\.5{padding-top:.875rem;padding-bottom:.875rem}
-    .py-4{padding-top:1rem;padding-bottom:1rem}
-    .py-12{padding-top:3rem;padding-bottom:3rem}
-    .pt-1\.5{padding-top:.375rem}.pt-3{padding-top:.75rem}.pt-4{padding-top:1rem}.pt-6{padding-top:1.5rem}
-    .pb-3{padding-bottom:.75rem}.pb-4{padding-bottom:1rem}.pb-24{padding-bottom:6rem}.pb-72{padding-bottom:18rem}
-    .pl-4{padding-left:1rem}.pr-2{padding-right:.5rem}.pr-12{padding-right:3rem}
-    .\!py-1\.5{padding-top:.375rem!important;padding-bottom:.375rem!important}
-    .\!px-3{padding-left:.75rem!important;padding-right:.75rem!important}
-    .\!p-1\.5{padding:.375rem!important}.p-0\!{padding:0!important}
-    .\!rounded-lg{border-radius:.5rem!important}
-
-    /* ── Spacing: margin ── */
-    .m-0{margin:0}.mt-0\.5{margin-top:.125rem}.mt-1{margin-top:.25rem}
-    .mt-2{margin-top:.5rem}.mt-4{margin-top:1rem}
-    .mb-1{margin-bottom:.25rem}.mb-1\.5{margin-bottom:.375rem}
-    .mb-2{margin-bottom:.5rem}.mb-3{margin-bottom:.75rem}.mb-6{margin-bottom:1.5rem}
-    .ml-4{margin-left:1rem}.mr-1{margin-right:.25rem}
-    .-translate-y-1\/2{transform:translateY(-50%)}
-
-    /* ── Space between children ── */
-    .space-y-1>:not([hidden])~:not([hidden]){margin-top:.25rem}
-    .space-y-1\.5>:not([hidden])~:not([hidden]){margin-top:.375rem}
-    .space-y-3>:not([hidden])~:not([hidden]){margin-top:.75rem}
-    .space-y-4>:not([hidden])~:not([hidden]){margin-top:1rem}
-    .space-y-6>:not([hidden])~:not([hidden]){margin-top:1.5rem}
-
-    /* ── Typography ── */
-    .text-xs{font-size:.75rem;line-height:1rem}
-    .text-sm{font-size:.875rem;line-height:1.25rem}
-    .text-base{font-size:1rem;line-height:1.5rem}
-    .text-lg{font-size:1.125rem;line-height:1.75rem}
-    .text-2xl{font-size:1.5rem;line-height:2rem}
-    .text-3xl{font-size:1.875rem;line-height:2.25rem}
-    .font-bold{font-weight:700}.font-semibold{font-weight:600}.font-medium{font-weight:500}
-    .font-mono{font-family:'JetBrains Mono','Fira Code','Cascadia Code',Consolas,monospace}
-    .text-left{text-align:left}.text-center{text-align:center}.text-right{text-align:right}
-    .tracking-wide{letter-spacing:.025em}
-    .uppercase{text-transform:uppercase}
-    .truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .whitespace-nowrap{white-space:nowrap}
-    .leading-5{line-height:1.25rem}
-    .no-underline{text-decoration:none}
-
-    /* ── Text colors: gray scale ── */
-    .text-gray-200{color:#e4e4e7}.text-gray-300{color:#d1d5db}.text-gray-400{color:#9ca3af}
-    .text-gray-500{color:#6b7280}.text-gray-600{color:#4b5563}
-    /* ── Text colors: cyber theme ── */
-    .text-cyber-green{color:#00ff41}.text-cyber-blue{color:#00d4ff}
-    .text-cyber-amber{color:#fbbf24}.text-cyber-red{color:#ff4444}
-    .text-white{color:#fff}
-
-    /* ── Backgrounds ── */
-    .bg-themed{background:var(--bg-primary)}
-    .bg-card-themed{background:var(--bg-card)}
-    .bg-cyber-dark{background:#0a0a0f}
-    .bg-cyber-card{background:#111118}
-    .bg-cyber-hover{background:#16161f}
-    .bg-transparent{background:transparent}
-    .bg-red-900{background:rgba(127,29,29,.6)}
-    .bg-amber-900{background:rgba(120,53,15,.6)}
-    .bg-blue-900{background:rgba(30,58,138,.6)}
-    .bg-gray-700{background:rgba(55,65,81,.6)}
-
-    /* ── Borders ── */
-    .border-0{border-width:0}
-    .border-t{border-top-width:1px}.border-b{border-bottom-width:1px}
-    .border-cyber-border{border-color:#1e1e2e}
-    .border-cyber-dark{border-color:#0a0a0f}
-    .border-2{border-width:2px}
-    .border-t-transparent{border-top-color:transparent}
-
-    /* ── Rounded ── */
-    .rounded{border-radius:.25rem}.rounded-lg{border-radius:.5rem}
-    .rounded-xl{border-radius:.75rem}.rounded-full{border-radius:9999px}
-
-    /* ── Display ── */
-    .hidden{display:none}.block{display:block}.inline{display:inline}.inline-block{display:inline-block}
-    .\!hidden{display:none!important}
-
-    /* ── Position ── */
-    .relative{position:relative}.absolute{position:absolute}.fixed{position:fixed}.sticky{position:sticky}
-    .top-0{top:0}.top-1\/2{top:50%}.top-24{top:6rem}
-    .right-0{right:0}.right-2{right:.5rem}.right-24{right:6rem}
-    .left-0{left:0}.bottom-0{bottom:0}
-    .z-40{z-index:40}.z-50{z-index:50}.z-9999{z-index:9999}
-
-    /* ── Sizing ── */
-    .w-2{width:.5rem}.w-4{width:1rem}.w-9{width:2.25rem}.w-14{width:3.5rem}.w-20{width:5rem}.w-32{width:8rem}
-    .w-full{width:100%}
-    .h-2{height:.5rem}.h-4{height:1rem}.h-9{height:2.25rem}.h-14{height:3.5rem}.h-18{height:4.5rem}
-    .h-full{height:100%}
-    .min-w-0{min-width:0}.min-h-55{min-height:55vh}
-    .max-h-60vh{max-height:60vh}.max-h-600{max-height:600px}
-    .\!w-32{width:8rem!important}.\!h-18{height:4.5rem!important}
-
-    /* ── Overflow ── */
-    .overflow-hidden{overflow:hidden}.overflow-x-auto{overflow-x:auto}.overflow-y-auto{overflow-y:auto}
-
-    /* ── Cursor / Select ── */
-    .cursor-pointer{cursor:pointer}.cursor-help{cursor:help}
-    .select-none{user-select:none}
-
-    /* ── Opacity / Shadow ── */
-    .opacity-45{opacity:.45}
-    .shadow-2xl{box-shadow:0 25px 50px -12px rgba(0,0,0,.25)}
-
-    /* ── Backdrop / Animation ── */
-    .backdrop-blur-md{backdrop-filter:blur(12px)}
-    @keyframes spin{to{transform:rotate(360deg)}}
-    .animate-spin{animation:spin 1s linear infinite}
-
-    /* ── Pointer events ── */
-    .pointer-events-none{pointer-events:none}
-
-    /* ── Hover states ── */
-    .hover\:text-gray-300:hover{color:#d1d5db}
-    .hover\:bg-cyber-hover:hover{background:#16161f}
-    .transition-colors{transition-property:color,background-color,border-color;transition-duration:.15s}
-    .transition-transform{transition-property:transform;transition-duration:.15s}
-    .transition-all{transition-property:all;transition-duration:.15s}
-    .duration-200{transition-duration:.2s}.duration-300{transition-duration:.3s}
-
-    /* ── Small breakpoint (≥640px) ── */
-    @media(min-width:640px){
-        .sm\:inline{display:inline}
-    }
-
-    /* ── Responsive (md/lg 断点) ── */
-    @media(min-width:768px){
-        .md\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
-        .md\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
-        .md\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}
-        .md\:grid{display:grid}
-    }
-    @media(min-width:1024px){
-        .lg\:grid-cols-6{grid-template-columns:repeat(6,minmax(0,1fr))}
-    }
-    @media(max-width:900px){
-        .filter-row-sm{grid-template-columns:1fr 1fr!important}
-    }
-    @media(max-width:768px){
-        .grid-2col{grid-template-columns:1fr!important}
-    }
-    /* ── Misc ── */
-    .break-all{word-break:break-all}
-    .object-cover{object-fit:cover}
-    [hidden]{display:none}
-    a,button,input,select,textarea{color:inherit;font:inherit}
-
     /* ============================================================
        主题变量 — 支持深色 / 浅色 / 跟随系统
        ============================================================ */
@@ -377,6 +208,12 @@
 
     /* 手风琴展开动画 */
     .accordion-body { overflow: hidden; transition: max-height .3s ease; }
+
+    /* 抓包页请求/响应体：长内容自动换行 + 纵向滚动，避免被截断看不全 */
+    .trace-pre {
+        max-height: 320px; overflow: auto;
+        white-space: pre-wrap; word-break: break-all;
+    }
 
     /* 标签页高亮下划线 */
     .tab-btn {
@@ -586,22 +423,35 @@
         <!-- ===== Tab 2: 配置管理 (Config) ===== -->
         <section v-show="activeTab === 'config'" class="space-y-6">
 
+            <!-- ===== 配置子标签页 ===== -->
+            <div class="flex gap-1 border-b border-cyber-border overflow-x-auto">
+                <button v-for="sub in configSubTabs" :key="sub.id"
+                        @click="configSubTab = sub.id"
+                        :class="['tab-btn whitespace-nowrap', { active: configSubTab === sub.id }]">
+                    {{ sub.label }}
+                </button>
+            </div>
+
             <!-- ─── API 连接 ─── -->
-            <div class="card-panel p-5 space-y-4">
+            <div v-show="configSubTab === 'api'" class="card-panel p-5 space-y-4">
                 <div class="section-title">{{ lang.sectionApi }}</div>
                 <!-- API Key -->
                 <div>
                     <label class="input-label">{{ lang.apiKey }}</label>
                     <div class="relative">
-                        <input :type="showApiKey ? 'text' : 'password'"
+                        <input :type="apiKeyInputType"
                                v-model="config.apiKey"
-                               class="input-field pr-12 font-mono"
+                               class="input-field font-mono"
+                               :class="{ 'pr-12': !isApiKeyPlaceholder }"
                                :placeholder="lang.apiKeyPlaceholder">
-                        <button @click="showApiKey = !showApiKey"
+                        <button v-if="!isApiKeyPlaceholder" @click="showApiKey = !showApiKey"
                                 class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-300 px-2 py-1"
                                 :title="showApiKey ? lang.hideKey : lang.showKey">
                             {{ showApiKey ? '🙈' : '👁' }}
                         </button>
+                        <span v-else class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-amber-400">
+                            {{ lang.apiKeyHint }}
+                        </span>
                     </div>
                 </div>
                 <!-- API URL -->
@@ -616,17 +466,87 @@
                     <input type="text" v-model="config.model" class="input-field"
                            :placeholder="lang.modelPlaceholder">
                 </div>
-                <!-- System Prompt -->
+                <!-- Provider -->
                 <div>
-                    <label class="input-label">{{ lang.systemPrompt }}</label>
-                    <textarea v-model="config.systemPrompt" class="input-field" rows="4"
-                              :placeholder="lang.systemPromptPlaceholder"
-                              style="resize:vertical; min-height:80px;"></textarea>
+                    <label class="input-label">{{ lang.provider }}</label>
+                    <select v-model="config.provider" class="input-field">
+                        <option v-for="p in availableProviders" :key="p.id" :value="p.id">{{ p.name }}</option>
+                    </select>
+                    <div class="text-xs text-gray-500 mt-1">{{ lang.providerDesc }}</div>
+                </div>
+                <!-- Anthropic-only params -->
+                <div v-show="config.provider === 'anthropic'" class="space-y-3 pl-3 border-l-2 border-cyber-blue/40">
+                    <div>
+                        <label class="input-label">{{ lang.maxTokens }}</label>
+                        <input type="number" v-model.number="config.maxTokens" class="input-field w-32"
+                               min="1" max="200000" step="256">
+                        <div class="text-xs text-gray-500 mt-1">{{ lang.maxTokensDesc }}</div>
+                    </div>
+                    <div>
+                        <label class="input-label">{{ lang.anthropicVersion }}</label>
+                        <input type="text" v-model="config.anthropicVersion" class="input-field w-48"
+                               placeholder="2023-06-01">
+                        <div class="text-xs text-gray-500 mt-1">{{ lang.anthropicVersionDesc }}</div>
+                    </div>
+                </div>
+                <!-- Connection presets -->
+                <div class="pt-2 border-t border-gray-700/50">
+                    <label class="input-label">{{ lang.presets }}</label>
+                    <div class="flex items-center gap-2">
+                        <select v-model="selectedPreset" class="input-field flex-1">
+                            <option value="">{{ lang.presetCustom }}</option>
+                            <option v-for="p in config.presets" :key="p.name" :value="p.name">{{ p.name }} ({{ p.provider }})</option>
+                        </select>
+                        <button @click="applyPreset" class="btn btn-ghost text-sm !py-2 !px-3" :disabled="!selectedPreset">{{ lang.presetApply }}</button>
+                        <button @click="deletePreset" class="btn btn-danger text-sm !py-2 !px-3" :disabled="!selectedPreset">{{ lang.presetDelete }}</button>
+                    </div>
+                    <div class="flex items-center gap-2 mt-2">
+                        <input type="text" v-model="newPresetName" class="input-field flex-1" :placeholder="lang.presetNamePlaceholder">
+                        <button @click="savePreset" class="btn btn-ghost text-sm !py-2 !px-3" :disabled="!newPresetName.trim()">{{ lang.presetSaveCurrent }}</button>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">{{ lang.presetsDesc }}</div>
+                </div>
+                <!-- Target Language -->
+                <div>
+                    <label class="input-label">{{ lang.targetLanguage }}</label>
+                    <select v-if="config.targetLanguageMode === 'preset'" v-model="config.targetLanguage" class="input-field">
+                        <option v-for="l in presetLanguages" :key="l" :value="l">{{ l }}</option>
+                    </select>
+                    <input v-else type="text" v-model="config.targetLanguage" class="input-field"
+                           :placeholder="lang.targetLanguageCustomPlaceholder">
+                    <label style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:12px; cursor:pointer;">
+                        <input type="checkbox"
+                               :checked="config.targetLanguageMode === 'custom'"
+                               @change="config.targetLanguageMode = $event.target.checked ? 'custom' : 'preset'">
+                        {{ lang.targetLanguageModeToggle }}
+                    </label>
+                </div>
+                <!-- Proper noun mode -->
+                <div>
+                    <label class="input-label">{{ lang.properNounMode }}</label>
+                    <select v-model="config.properNounMode" class="input-field">
+                        <option value="keep">{{ lang.properNounKeep }}</option>
+                        <option value="translate">{{ lang.properNounTranslate }}</option>
+                        <option value="item_only">{{ lang.properNounItemOnly }}</option>
+                    </select>
+                </div>
+                <!-- Optional user prompts -->
+                <div>
+                    <label class="input-label">{{ lang.userChatPrompt }}</label>
+                    <textarea v-model="config.userChatPrompt" class="input-field" rows="2"
+                              :placeholder="lang.userChatPromptPlaceholder"
+                              style="resize:vertical; min-height:48px;"></textarea>
+                </div>
+                <div>
+                    <label class="input-label">{{ lang.userItemPrompt }}</label>
+                    <textarea v-model="config.userItemPrompt" class="input-field" rows="2"
+                              :placeholder="lang.userItemPromptPlaceholder"
+                              style="resize:vertical; min-height:48px;"></textarea>
                 </div>
             </div>
 
             <!-- ─── 翻译行为 ─── -->
-            <div class="card-panel p-5 space-y-4">
+            <div v-show="configSubTab === 'behavior'" class="card-panel p-5 space-y-4">
                 <div class="section-title">{{ lang.sectionBehavior }}</div>
                 <!-- translationMode -->
                 <div>
@@ -674,7 +594,7 @@
             </div>
 
             <!-- ─── 缓存设置 ─── -->
-            <div class="card-panel p-5 space-y-4">
+            <div v-show="configSubTab === 'cache'" class="card-panel p-5 space-y-4">
                 <div class="section-title">{{ lang.sectionCache }}</div>
                 <label class="flex items-center justify-between cursor-pointer">
                     <div>
@@ -697,10 +617,18 @@
                            min="1200" max="240000" step="1200">
                     <div class="text-xs text-gray-500 mt-1">{{ lang.periodicSaveIntervalDesc }}</div>
                 </div>
+
+                <!-- cacheMaxEntries -->
+                <div>
+                    <label class="input-label">{{ lang.cacheMaxEntries }}</label>
+                    <input type="number" v-model.number="config.cacheMaxEntries" class="input-field w-32"
+                           min="100" max="1000000" step="1000">
+                    <div class="text-xs text-gray-500 mt-1">{{ lang.cacheMaxEntriesDesc }}</div>
+                </div>
             </div>
 
             <!-- ─── 聊天折叠 ─── -->
-            <div class="card-panel p-5 space-y-4">
+            <div v-show="configSubTab === 'compact'" class="card-panel p-5 space-y-4">
                 <div class="section-title">{{ lang.sectionCompact }}</div>
                 <label class="flex items-center justify-between cursor-pointer">
                     <div>
@@ -766,7 +694,7 @@
                           :style="{ transform: trace.expanded ? 'rotate(180deg)' : 'rotate(0deg)' }">▼</span>
                 </button>
                 <!-- 手风琴展开内容 -->
-                <div class="accordion-body" :style="{ maxHeight: trace.expanded ? '600px' : '0px' }">
+                <div class="accordion-body" :style="{ maxHeight: trace.expanded ? '900px' : '0px' }">
                     <div class="px-5 pb-4 space-y-3 border-t border-cyber-border pt-3">
                         <!-- Request 概要信息 -->
                         <div v-if="trace.estimatedTokens > 0" class="text-xs text-gray-400 flex items-center gap-3 flex-wrap">
@@ -779,13 +707,13 @@
                         <!-- Request Payload -->
                         <div>
                             <div class="text-xs text-cyber-blue font-semibold mb-1.5">{{ lang.requestPayload }}</div>
-                            <pre class="text-xs text-gray-300 rounded-lg p-3 overflow-x-auto font-mono" style="background:var(--bg-input);"
+                            <pre class="trace-pre text-xs text-gray-300 rounded-lg p-3 font-mono" style="background:var(--bg-input);"
                                  >{{ formatJson(trace.requestBody) }}</pre>
                         </div>
                         <!-- Response Body -->
                         <div>
                             <div class="text-xs text-cyber-green font-semibold mb-1.5">{{ lang.responseBody }}</div>
-                            <pre class="text-xs text-gray-300 rounded-lg p-3 overflow-x-auto font-mono" style="background:var(--bg-input);"
+                            <pre class="trace-pre text-xs text-gray-300 rounded-lg p-3 font-mono" style="background:var(--bg-input);"
                                  >{{ formatJson(trace.responseBody) }}</pre>
                         </div>
                         <!-- Token 用量（有数据时显示） -->
@@ -1061,14 +989,37 @@ const I18N_DICT = {
         saving: '保存中...',
         apiKey: 'API Key',
         apiKeyPlaceholder: '请输入你的 API Key...',
+        apiKeyHint: '⬆ 请替换为你的真实 Key',
         showKey: '显示',
         hideKey: '隐藏',
         apiUrl: 'API URL',
         apiUrlPlaceholder: 'https://api.openai.com/v1/chat/completions',
         model: 'Model（模型标识）',
         modelPlaceholder: '例如: gpt-4o, claude-sonnet-4-6',
-        systemPrompt: 'System Prompt（系统提示词）',
-        systemPromptPlaceholder: '你是一个 Minecraft 翻译助手...',
+        provider: 'AI 供应商格式',
+        providerDesc: 'OpenAI 兼容适用于 DeepSeek/OpenAI 等；Anthropic 为 Claude 原生格式',
+        maxTokens: '最大输出 Token',
+        maxTokensDesc: 'Anthropic 必需。OpenAI 兼容端点忽略此项',
+        anthropicVersion: 'anthropic-version 头',
+        anthropicVersionDesc: '仅 Anthropic 使用，一般保持默认 2023-06-01',
+        presets: '连接预设',
+        presetsDesc: '保存多套供应商/密钥/模型组合，一键切换。应用后记得点保存配置',
+        presetCustom: '（自定义连接）',
+        presetApply: '应用',
+        presetDelete: '删除',
+        presetSaveCurrent: '存为预设',
+        presetNamePlaceholder: '新预设名称',
+        targetLanguage: '目标语言（翻译成）',
+        targetLanguageCustomPlaceholder: '自定义语言，如 Italiano',
+        targetLanguageModeToggle: '自定义语言',
+        userChatPrompt: '聊天附加指令（可选）',
+        userChatPromptPlaceholder: '留空则不发送。例如：口语化、保留游戏梗',
+        userItemPrompt: '物品附加指令（可选）',
+        userItemPromptPlaceholder: '留空则不发送。例如：保留装备词条缩写',
+        properNounMode: '专有名词处理',
+        properNounKeep: '保留英文（物品名/附魔/能力）',
+        properNounTranslate: '全部翻译',
+        properNounItemOnly: '只保留物品名',
         saveSuccess: '配置已保存并重载成功 ✓',
         saveFailed: '配置保存失败，请检查后端日志',
         loadFailed: '加载配置失败',
@@ -1101,6 +1052,10 @@ const I18N_DICT = {
         sectionBehavior: '翻译行为',
         sectionCache: '缓存设置',
         sectionCompact: '聊天折叠',
+        subTabApi: 'API 连接',
+        subTabBehavior: '翻译行为',
+        subTabCache: '缓存设置',
+        subTabCompact: '聊天折叠',
 
         // -- 新增字段 --
         translationMode: '翻译模式',
@@ -1126,6 +1081,8 @@ const I18N_DICT = {
         enablePeriodicSaveDesc: '每隔一定 tick 自动将缓存刷写到磁盘',
         periodicSaveInterval: '保存间隔 (ticks)',
         periodicSaveIntervalDesc: '24000 ticks ≈ 20 分钟。范围: 1200~240000',
+        cacheMaxEntries: '内存缓存上限 (条)',
+        cacheMaxEntriesDesc: '超过后按 LRU 淘汰最久未访问的条目。默认 20000',
         enableChatCompact: '聊天折叠',
         enableChatCompactDesc: '将连续重复的聊天消息折叠为一条，附带次数标记',
         compactTimeSeconds: '折叠时间窗口 (秒)',
@@ -1194,14 +1151,37 @@ const I18N_DICT = {
         saving: 'Saving...',
         apiKey: 'API Key',
         apiKeyPlaceholder: 'Enter your API Key...',
+        apiKeyHint: '⬆ Replace with your real key',
         showKey: 'Show',
         hideKey: 'Hide',
         apiUrl: 'API URL',
         apiUrlPlaceholder: 'https://api.openai.com/v1/chat/completions',
         model: 'Model',
         modelPlaceholder: 'e.g. gpt-4o, claude-sonnet-4-6',
-        systemPrompt: 'System Prompt',
-        systemPromptPlaceholder: 'You are a Minecraft translation assistant...',
+        provider: 'AI Provider Format',
+        providerDesc: 'OpenAI-compatible for DeepSeek/OpenAI etc.; Anthropic for Claude native format',
+        maxTokens: 'Max Output Tokens',
+        maxTokensDesc: 'Required by Anthropic. Ignored by OpenAI-compatible endpoints',
+        anthropicVersion: 'anthropic-version Header',
+        anthropicVersionDesc: 'Anthropic only; usually keep default 2023-06-01',
+        presets: 'Connection Presets',
+        presetsDesc: 'Save multiple provider/key/model combos, switch with one click. Remember to Save Config after applying',
+        presetCustom: '(Custom connection)',
+        presetApply: 'Apply',
+        presetDelete: 'Delete',
+        presetSaveCurrent: 'Save Preset',
+        presetNamePlaceholder: 'New preset name',
+        targetLanguage: 'Target Language (translate into)',
+        targetLanguageCustomPlaceholder: 'Custom language, e.g. Italiano',
+        targetLanguageModeToggle: 'Custom language',
+        userChatPrompt: 'Extra Chat Instructions (optional)',
+        userChatPromptPlaceholder: 'Empty = not sent. e.g. casual tone, keep memes',
+        userItemPrompt: 'Extra Item Instructions (optional)',
+        userItemPromptPlaceholder: 'Empty = not sent. e.g. keep stat abbreviations',
+        properNounMode: 'Proper Noun Handling',
+        properNounKeep: 'Keep All English (items/enchants/abilities)',
+        properNounTranslate: 'Translate Everything',
+        properNounItemOnly: 'Keep Item Names Only',
         saveSuccess: 'Config saved & reloaded successfully ✓',
         saveFailed: 'Failed to save config, check backend logs',
         loadFailed: 'Failed to load config',
@@ -1234,6 +1214,10 @@ const I18N_DICT = {
         sectionBehavior: 'Translation Behavior',
         sectionCache: 'Cache Settings',
         sectionCompact: 'Chat Compact',
+        subTabApi: 'API Connection',
+        subTabBehavior: 'Translation',
+        subTabCache: 'Cache',
+        subTabCompact: 'Chat Compact',
 
         // -- Additional fields --
         translationMode: 'Translation Mode',
@@ -1259,6 +1243,8 @@ const I18N_DICT = {
         enablePeriodicSaveDesc: 'Flush cache to disk at regular intervals',
         periodicSaveInterval: 'Save Interval (ticks)',
         periodicSaveIntervalDesc: '24000 ticks ≈ 20 min. Range: 1200–240000',
+        cacheMaxEntries: 'Max Cache Entries',
+        cacheMaxEntriesDesc: 'Evicts least-recently-used entries beyond this. Default 20000',
         enableChatCompact: 'Chat Compact',
         enableChatCompactDesc: 'Fold duplicate chat messages with a repeat counter',
         compactTimeSeconds: 'Compact Time Window (seconds)',
@@ -1316,6 +1302,14 @@ createApp({
                 { id: 'network',   label: '' },
                 { id: 'debug',     label: '' },
             ],
+            /** 配置标签页内的子标签 */
+            configSubTab: 'api',
+            configSubTabs: [
+                { id: 'api',      label: '' },
+                { id: 'behavior', label: '' },
+                { id: 'cache',    label: '' },
+                { id: 'compact',  label: '' },
+            ],
 
             /* ---- 连接状态 ---- */
             connected: false,
@@ -1331,7 +1325,16 @@ createApp({
                 apiKey:                '',
                 apiUrl:                '',
                 model:                 '',
-                systemPrompt:          '',
+                provider:              'openai',
+                maxTokens:             4096,
+                anthropicVersion:      '2023-06-01',
+                presets:               [],
+                activePreset:          '',
+                targetLanguage:        'Simplified Chinese (简体中文)',
+                targetLanguageMode:    'preset',   // 'preset' | 'custom'（仅前端 UI 状态，不发送）
+                userChatPrompt:        '',
+                userItemPrompt:        '',
+                properNounMode:        'keep',
                 translationMode: 'auto',
                 buttonStyle:           'NORMAL',
                 enableTranslateButton: true,
@@ -1339,14 +1342,30 @@ createApp({
                 enableCachePersistence: true,
                 enablePeriodicSave:    true,
                 periodicSaveInterval:  24000,
+                cacheMaxEntries:       20000,
                 enableChatCompact:     true,
                 compactTimeSeconds:    120,
                 compactColorCode:      'GRAY',
                 debug:                 false,
             },
+            presetLanguages: [
+                'Simplified Chinese (简体中文)',
+                'English',
+                '日本語 (Japanese)',
+                '繁體中文 (Traditional Chinese)',
+                '한국어 (Korean)',
+                'Français',
+                'Deutsch',
+                'Español',
+                'Русский (Russian)',
+                'Português',
+            ],
             showApiKey: false,
             configLoading: false,
             configSaving: false,
+            availableProviders: [{ id: 'openai', name: 'OpenAI Compatible' }, { id: 'anthropic', name: 'Anthropic (Claude)' }],
+            selectedPreset: '',
+            newPresetName: '',
 
             /* ---- 运行指标 ---- */
             metrics: {
@@ -1418,6 +1437,14 @@ createApp({
             const lvl = this.consoleLevelFilter;
             return this.consoleLines.filter(l => l.level === lvl);
         },
+        /** API Key 是占位符时，输入框强制明文提示用户填入 */
+        isApiKeyPlaceholder() {
+            return !this.config.apiKey || this.config.apiKey === 'YOUR_API_KEY_HERE';
+        },
+        /** API Key 输入框的 type：占位符时强制 text，否则看 showApiKey */
+        apiKeyInputType() {
+            return this.isApiKeyPlaceholder ? 'text' : (this.showApiKey ? 'text' : 'password');
+        },
     },
 
     watch: {
@@ -1485,6 +1512,10 @@ createApp({
             this.tabs[1].label = this.lang.config;
             this.tabs[2].label = this.lang.network;
             this.tabs[3].label = this.lang.debugTab;
+            this.configSubTabs[0].label = this.lang.subTabApi;
+            this.configSubTabs[1].label = this.lang.subTabBehavior;
+            this.configSubTabs[2].label = this.lang.subTabCache;
+            this.configSubTabs[3].label = this.lang.subTabCompact;
         },
 
         /* ==================== 主题切换 ==================== */
@@ -1564,6 +1595,56 @@ createApp({
             }, 3500);
         },
 
+        /* ==================== 连接预设 ==================== */
+        /** 把选中预设的连接字段载入当前编辑区（不自动保存，需用户点保存配置）。 */
+        applyPreset() {
+            const p = (this.config.presets || []).find(x => x.name === this.selectedPreset);
+            if (!p) return;
+            this.config.provider         = p.provider || 'openai';
+            this.config.apiUrl           = p.apiUrl || '';
+            this.config.model            = p.model || '';
+            this.config.maxTokens        = p.maxTokens || 4096;
+            this.config.anthropicVersion = p.anthropicVersion || '2023-06-01';
+            // 如果预设里的 key 是占位符，保留用户当前已填的 key（避免把真 key 冲掉）
+            if (p.apiKey && p.apiKey !== 'YOUR_API_KEY_HERE') {
+                this.config.apiKey = p.apiKey;
+            } else if (!this.config.apiKey) {
+                this.config.apiKey = 'YOUR_API_KEY_HERE';
+            }
+            this.config.activePreset     = p.name;
+            this.showToast(this.lang.presetApply + ': ' + p.name, 'success');
+        },
+        /** 把当前编辑区的连接保存为命名预设（同名则覆盖）。 */
+        savePreset() {
+            const name = this.newPresetName.trim();
+            if (!name) return;
+            const preset = {
+                name,
+                provider: this.config.provider,
+                apiUrl: this.config.apiUrl,
+                apiKey: this.config.apiKey,
+                model: this.config.model,
+                maxTokens: this.config.maxTokens,
+                anthropicVersion: this.config.anthropicVersion
+            };
+            if (!Array.isArray(this.config.presets)) this.config.presets = [];
+            const idx = this.config.presets.findIndex(x => x.name === name);
+            if (idx >= 0) this.config.presets.splice(idx, 1, preset);
+            else this.config.presets.push(preset);
+            this.config.activePreset = name;
+            this.selectedPreset = name;
+            this.newPresetName = '';
+            this.showToast(this.lang.presetSaveCurrent + ': ' + name, 'success');
+        },
+        /** 删除选中预设。 */
+        deletePreset() {
+            if (!this.selectedPreset) return;
+            this.config.presets = (this.config.presets || []).filter(x => x.name !== this.selectedPreset);
+            if (this.config.activePreset === this.selectedPreset) this.config.activePreset = '';
+            this.selectedPreset = '';
+            this.showToast(this.lang.presetDelete, 'success');
+        },
+
         /* ==================== API 调用 ==================== */
         /** GET /api/config —— 拉取当前 TOML 内存配置的 JSON 表示 */
         async fetchConfig() {
@@ -1575,7 +1656,20 @@ createApp({
                 this.config.apiKey                = data.apiKey                || '';
                 this.config.apiUrl                = data.apiUrl                || data.api_url || '';
                 this.config.model                 = data.model                 || '';
-                this.config.systemPrompt          = data.systemPrompt          || data.system_prompt || '';
+                this.config.provider              = data.provider              || 'openai';
+                this.config.maxTokens             = data.maxTokens             || 4096;
+                this.config.anthropicVersion      = data.anthropicVersion      || '2023-06-01';
+                this.config.presets               = Array.isArray(data.presets) ? data.presets : [];
+                this.config.activePreset          = data.activePreset          || '';
+                this.selectedPreset               = this.config.activePreset;
+                if (Array.isArray(data.availableProviders) && data.availableProviders.length) {
+                    this.availableProviders = data.availableProviders;
+                }
+                this.config.targetLanguage        = data.targetLanguage        || 'Simplified Chinese (简体中文)';
+                this.config.targetLanguageMode    = this.presetLanguages.includes(this.config.targetLanguage) ? 'preset' : 'custom';
+                this.config.userChatPrompt        = data.userChatPrompt        || '';
+                this.config.userItemPrompt        = data.userItemPrompt        || '';
+                this.config.properNounMode        = data.properNounMode        || 'keep';
                 this.config.translationMode = data.translationMode || 'auto';
                 this.config.buttonStyle           = data.buttonStyle           || 'NORMAL';
                 this.config.enableTranslateButton = data.enableTranslateButton ?? true;
@@ -1583,6 +1677,7 @@ createApp({
                 this.config.enableCachePersistence = data.enableCachePersistence ?? true;
                 this.config.enablePeriodicSave    = data.enablePeriodicSave    ?? true;
                 this.config.periodicSaveInterval  = data.periodicSaveInterval  || 24000;
+                this.config.cacheMaxEntries       = data.cacheMaxEntries       || 20000;
                 this.config.enableChatCompact     = data.enableChatCompact     ?? true;
                 this.config.compactTimeSeconds    = data.compactTimeSeconds    || 120;
                 this.config.compactColorCode      = data.compactColorCode      || 'GRAY';
@@ -1606,7 +1701,17 @@ createApp({
                         apiKey:                this.config.apiKey,
                         apiUrl:                this.config.apiUrl,
                         model:                 this.config.model,
-                        systemPrompt:          this.config.systemPrompt,
+                        provider:              this.config.provider,
+                        maxTokens:             this.config.maxTokens,
+                        anthropicVersion:      this.config.anthropicVersion,
+                        presets:               this.config.presets,
+                        activePreset:          this.config.activePreset,
+                        targetLanguage:        (this.config.targetLanguage && this.config.targetLanguage.trim())
+                                                   ? this.config.targetLanguage.trim()
+                                                   : 'Simplified Chinese (简体中文)',
+                        userChatPrompt:        this.config.userChatPrompt,
+                        userItemPrompt:        this.config.userItemPrompt,
+                        properNounMode:        this.config.properNounMode,
                         translationMode: this.config.translationMode,
                         buttonStyle:           this.config.buttonStyle,
                         enableTranslateButton: this.config.enableTranslateButton,
@@ -1614,6 +1719,7 @@ createApp({
                         enableCachePersistence: this.config.enableCachePersistence,
                         enablePeriodicSave:    this.config.enablePeriodicSave,
                         periodicSaveInterval:  this.config.periodicSaveInterval,
+                        cacheMaxEntries:       this.config.cacheMaxEntries,
                         enableChatCompact:     this.config.enableChatCompact,
                         compactTimeSeconds:    this.config.compactTimeSeconds,
                         compactColorCode:      this.config.compactColorCode,
@@ -1937,6 +2043,7 @@ createApp({
             if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'k';
             return String(n);
         },
+    },
 
         /* ==================== Spam Hider ==================== */
         async loadSpamFilters() {
@@ -2001,7 +2108,6 @@ createApp({
         removeSpamFilter(index) {
             this.spamFilters.splice(index, 1);
         },
-    },
 
     /* ==================== 生命周期 ==================== */
     mounted() {

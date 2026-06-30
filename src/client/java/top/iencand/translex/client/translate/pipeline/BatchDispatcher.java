@@ -1,10 +1,13 @@
-package top.iencand.translex.client.translate;
+package top.iencand.translex.client.translate.pipeline;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import net.minecraft.client.Minecraft;
 import top.iencand.translex.client.config.ModConfig;
 import top.iencand.translex.client.config.NetworkConfig;
+import top.iencand.translex.client.translate.TranslationParser;
+import top.iencand.translex.client.translate.TranslationRequester;
 import top.iencand.translex.client.translate.render.TranslationProgressTracker;
 import top.iencand.translex.client.util.I18nHelper;
 import top.iencand.translex.client.web.ConsoleBroadcaster;
@@ -17,67 +20,70 @@ import java.util.*;
 import java.util.concurrent.*;
 
 /**
- * 网络层核心组件：批处理、请求去重、字典格式载荷、防御性响应清理、
- * 以及缺失条目的单条重试。
+ * 可复用的网络批处理器：批处理、请求去重、字典格式载荷、防御性响应清理、缺失条目单条重试。
  *
- * <p>调用方通过 {@link #submit(String)} 加入文本队列，返回
- * {@link CompletableFuture} 在翻译完成后获得结果。</p>
+ * <p>由原 {@code TranslationDispatcher} 改造而来，通过注入的 {@link PipelineConfig}
+ * 区分各管线的 system prompt、批处理窗口、进度行 displayId、调度线程名。
+ * 聊天管线与物品管线各持有一个独立实例，去重表 {@code pendingRequests} 天然按实例隔离，
+ * 因此不会跨管线去重（彻底分离）。</p>
  *
- * <p>批处理策略：在 1500ms 窗口内收集多条翻译请求，合并为一个字典格式的
- * JSON 载荷发送到 AI API，以提高吞吐量。</p>
+ * <p>多个实例共享同一个无状态的 {@link TranslationRequester}（复用 OkHttp 连接池）。</p>
  */
-public class TranslationDispatcher {
+public class BatchDispatcher {
 
-    private static final Gson GSON = new Gson();
+    private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
+    private static final DateTimeFormatter TRACE_TF = DateTimeFormatter.ofPattern("HH:mm:ss");
 
-    // -------- 请求去重 --------
+    // -------- 管线配置 --------
+    private final PipelineConfig config;
+    private final String batchDisplayId;
+
+    // -------- 请求去重（按实例隔离） --------
     private final ConcurrentHashMap<String, CompletableFuture<String>> pendingRequests = new ConcurrentHashMap<>();
 
     // -------- 批处理队列 --------
     private final List<BatchEntry> batchQueue = Collections.synchronizedList(new ArrayList<>());
-    private final ScheduledExecutorService windowScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-        Thread t = new Thread(r, "Translex-Dispatcher");
-        t.setDaemon(true);
-        return t;
-    });
+    private final ScheduledExecutorService windowScheduler;
     private ScheduledFuture<?> windowFuture;
-    private static final long WINDOW_MS = 1500;
 
-    // -------- 组件 --------
-    private final TranslationRequester requester = new TranslationRequester();
+    // -------- 组件（requester 共享注入） --------
+    private final TranslationRequester requester;
     private final TranslationProgressTracker progressTracker = new TranslationProgressTracker();
-    private static final String BATCH_DISPLAY_ID = "TL_BATCH";
 
     // -------- 批处理状态 --------
     private volatile int batchSeq = 0;
     private volatile boolean shutdown;
-    private static final DateTimeFormatter TRACE_TF = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     private record BatchEntry(int index, String text, CompletableFuture<String> future) {}
+
+    public BatchDispatcher(PipelineConfig config, TranslationRequester sharedRequester) {
+        this.config = config;
+        this.requester = sharedRequester;
+        this.batchDisplayId = config.displayIdPrefix() + "_BATCH";
+        this.windowScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, config.threadName());
+            t.setDaemon(true);
+            return t;
+        });
+    }
 
     // ===============================================================
     // 公开 API
     // ===============================================================
 
     /**
-     * 提交文本进行翻译。如果相同文本已在队列中等待，则返回已存在的 Future（去重）。
-     *
-     * @param text 待翻译文本
-     * @return 翻译完成后的 Future
+     * 提交文本进行翻译。如果相同文本已在本管线队列中等待，则返回已存在的 Future（管线内去重）。
      */
     public CompletableFuture<String> submit(String text) {
         if (text == null || text.isBlank()) {
             return CompletableFuture.completedFuture(text);
         }
 
-        // Dedup: reuse existing future
         CompletableFuture<String> existing = pendingRequests.get(text);
         if (existing != null) return existing;
 
         CompletableFuture<String> future = new CompletableFuture<>();
         pendingRequests.put(text, future);
-
-        // Clean up dedup entry when done
         future.whenComplete((result, ex) -> pendingRequests.remove(text));
 
         synchronized (batchQueue) {
@@ -92,19 +98,19 @@ public class TranslationDispatcher {
     }
 
     // ===============================================================
-    // 窗口定时器（延迟刷出，收集批处理）
+    // 窗口定时器
     // ===============================================================
 
     private void scheduleWindow() {
         synchronized (this) {
             if (windowFuture == null || windowFuture.isDone()) {
-                windowFuture = windowScheduler.schedule(this::flush, WINDOW_MS, TimeUnit.MILLISECONDS);
+                windowFuture = windowScheduler.schedule(this::flush, config.windowMs(), TimeUnit.MILLISECONDS);
             }
         }
     }
 
     // ===============================================================
-    // 刷出：构建字典载荷、发送、解析、完成 Future
+    // 刷出
     // ===============================================================
 
     private void flush() {
@@ -119,44 +125,45 @@ public class TranslationDispatcher {
 
         final int seq = ++batchSeq;
 
-        // Build dictionary payload
         JsonObject dict = new JsonObject();
         for (int i = 0; i < batch.size(); i++) {
             dict.addProperty(String.valueOf(i), batch.get(i).text());
         }
         String payload = GSON.toJson(dict);
 
-        // Update progress: "正在翻译 N 条内容..."
-        progressTracker.updateLoading(BATCH_DISPLAY_ID,
+        progressTracker.updateLoading(batchDisplayId,
                 I18nHelper.translate("translex.info.translating_batch", batch.size()));
 
-        // ---- 指标采集 + 控制台广播 ----
-        long systemPromptTokens = TokenCounter.estimate(ModConfig.get().translationPrompt);
+        final String systemPrompt = config.systemPrompt();
+        final String userPrompt   = config.userPrompt();
+        long systemPromptTokens = TokenCounter.estimate(systemPrompt)
+                + (userPrompt != null && !userPrompt.isBlank() ? TokenCounter.estimate(userPrompt) : 0);
         long payloadTokens      = TokenCounter.estimate(payload);
         long estimatedTokens    = systemPromptTokens + payloadTokens;
         MetricsCollector.get().recordAiRequestWithTokens(estimatedTokens);
         final long startTime = System.currentTimeMillis();
         final String apiUrlSnapshot = ModConfig.get().apiUrl;
         ConsoleBroadcaster.broadcast("INFO",
-                "Sending AI request — batch #" + seq + ", " + batch.size() + " texts, "
-                + payload.length() + " chars, ~" + estimatedTokens + " tokens");
+                "Sending AI request — " + config.displayIdPrefix() + " batch #" + seq + ", "
+                + batch.size() + " texts, " + payload.length() + " chars, ~" + estimatedTokens + " tokens");
 
         requester.requestTranslation(
                 ModConfig.get().apiKey,
                 apiUrlSnapshot,
                 ModConfig.get().modelName,
-                ModConfig.get().translationPrompt,
+                systemPrompt,
+                userPrompt,
                 payload,
                 "BATCH_" + seq,
                 "批_" + seq,
-                (cacheKey, rawResult, displayId) -> {
+                (cacheKey, rawResult, displayId, rawBody) -> {
                     long duration = System.currentTimeMillis() - startTime;
                     MetricsCollector.get().recordLatency(duration);
                     MetricsCollector.TraceEntry te = new MetricsCollector.TraceEntry(
                             LocalTime.now().format(TRACE_TF),
                             "POST", apiUrlSnapshot,
                             !rawResult.startsWith("§c"), duration,
-                            payload, rawResult);
+                            buildTraceBody(systemPrompt, userPrompt, payload), rawBody != null ? rawBody : rawResult);
                     te.estimatedTokens            = estimatedTokens;
                     te.estimatedSystemPromptTokens = systemPromptTokens;
                     te.estimatedPayloadTokens      = payloadTokens;
@@ -177,10 +184,19 @@ public class TranslationDispatcher {
         if (shutdown) return;
         Minecraft.getInstance().execute(() -> {
             try {
+                // 整批请求失败（如网络/HTTP/API 错误）：rawResult 是 §c 开头的错误串，
+                // 不是可解析的字典。直接把错误传播给每个 future，让上层渲染红字，
+                // 而不是误判为"缺失"再单条重试（同样会失败并被静默吞掉）。
+                if (rawResult != null && rawResult.startsWith("§c")) {
+                    for (BatchEntry entry : batch) {
+                        entry.future().complete(rawResult);
+                    }
+                    return;
+                }
+
                 Map<Integer, String> parsed = parseDictResponse(rawResult, batch.size());
 
                 List<BatchEntry> missing = new ArrayList<>();
-
                 for (BatchEntry entry : batch) {
                     String translated = parsed.get(entry.index());
                     if (translated != null && !translated.isBlank()) {
@@ -190,25 +206,23 @@ public class TranslationDispatcher {
                     }
                 }
 
-                // Single-item retry for missing entries
                 for (BatchEntry entry : missing) {
                     retrySingle(entry);
                 }
 
             } catch (Exception e) {
-                // Parse failure — complete all futures with error marker
                 String errorMsg = "§c" + I18nHelper.translate("translex.error.parse.json");
                 for (BatchEntry entry : batch) {
                     entry.future().complete(errorMsg);
                 }
             } finally {
-                progressTracker.removeLoading(BATCH_DISPLAY_ID);
+                progressTracker.removeLoading(batchDisplayId);
             }
         });
     }
 
     // ===============================================================
-    // 字典响应解析（带防御性清理）
+    // 字典响应解析
     // ===============================================================
 
     static Map<Integer, String> parseDictResponse(String raw, int expectedSize) {
@@ -219,8 +233,32 @@ public class TranslationDispatcher {
         }
     }
 
+    /**
+     * 构造抓包页显示用的请求体：还原实际发送的 messages 数组
+     * （强制 system → 可选 user → payload），让用户能在 Web 控制台看到完整 prompt，
+     * 而不是只看到 payload。仅用于展示，与真正发送的请求由 TranslationRequester 各自构造。
+     */
+    private static String buildTraceBody(String systemPrompt, String userPrompt, String payload) {
+        com.google.gson.JsonArray messages = new com.google.gson.JsonArray();
+        messages.add(traceMsg("system", systemPrompt));
+        if (userPrompt != null && !userPrompt.isBlank()) {
+            messages.add(traceMsg("user", userPrompt));
+        }
+        messages.add(traceMsg("user", payload));
+        JsonObject body = new JsonObject();
+        body.add("messages", messages);
+        return GSON.toJson(body);
+    }
+
+    private static JsonObject traceMsg(String role, String content) {
+        JsonObject o = new JsonObject();
+        o.addProperty("role", role);
+        o.addProperty("content", content);
+        return o;
+    }
+
     // ===============================================================
-    // 单条重试（字典格式，id=0）
+    // 单条重试
     // ===============================================================
 
     private void retrySingle(BatchEntry entry) {
@@ -230,10 +268,10 @@ public class TranslationDispatcher {
                 dict.addProperty("0", entry.text());
                 String payload = GSON.toJson(dict);
 
-                CompletableFuture<String> retryFuture = new CompletableFuture<>();
-
-                // ---- 指标采集 + 控制台广播 ----
-                long sysTokens = TokenCounter.estimate(ModConfig.get().translationPrompt);
+                final String systemPrompt = config.systemPrompt();
+                final String userPrompt   = config.userPrompt();
+                long sysTokens = TokenCounter.estimate(systemPrompt)
+                        + (userPrompt != null && !userPrompt.isBlank() ? TokenCounter.estimate(userPrompt) : 0);
                 long payTokens = TokenCounter.estimate(payload);
                 long estTokens = sysTokens + payTokens;
                 MetricsCollector.get().recordAiRequestWithTokens(estTokens);
@@ -246,18 +284,19 @@ public class TranslationDispatcher {
                         ModConfig.get().apiKey,
                         apiUrlSnapshot,
                         ModConfig.get().modelName,
-                        ModConfig.get().translationPrompt,
+                        systemPrompt,
+                        userPrompt,
                         payload,
                         "RETRY_" + entry.index(),
                         "重试_" + entry.index(),
-                        (cacheKey, rawResult, displayId) -> {
+                        (cacheKey, rawResult, displayId, rawBody) -> {
                             long duration = System.currentTimeMillis() - startTime;
                             MetricsCollector.get().recordLatency(duration);
                             MetricsCollector.TraceEntry te = new MetricsCollector.TraceEntry(
                                     LocalTime.now().format(TRACE_TF),
                                     "POST", apiUrlSnapshot,
                                     !rawResult.startsWith("§c"), duration,
-                                    payload, rawResult);
+                                    buildTraceBody(systemPrompt, userPrompt, payload), rawBody != null ? rawBody : rawResult);
                             te.estimatedTokens            = estTokens;
                             te.estimatedSystemPromptTokens = sysTokens;
                             te.estimatedPayloadTokens      = payTokens;
@@ -293,14 +332,8 @@ public class TranslationDispatcher {
             count = batchQueue.size();
         }
         if (count == 0) return;
-
-        String msg;
-        if (count == 1) {
-            msg = I18nHelper.translate("translex.info.preparing", 1);
-        } else {
-            msg = I18nHelper.translate("translex.info.preparing", count);
-        }
-        progressTracker.updateLoading(BATCH_DISPLAY_ID, msg);
+        progressTracker.updateLoading(batchDisplayId,
+                I18nHelper.translate("translex.info.preparing", count));
     }
 
     // ===============================================================
