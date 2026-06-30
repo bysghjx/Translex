@@ -372,11 +372,31 @@ public class TranslexCommand {
         String token = WebServer.getToken();
         String url = "http://127.0.0.1:" + port + "/?token=" + token;
 
-        try {
-            Desktop.getDesktop().browse(URI.create(url));
-        } catch (Exception e) {
-            LOGGER.warn("Failed to open config URL in browser: {}", e.getMessage());
-        }
+        // 必须在独立线程打开，加延迟确保 WebServer 就绪（参照 ShaftComm 实现）
+        new Thread(() -> {
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            try {
+                if (Desktop.isDesktopSupported()
+                        && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                    Desktop.getDesktop().browse(URI.create(url));
+                } else {
+                    Runtime.getRuntime().exec("cmd /c start \"\" \"" + url + "\"");
+                }
+                LOGGER.info("Opened config browser: {}", url);
+            } catch (Exception e) {
+                LOGGER.warn("Browser open failed: {}", e.getMessage());
+                try {
+                    Runtime.getRuntime().exec("cmd /c start \"\" \"" + url + "\"");
+                } catch (Exception e2) {
+                    LOGGER.error("All open methods failed. URL: {}", url);
+                }
+            }
+        }, "Translex-BrowserOpener").start();
+
         source.sendFeedback(Component.literal(
                 I18nHelper.getPrefixed("translex.info.config_opened", url)));
         return Command.SINGLE_SUCCESS;
