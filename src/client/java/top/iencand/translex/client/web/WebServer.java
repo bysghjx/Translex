@@ -7,6 +7,11 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 import top.iencand.translex.client.spam.SpamFilterData;
 import top.iencand.translex.client.spam.SpamHider;
 import com.sun.net.httpserver.HttpExchange;
@@ -94,6 +99,8 @@ public class WebServer {
             // 兜底 — 静态文件服务
             server.createContext("/api/spam-filters",      this::handleGetSpamFilters);
             server.createContext("/api/spam-filters/save", this::handleSaveSpamFilters);
+            server.createContext("/api/status",            this::handleGetStatus);
+            server.createContext("/api/test",              this::handleTestConnection);
             server.createContext("/", ex -> handleStatic(ex, isDev, webRoot));
 
             server.setExecutor(Executors.newCachedThreadPool(r -> {
@@ -159,6 +166,8 @@ public class WebServer {
         json.add("presets",                       GSON.toJsonTree(cfg.presets));
         json.add("availableProviders",            buildProvidersJson());
         json.addProperty("targetLanguage",        cfg.targetLanguage);
+        json.addProperty("targetLanguageMode",    top.iencand.translex.client.translate.TranslationPrompts
+                .deriveTargetLanguageMode(cfg.targetLanguage));
         json.addProperty("userChatPrompt",        cfg.userChatPrompt);
         json.addProperty("userItemPrompt",        cfg.userItemPrompt);
         json.addProperty("properNounMode",        cfg.properNounMode);
@@ -294,6 +303,113 @@ public class WebServer {
         json.add("latencyHistory",               GSON.toJsonTree(mc.getLatencyHistory()));
         json.addProperty("sseClientCount",       ConsoleBroadcaster.getClientCount());
         sendJson(ex, 200, json);
+    }
+
+    /** GET /api/status — 首屏汇总（Dashboard 初始化用，减少首屏请求数）。 */
+    private void handleGetStatus(HttpExchange ex) throws IOException {
+        if (!checkToken(ex)) { sendForbidden(ex); return; }
+        ModConfig cfg = ModConfig.get();
+        MetricsCollector mc = MetricsCollector.get();
+        JsonObject json = new JsonObject();
+        json.addProperty("connected",        ConsoleBroadcaster.getClientCount() > 0);
+        json.addProperty("sseClientCount",   ConsoleBroadcaster.getClientCount());
+        json.addProperty("provider",         cfg.provider);
+        json.addProperty("apiUrl",           cfg.apiUrl);
+        json.addProperty("model",            cfg.modelName);
+        json.addProperty("translationMode",  cfg.translationMode);
+        json.addProperty("debug",            cfg.debug);
+        json.addProperty("localHits",        mc.getLocalHits());
+        json.addProperty("aiRequests",       mc.getAiRequests());
+        sendJson(ex, 200, json);
+    }
+
+    /**
+     * POST /api/test — 连接测试。用前端表单当前值（未必已保存）构造一个最小翻译请求，
+     * 同步等待响应，返回成功/HTTP码/延迟/响应片段。不记 metrics/trace，不触 Minecraft 主线程。
+     * 注意：会消耗少量 token。
+     */
+    private void handleTestConnection(HttpExchange ex) throws IOException {
+        if (!checkToken(ex)) { sendForbidden(ex); return; }
+        if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
+            sendJson(ex, 405, errorJson("Method not allowed"));
+            return;
+        }
+        String provider, apiUrl, apiKey, model, anthropicVersion;
+        int maxTokens;
+        try {
+            JsonObject input = JsonParser.parseString(readBody(ex)).getAsJsonObject();
+            provider = optString(input, "provider", "openai");
+            apiUrl = optString(input, "apiUrl", "");
+            apiKey = optString(input, "apiKey", "");
+            model = optString(input, "model", "");
+            anthropicVersion = optString(input, "anthropicVersion", "2023-06-01");
+            maxTokens = input.has("maxTokens") && !input.get("maxTokens").isJsonNull()
+                    ? input.get("maxTokens").getAsInt() : 64;
+        } catch (Exception e) {
+            sendJson(ex, 400, errorJson("Invalid request body: " + e.getMessage()));
+            return;
+        }
+
+        if (apiKey.isBlank() || apiKey.equals("YOUR_API_KEY_HERE")) {
+            sendJson(ex, 200, testResult(false, 0, 0, "API key missing", null));
+            return;
+        }
+        if (apiUrl.isBlank() || model.isBlank()) {
+            sendJson(ex, 200, testResult(false, 0, 0, "API URL or model missing", null));
+            return;
+        }
+
+        // 独立短超时客户端，不碰 TranslationRequester 的私有 CLIENT，纯 web 线程同步
+        OkHttpClient testClient = new OkHttpClient.Builder()
+                .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                .build();
+
+        AiProvider aiProvider = AiProviders.get(provider);
+        top.iencand.translex.client.translate.provider.AiRequest aiReq =
+                new top.iencand.translex.client.translate.provider.AiRequest(
+                        apiKey, apiUrl, model,
+                        "You are a connection test. Reply with exactly: ok",
+                        null, "hi", Math.max(1, maxTokens), anthropicVersion);
+
+        RequestBody body = RequestBody.create(aiProvider.buildRequestBody(aiReq),
+                MediaType.get("application/json; charset=utf-8"));
+        Request request = aiProvider.buildRequest(aiReq, body);
+
+        long start = System.currentTimeMillis();
+        try (Response response = testClient.newCall(request).execute()) {
+            String respBody = response.body() != null ? response.body().string() : "";
+            long latency = System.currentTimeMillis() - start;
+            String sample = respBody.length() > 500 ? respBody.substring(0, 500) + "…" : respBody;
+            if (response.isSuccessful() && !respBody.isEmpty()) {
+                top.iencand.translex.client.translate.provider.AiResponse parsed = aiProvider.parseResponse(respBody);
+                if (parsed.success()) {
+                    sendJson(ex, 200, testResult(true, response.code(), latency,
+                            "OK — " + (parsed.content().length() > 60 ? parsed.content().substring(0, 60) : parsed.content()),
+                            sample));
+                } else {
+                    sendJson(ex, 200, testResult(false, response.code(), latency,
+                            "HTTP " + response.code() + " but empty/unparseable content", sample));
+                }
+            } else {
+                sendJson(ex, 200, testResult(false, response.code(), latency,
+                        "HTTP " + response.code(), sample));
+            }
+        } catch (Exception e) {
+            long latency = System.currentTimeMillis() - start;
+            String detail = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            sendJson(ex, 200, testResult(false, 0, latency, "Network error: " + detail, null));
+        }
+    }
+
+    private static JsonObject testResult(boolean success, int httpCode, long latencyMs, String message, String sample) {
+        JsonObject o = new JsonObject();
+        o.addProperty("success", success);
+        o.addProperty("httpCode", httpCode);
+        o.addProperty("latencyMs", latencyMs);
+        o.addProperty("message", message);
+        if (sample != null) o.addProperty("sampleResponse", sample);
+        return o;
     }
 
     /** GET /api/traces */
@@ -459,7 +575,8 @@ public class WebServer {
 
         ex.getResponseHeaders().set("Content-Type", contentType);
         if (!isDev) {
-            ex.getResponseHeaders().set("Cache-Control", "public, max-age=3600");
+            // 调试期禁用缓存，确认前端加载正常后可改回 max-age=60
+            ex.getResponseHeaders().set("Cache-Control", "no-cache, no-store, must-revalidate");
         }
         ex.sendResponseHeaders(200, content.length);
         try (OutputStream os = ex.getResponseBody()) {

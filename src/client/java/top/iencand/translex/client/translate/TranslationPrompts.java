@@ -46,6 +46,25 @@ public final class TranslationPrompts {
     /** 默认目标语言，targetLanguage 为空时回落。 */
     public static final String DEFAULT_TARGET_LANGUAGE = "Simplified Chinese (简体中文)";
 
+    /** 预设目标语言列表（Web UI 下拉用）。targetLanguage 命中其中之一即为 preset 模式，否则 custom。 */
+    public static final java.util.List<String> PRESET_LANGUAGES = java.util.List.of(
+            "Simplified Chinese (简体中文)",
+            "English",
+            "日本語 (Japanese)",
+            "繁體中文 (Traditional Chinese)",
+            "한국어 (Korean)",
+            "Français",
+            "Deutsch",
+            "Español",
+            "Русский (Russian)",
+            "Português");
+
+    /** 判定 targetLanguage 是否属于预设列表（Web UI 据此决定显示 preset 下拉还是 custom 输入框）。 */
+    public static String deriveTargetLanguageMode(String targetLanguage) {
+        if (targetLanguage == null || targetLanguage.isBlank()) return "preset";
+        return PRESET_LANGUAGES.contains(targetLanguage.trim()) ? "preset" : "custom";
+    }
+
     /**
      * 反向翻译（{@code /translex say}）的强制 system prompt：把任意输入译成英文并自动发送。
      * 要求只输出译文本身、不加引号/解释/markdown，便于直接作为聊天内容发送。

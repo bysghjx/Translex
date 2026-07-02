@@ -1,360 +1,55 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Translex Dashboard</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 样式 -->
+    <link rel="stylesheet" href="app.css?v=7">
+    <!-- Tailwind 运行时（本地，扫描 DOM 生成工具类） -->
+    <script src="lib/tailwind.js?v=7"></script>
     <script>
-    /* === Tailwind 自定义主题：赛博朋克暗色系 === */
-    tailwind.config = {
-        theme: {
-            extend: {
-                colors: {
-                    'cyber-dark':  '#0a0a0f',
-                    'cyber-card':  '#111118',
-                    'cyber-hover': '#16161f',
-                    'cyber-border':'#1e1e2e',
-                    'cyber-green': '#00ff41',
-                    'cyber-blue':  '#00d4ff',
-                    'cyber-amber': '#fbbf24',
-                    'cyber-red':   '#ff4444',
-                },
-                fontFamily: {
-                    mono: ['"JetBrains Mono"', '"Fira Code"', '"Cascadia Code"', 'Consolas', 'monospace'],
-                },
-            },
-        },
-    }
+    try { if (window.tailwind) tailwind.config = { theme: { extend: { fontFamily: { mono: ['"JetBrains Mono"','"Fira Code"','Consolas','monospace'] } } } }; } catch(e) {}
     </script>
-    <style>
-    /* ============================================================
-       主题变量 — 支持深色 / 浅色 / 跟随系统
-       ============================================================ */
-    :root, [data-theme="dark"] {
-        --bg-primary:       #0a0a0f;
-        --bg-card:          #111118;
-        --bg-hover:         #16161f;
-        --bg-input:         #0a0a0f;
-        --border-color:     #1e1e2e;
-        --border-hover:     #2a2a40;
-        --text-primary:     #c9cdd4;
-        --text-secondary:   #99a2b0;
-        --text-muted:       #6b7280;
-        --header-bg:        rgba(10,10,15,0.85);
-    }
-    [data-theme="light"] {
-        --bg-primary:       #f1f5f9;
-        --bg-card:          #ffffff;
-        --bg-hover:         #f8fafc;
-        --bg-input:         #ffffff;
-        --border-color:     #e2e8f0;
-        --border-hover:     #cbd5e1;
-        --text-primary:     #1e293b;
-        --text-secondary:   #64748b;
-        --text-muted:       #94a3b8;
-        --header-bg:        rgba(255,255,255,0.88);
-    }
-
-    /* 便利类：模板中替代硬编码 Tailwind 颜色 */
-    .bg-themed      { background: var(--bg-primary); }
-    .bg-card-themed { background: var(--bg-card); }
-
-    /* ============================================================
-       全局 & 赛博朋克风格预设
-       ============================================================ */
-    * { box-sizing: border-box; }
-    body {
-        margin: 0;
-        background: var(--bg-primary);
-        color: var(--text-primary);
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        overflow-x: hidden;
-    }
-    /* 隐藏 Vue 未编译的模板标记 */
-    [v-cloak] { display: none !important; }
-
-    /* 卡片玻璃拟态 + 边框发光 */
-    .card-panel {
-        background: var(--bg-card);
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-        transition: border-color .25s;
-    }
-    .card-panel:hover { border-color: var(--border-hover); }
-
-    /* 按钮基础 */
-    .btn {
-        display: inline-flex; align-items: center; gap: 6px;
-        padding: 8px 18px; border-radius: 8px; font-size: 14px; font-weight: 500;
-        border: 1px solid transparent; cursor: pointer; transition: all .2s;
-    }
-    .btn:disabled { opacity: .45; cursor: not-allowed; }
-    .btn-primary {
-        background: #00d4ff; color: #0a0a0f; border-color: #00d4ff;
-    }
-    .btn-primary:hover:not(:disabled) {
-        background: #00b8e0; border-color: #00b8e0; box-shadow: 0 0 18px rgba(0,212,255,.35);
-    }
-    .btn-ghost {
-        background: transparent; color: var(--text-secondary); border-color: var(--border-color);
-    }
-    .btn-ghost:hover:not(:disabled) {
-        background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-hover);
-    }
-
-    /* 开关 (Toggle Switch) */
-    .toggle-switch {
-        appearance: none; -webkit-appearance: none;
-        width: 44px; height: 24px; min-width: 44px;
-        background: var(--border-color); border-radius: 12px; border: 1px solid var(--border-hover);
-        position: relative; cursor: pointer; transition: background .25s, border-color .25s;
-        margin: 0;
-    }
-    .toggle-switch:checked { background: #00d4ff; border-color: #00d4ff; }
-    .toggle-switch::after {
-        content: ''; position: absolute;
-        top: 2px; left: 2px; width: 18px; height: 18px;
-        background: var(--text-primary); border-radius: 50%;
-        transition: transform .25s, background .25s;
-    }
-    .toggle-switch:checked::after {
-        transform: translateX(20px); background: #0a0a0f;
-    }
-    .toggle-switch:focus-visible { outline: 2px solid #00d4ff; outline-offset: 2px; }
-
-    /* 下拉选择框适配主题 */
-    select.input-field {
-        cursor: pointer;
-        appearance: none; -webkit-appearance: none;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-        background-repeat: no-repeat; background-position: right 12px center;
-        padding-right: 36px;
-    }
-    select.input-field option { background: var(--bg-card); color: var(--text-primary); }
-
-    /* 配置区块标题 */
-    .section-title {
-        font-size: 12px; font-weight: 600; color: #00d4ff; letter-spacing: .5px;
-        text-transform: uppercase; margin-bottom: 12px; padding-bottom: 8px;
-        border-bottom: 1px solid var(--border-color);
-    }
-
-    /* 主题切换按钮 */
-    .theme-btn {
-        background: none; border: 1px solid var(--border-color); border-radius: 8px;
-        cursor: pointer; font-size: 16px; padding: 4px 10px; transition: background .2s;
-        line-height: 1;
-    }
-    .theme-btn:hover { background: var(--bg-hover); }
-
-    /* 输入框 & 文本域 */
-    .input-field {
-        width: 100%; padding: 10px 14px;
-        background: var(--bg-input); color: var(--text-primary);
-        border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px;
-        outline: none; transition: border-color .2s;
-    }
-    .input-field:focus { border-color: #00d4ff; box-shadow: 0 0 0 3px rgba(0,212,255,.08); }
-    .input-label {
-        display: block; margin-bottom: 6px; font-size: 13px;
-        color: var(--text-secondary); font-weight: 500; letter-spacing: .3px;
-    }
-
-    /* 状态指示灯 */
-    .status-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
-    .status-dot.online  { background: #00ff41; box-shadow: 0 0 8px rgba(0,255,65,.5); }
-    .status-dot.offline { background: #ff4444; box-shadow: 0 0 8px rgba(255,68,68,.5); }
-
-    /* Toast 弹出通知 */
-    .toast-wrap {
-        position: fixed; top: 24px; right: 24px; z-index: 9999;
-        display: flex; flex-direction: column; gap: 10px; pointer-events: none;
-    }
-    .toast-item {
-        pointer-events: auto;
-        padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 500;
-        color: #fff; backdrop-filter: blur(12px);
-        animation: toastIn .3s ease-out;
-        box-shadow: 0 8px 32px rgba(0,0,0,.5);
-    }
-    .toast-success { background: rgba(0,255,65,.18); border: 1px solid rgba(0,255,65,.3); }
-    .toast-error   { background: rgba(255,68,68,.18); border: 1px solid rgba(255,68,68,.3); }
-    .toast-info    { background: rgba(0,212,255,.15); border: 1px solid rgba(0,212,255,.3); }
-    @keyframes toastIn { from { opacity:0; transform: translateX(40px); } to { opacity:1; transform: translateX(0); } }
-
-    /* 终端控制台样式（保持深色不变） */
-    .terminal {
-        background: #050508; color: #00ff41;
-        font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
-        font-size: 13px; line-height: 1.7;
-        overflow-y: auto; white-space: pre-wrap; word-break: break-all;
-    }
-    .terminal .log-warn  { color: #fbbf24; }
-    .terminal .log-error { color: #ff4444; }
-    .terminal .log-debug { color: #6b7280; }
-    .terminal .log-info  { color: #00ff41; }
-    .terminal::-webkit-scrollbar { width: 6px; }
-    .terminal::-webkit-scrollbar-track { background: #050508; }
-    .terminal::-webkit-scrollbar-thumb { background: #1e1e2e; border-radius: 3px; }
-    .terminal::-webkit-scrollbar-thumb:hover { background: #2a2a40; }
-
-    /* 全局自定义滚动条 */
-    ::-webkit-scrollbar { width: 5px; height: 5px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
-
-    /* 手风琴展开动画 */
-    .accordion-body { overflow: hidden; transition: max-height .3s ease; }
-
-    /* 抓包页请求/响应体：长内容自动换行 + 纵向滚动，避免被截断看不全 */
-    .trace-pre {
-        max-height: 320px; overflow: auto;
-        white-space: pre-wrap; word-break: break-all;
-    }
-
-    /* 标签页高亮下划线 */
-    .tab-btn {
-        position: relative; padding: 10px 20px; font-size: 14px;
-        color: var(--text-muted); background: none; border: none; cursor: pointer;
-        font-weight: 500; transition: color .2s;
-    }
-    .tab-btn:hover { color: var(--text-primary); }
-    .tab-btn.active { color: #00d4ff; }
-    .tab-btn.active::after {
-        content: ''; position: absolute; bottom: -1px; left: 20px; right: 20px;
-        height: 2px; background: #00d4ff; border-radius: 1px;
-        box-shadow: 0 0 10px rgba(0,212,255,.5);
-    }
-
-    /* 统计卡片数字跳动感 */
-    .stat-value { font-variant-numeric: tabular-nums; }
-
-    /* 脉冲动画(连接状态) */
-    @keyframes pulse-dot {
-        0%,100% { opacity:1; } 50% { opacity:.35; }
-    }
-    .pulse { animation: pulse-dot 1.8s ease-in-out infinite; }
-
-    /* 响应式：移动端单列布局 */
-    @media (max-width: 768px) {
-        .grid-2col { grid-template-columns: 1fr !important; }
-    }
-
-    /* 首次欢迎横幅 */
-    .welcome-banner {
-        background: linear-gradient(135deg, rgba(0,212,255,.12) 0%, rgba(0,255,65,.08) 100%);
-        border: 1px solid rgba(0,212,255,.25);
-        border-radius: 12px;
-        padding: 20px 24px;
-        display: flex;
-        align-items: flex-start;
-        gap: 16px;
-        animation: welcomeIn .5s ease-out;
-    }
-    @keyframes welcomeIn { from { opacity:0; transform: translateY(-16px); } to { opacity:1; transform: translateY(0); } }
-    .welcome-banner .welcome-icon { font-size: 32px; flex-shrink: 0; line-height: 1; }
-    .welcome-banner .welcome-body { flex: 1; min-width: 0; }
-    .welcome-banner .welcome-title {
-        font-size: 16px; font-weight: 600; color: #00d4ff; margin-bottom: 6px;
-    }
-    .welcome-banner .welcome-text {
-        font-size: 13px; color: var(--text-secondary); line-height: 1.6;
-    }
-    .welcome-banner .welcome-text code {
-        background: rgba(0,212,255,.12); color: #00d4ff;
-        padding: 1px 6px; border-radius: 4px; font-size: 12px;
-    }
-    .welcome-banner .welcome-close {
-        flex-shrink: 0;
-        background: none; border: 1px solid var(--border-color); border-radius: 8px;
-        color: var(--text-muted); cursor: pointer; font-size: 18px; padding: 4px 10px;
-        transition: all .2s; line-height: 1;
-    }
-    .welcome-banner .welcome-close:hover {
-        background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-hover);
-    }
-
-    /* Spam Hider 专用 */
-    .btn-danger {
-        background: transparent; color: #ff4444; border-color: #ff4444;
-    }
-    .btn-danger:hover:not(:disabled) {
-        background: rgba(255,68,68,.12); box-shadow: 0 0 12px rgba(255,68,68,.25);
-    }
-    .select-field {
-        cursor: pointer; appearance: none; -webkit-appearance: none;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-        background-repeat: no-repeat; background-position: right 10px center; padding-right: 32px;
-    }
-    .filter-row {
-        display: grid; grid-template-columns: 1.2fr 1.5fr auto auto auto auto; gap: 8px;
-        align-items: center; padding: 10px 14px;
-        border: 1px solid var(--border-color); border-radius: 10px;
-        background: var(--bg-card); transition: border-color .2s;
-    }
-    .filter-row:hover { border-color: var(--border-hover); }
-    @media (max-width: 900px) {
-        .filter-row { grid-template-columns: 1fr 1fr; gap: 6px; }
-        .filter-row .span-full { grid-column: 1 / -1; }
-    }
-    .help-badge {
-        display: inline-block; width: 16px; height: 16px; border-radius: 50%;
-        background: var(--border-color); color: var(--text-muted);
-        font-size: 10px; text-align: center; line-height: 16px; cursor: help; margin-left: 4px;
-    }
-</style>
+    <!-- Vue 3 + ApexCharts（本地） -->
+    <script src="lib/vue.global.prod.js?v=7"></script>
+    <script src="lib/apexcharts.min.js?v=7"></script>
+    <!-- 组件 + 应用逻辑（DOMContentLoaded 后挂载，确保 #app 已存在） -->
+    <script src="components.js?v=7"></script>
+    <script src="app.js?v=7"></script>
 </head>
 <body>
 
-<!-- ============================================================
-     Vue 3 挂载点
-     ============================================================ -->
 <div id="app" v-cloak>
 
-    <!-- ========== 顶部导航栏 ========== -->
-    <header class="sticky top-0 z-50 backdrop-blur-md border-b border-cyber-border" style="background:var(--header-bg);">
+    <!-- ========== 顶部导航 ========== -->
+    <header class="sticky top-0 z-50 backdrop-blur-md border-b" style="background:var(--header-bg);border-color:var(--border-color)">
         <div class="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <span class="text-cyber-blue font-bold text-lg tracking-wide">◈ TRANSLEX</span>
-                <span class="text-xs text-gray-500 hidden sm:inline">| &nbsp;{{ lang.subtitle }}</span>
+                <span class="font-bold text-lg tracking-wide" style="color:var(--accent)">◈ TRANSLEX</span>
+                <span class="text-xs hidden sm:inline" style="color:var(--text-muted)">| {{ lang.subtitle }}</span>
+                <span v-if="hasUnsavedChanges" class="unsaved-badge">● {{ lang.unsavedChanges }}</span>
             </div>
             <div class="flex items-center gap-3">
-                <!-- 连接状态 -->
-                <span class="flex items-center gap-1.5 text-xs text-gray-400">
+                <span class="flex items-center gap-1.5 text-xs" style="color:var(--text-secondary)">
                     <span :class="['status-dot', connected ? 'online pulse' : 'offline']"></span>
                     {{ connected ? lang.connected : lang.disconnected }}
                 </span>
-                <!-- 主题切换 -->
                 <button @click="cycleTheme" class="theme-btn" :title="lang.themeHint">{{ themeIcon }}</button>
-                <!-- 语言切换 -->
-                <button @click="switchLanguage"
-                        class="btn btn-ghost text-xs !py-1.5 !px-3"
-                        :title="lang.switchLangHint">
-                    🌐 {{ currentLang.toUpperCase() }}
-                </button>
+                <button @click="switchLanguage" class="btn btn-ghost text-xs !py-1.5 !px-3" :title="lang.switchLangHint">🌐 {{ currentLang.toUpperCase() }}</button>
             </div>
         </div>
     </header>
 
-    <!-- ========== 标签页导航 ========== -->
-    <nav class="bg-card-themed border-b border-cyber-border">
+    <!-- ========== Tab 导航 ========== -->
+    <nav class="bg-card-themed border-b" style="border-color:var(--border-color)">
         <div class="max-w-7xl mx-auto px-4 flex gap-0 overflow-x-auto">
-            <button v-for="tab in tabs" :key="tab.id"
-                    @click="activeTab = tab.id"
-                    :class="['tab-btn whitespace-nowrap', { active: activeTab === tab.id }]">
-                {{ tab.label }}
-            </button>
-            <button @click="activeTab = 'spam'"
-                    :class="['tab-btn whitespace-nowrap', { active: activeTab === 'spam' }]">
-                🛡 Spam Hider
-            </button>
+            <button v-for="tab in tabs" :key="tab.id" @click="activeTab = tab.id"
+                    :class="['tab-btn whitespace-nowrap', { active: activeTab === tab.id }]">{{ tab.label }}</button>
         </div>
     </nav>
 
-    <!-- ========== 首次欢迎横幅 ========== -->
+    <!-- ========== 欢迎横幅 ========== -->
     <div v-if="showWelcome" class="max-w-7xl mx-auto px-4 pt-4">
         <div class="welcome-banner">
             <span class="welcome-icon">👋</span>
@@ -362,1789 +57,250 @@
                 <div class="welcome-title">{{ lang.welcomeTitle }}</div>
                 <div class="welcome-text" v-html="lang.welcomeText"></div>
             </div>
-            <button @click="dismissWelcome" class="welcome-close" :title="lang.welcomeDismiss">✕</button>
+            <button @click="showWelcome = false" class="welcome-close" :title="lang.welcomeDismiss">✕</button>
         </div>
     </div>
 
-    <!-- ========== 主内容区 ========== -->
-    <main class="max-w-7xl mx-auto px-4 pb-72 pt-6 space-y-6">
+    <!-- ========== 主内容 ========== -->
+    <main class="max-w-7xl mx-auto px-4 pb-12 pt-6 space-y-6">
 
-        <!-- ===== Tab 1: 运行看板 (Dashboard) ===== -->
+        <!-- ===== Dashboard ===== -->
         <section v-show="activeTab === 'dashboard'" class="space-y-6">
-            <!-- 统计卡片行 -->
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                <div class="card-panel p-5">
-                    <div class="text-xs text-gray-500 mb-1">{{ lang.cacheHits }}</div>
-                    <div class="stat-value text-3xl font-bold text-cyber-green">{{ metrics.localHits }}</div>
-                </div>
-                <div class="card-panel p-5">
-                    <div class="text-xs text-gray-500 mb-1">{{ lang.aiRequests }}</div>
-                    <div class="stat-value text-3xl font-bold text-cyber-blue">{{ metrics.aiRequests }}</div>
-                </div>
-                <div class="card-panel p-5">
-                    <div class="text-xs text-gray-500 mb-1">{{ lang.tokenSaveRate }}</div>
-                    <div class="stat-value text-3xl font-bold text-cyber-amber">{{ tokenSaveRate }}%</div>
-                </div>
-                <div class="card-panel p-5">
-                    <div class="text-xs text-gray-500 mb-1">{{ lang.avgLatency }}</div>
-                    <div class="stat-value text-3xl font-bold text-gray-200">{{ avgLatency }}<span class="text-sm text-gray-500">ms</span></div>
-                </div>
-                <div class="card-panel p-5">
-                    <div class="text-xs text-gray-500 mb-1">{{ lang.tokensConsumed }}</div>
-                    <div class="text-xs text-gray-400 mt-0.5">{{ lang.est }} <span class="text-cyber-green font-semibold">{{ formatTokens(metrics.totalEstimatedTokens) }}</span></div>
-                    <div class="text-xs text-gray-400 mt-0.5">{{ lang.api }} <span class="text-cyber-blue font-semibold">{{ metrics.hasActualTokenData ? formatTokens(metrics.totalActualTokens) : '—' }}</span></div>
-                </div>
-                <div class="card-panel p-5">
-                    <div class="text-xs text-gray-500 mb-1">{{ lang.tokensSaved }}</div>
-                    <div class="stat-value text-3xl font-bold text-cyber-amber">{{ formatTokens(metrics.totalSavedTokens) }}</div>
-                </div>
+                <stat-card :label="lang.cacheHits" :value="metrics.localHits" accent="success"></stat-card>
+                <stat-card :label="lang.aiRequests" :value="metrics.aiRequests" accent="accent"></stat-card>
+                <stat-card :label="lang.tokenSaveRate" :value="tokenSaveRate + '%'" accent="warning"></stat-card>
+                <stat-card :label="lang.avgLatency" :value="avgLatency + 'ms'"></stat-card>
+                <stat-card :label="lang.tokensConsumed"
+                           :sub="lang.est + ' <b style=color:var(--success)>' + formatTokens(metrics.totalEstimatedTokens) + '</b><br>' + lang.api + ' <b style=color:var(--accent)>' + (metrics.hasActualTokenData ? formatTokens(metrics.totalActualTokens) : '—') + '</b>'"></stat-card>
+                <stat-card :label="lang.tokensSaved" :value="formatTokens(metrics.totalSavedTokens)" accent="warning"></stat-card>
             </div>
-
-            <!-- 图表行：环形图 + 折线图 -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="card-panel p-5">
-                    <h3 class="text-sm font-semibold text-gray-300 mb-3">{{ lang.hitRatio }}</h3>
+                    <h3 class="text-sm font-semibold mb-3" style="color:var(--text-secondary)">{{ lang.hitRatio }}</h3>
                     <div ref="donutChartEl" style="height:300px;"></div>
                 </div>
                 <div class="card-panel p-5">
-                    <h3 class="text-sm font-semibold text-gray-300 mb-3">{{ lang.latencyTrend }}</h3>
+                    <h3 class="text-sm font-semibold mb-3" style="color:var(--text-secondary)">{{ lang.latencyTrend }}</h3>
                     <div ref="lineChartEl" style="height:300px;"></div>
                 </div>
             </div>
-
-            <!-- 刷新按钮 -->
+            <div class="card-panel p-5">
+                <h3 class="text-sm font-semibold mb-3" style="color:var(--text-secondary)">{{ lang.tokenCostTrend }}</h3>
+                <div ref="costChartEl" style="height:200px;"></div>
+            </div>
             <div class="flex justify-end">
-                <button @click="fetchMetrics" class="btn btn-ghost text-xs" :disabled="metricsLoading">
-                    {{ metricsLoading ? lang.loading : lang.refresh }}
-                </button>
+                <button @click="fetchMetrics" class="btn btn-ghost text-xs" :disabled="metricsLoading">{{ metricsLoading ? lang.loading : lang.refresh }}</button>
             </div>
         </section>
 
-        <!-- ===== Tab 2: 配置管理 (Config) ===== -->
+        <!-- ===== Config ===== -->
         <section v-show="activeTab === 'config'" class="space-y-6">
-
-            <!-- ===== 配置子标签页 ===== -->
-            <div class="flex gap-1 border-b border-cyber-border overflow-x-auto">
-                <button v-for="sub in configSubTabs" :key="sub.id"
-                        @click="configSubTab = sub.id"
-                        :class="['tab-btn whitespace-nowrap', { active: configSubTab === sub.id }]">
-                    {{ sub.label }}
-                </button>
+            <div class="flex gap-1 border-b overflow-x-auto" style="border-color:var(--border-color)">
+                <button v-for="sub in configSubTabs" :key="sub.id" @click="configSubTab = sub.id"
+                        :class="['tab-btn whitespace-nowrap', { active: configSubTab === sub.id }]">{{ sub.label }}</button>
             </div>
 
-            <!-- ─── API 连接 ─── -->
-            <div v-show="configSubTab === 'api'" class="card-panel p-5 space-y-4">
+            <!-- API 连接 -->
+            <div v-show="configSubTab === 'api'" class="space-y-6">
+            <div class="card-panel p-6 space-y-4">
                 <div class="section-title">{{ lang.sectionApi }}</div>
-                <!-- API Key -->
                 <div>
                     <label class="input-label">{{ lang.apiKey }}</label>
-                    <div class="relative">
-                        <input :type="apiKeyInputType"
-                               v-model="config.apiKey"
-                               class="input-field font-mono"
-                               :class="{ 'pr-12': !isApiKeyPlaceholder }"
-                               :placeholder="lang.apiKeyPlaceholder">
-                        <button v-if="!isApiKeyPlaceholder" @click="showApiKey = !showApiKey"
-                                class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-300 px-2 py-1"
-                                :title="showApiKey ? lang.hideKey : lang.showKey">
-                            {{ showApiKey ? '🙈' : '👁' }}
-                        </button>
-                        <span v-else class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-amber-400">
-                            {{ lang.apiKeyHint }}
-                        </span>
-                    </div>
+                    <api-key-input v-model="config.apiKey" :placeholder="lang.apiKeyPlaceholder" :hint="lang.apiKeyHint"></api-key-input>
                 </div>
-                <!-- API URL -->
                 <div>
                     <label class="input-label">{{ lang.apiUrl }}</label>
-                    <input type="url" v-model="config.apiUrl" class="input-field font-mono"
-                           :placeholder="lang.apiUrlPlaceholder">
+                    <input type="url" v-model="config.apiUrl" class="input-field font-mono" :placeholder="lang.apiUrlPlaceholder">
                 </div>
-                <!-- Model -->
                 <div>
                     <label class="input-label">{{ lang.model }}</label>
-                    <input type="text" v-model="config.model" class="input-field"
-                           :placeholder="lang.modelPlaceholder">
+                    <input type="text" v-model="config.model" class="input-field" :placeholder="lang.modelPlaceholder">
                 </div>
-                <!-- Provider -->
-                <div>
-                    <label class="input-label">{{ lang.provider }}</label>
-                    <select v-model="config.provider" class="input-field">
-                        <option v-for="p in availableProviders" :key="p.id" :value="p.id">{{ p.name }}</option>
-                    </select>
-                    <div class="text-xs text-gray-500 mt-1">{{ lang.providerDesc }}</div>
-                </div>
-                <!-- Anthropic-only params -->
-                <div v-show="config.provider === 'anthropic'" class="space-y-3 pl-3 border-l-2 border-cyber-blue/40">
+                <select-field :label="lang.provider" :desc="lang.providerDesc" v-model="config.provider" :options="providerOptions"></select-field>
+
+                <!-- Anthropic-only -->
+                <div v-show="config.provider === 'anthropic'" class="space-y-3 pl-3" style="border-left:2px solid var(--accent)">
                     <div>
                         <label class="input-label">{{ lang.maxTokens }}</label>
-                        <input type="number" v-model.number="config.maxTokens" class="input-field w-32"
-                               min="1" max="200000" step="256">
-                        <div class="text-xs text-gray-500 mt-1">{{ lang.maxTokensDesc }}</div>
+                        <input type="number" v-model.number="config.maxTokens" class="input-field w-32" min="1" max="200000" step="256">
+                        <div class="text-xs mt-1" style="color:var(--text-muted)">{{ lang.maxTokensDesc }}</div>
                     </div>
                     <div>
                         <label class="input-label">{{ lang.anthropicVersion }}</label>
-                        <input type="text" v-model="config.anthropicVersion" class="input-field w-48"
-                               placeholder="2023-06-01">
-                        <div class="text-xs text-gray-500 mt-1">{{ lang.anthropicVersionDesc }}</div>
+                        <input type="text" v-model="config.anthropicVersion" class="input-field w-48" placeholder="2023-06-01">
+                        <div class="text-xs mt-1" style="color:var(--text-muted)">{{ lang.anthropicVersionDesc }}</div>
                     </div>
                 </div>
-                <!-- Connection presets -->
-                <div class="pt-2 border-t border-gray-700/50">
-                    <label class="input-label">{{ lang.presets }}</label>
-                    <div class="flex items-center gap-2">
-                        <select v-model="selectedPreset" class="input-field flex-1">
-                            <option value="">{{ lang.presetCustom }}</option>
-                            <option v-for="p in config.presets" :key="p.name" :value="p.name">{{ p.name }} ({{ p.provider }})</option>
-                        </select>
-                        <button @click="applyPreset" class="btn btn-ghost text-sm !py-2 !px-3" :disabled="!selectedPreset">{{ lang.presetApply }}</button>
-                        <button @click="deletePreset" class="btn btn-danger text-sm !py-2 !px-3" :disabled="!selectedPreset">{{ lang.presetDelete }}</button>
+
+                <!-- 测试连接（新） -->
+                <div class="pt-2 border-t" style="border-color:var(--border-color)">
+                    <div class="flex items-center gap-3">
+                        <button @click="testConnection" class="btn btn-ghost text-sm" :disabled="testing">
+                            <span v-if="testing" class="inline-block w-3 h-3 border-2 rounded-full animate-spin" style="border-color:var(--text-muted);border-top-color:transparent"></span>
+                            {{ testing ? lang.testing : lang.testConnection }}
+                        </button>
+                        <span class="text-xs" style="color:var(--text-muted)">{{ lang.testHint }}</span>
                     </div>
-                    <div class="flex items-center gap-2 mt-2">
-                        <input type="text" v-model="newPresetName" class="input-field flex-1" :placeholder="lang.presetNamePlaceholder">
-                        <button @click="savePreset" class="btn btn-ghost text-sm !py-2 !px-3" :disabled="!newPresetName.trim()">{{ lang.presetSaveCurrent }}</button>
+                    <div v-if="testResult" class="mt-3 p-3 rounded-lg text-sm" style="background:var(--bg-input)">
+                        <div :class="testResult.success ? 'test-result-ok' : 'test-result-fail'" class="font-semibold">
+                            {{ testResult.success ? lang.testResultOk : lang.testResultFail }}
+                            <span v-if="testResult.httpCode" class="ml-2" style="color:var(--text-muted)">HTTP {{ testResult.httpCode }}</span>
+                            <span v-if="testResult.latencyMs" class="ml-2" style="color:var(--text-muted)">{{ lang.testLatency }} {{ testResult.latencyMs }}ms</span>
+                        </div>
+                        <div class="text-xs mt-1" style="color:var(--text-secondary)">{{ testResult.message }}</div>
+                        <pre v-if="testResult.sampleResponse" class="trace-pre text-xs mt-2 p-2 rounded font-mono" style="background:var(--bg-card);color:var(--text-muted)">{{ testResult.sampleResponse }}</pre>
                     </div>
-                    <div class="text-xs text-gray-500 mt-1">{{ lang.presetsDesc }}</div>
                 </div>
-                <!-- Target Language -->
+            </div>
+
+            <!-- 预设管理（独立卡片） -->
+            <div class="card-panel p-6 space-y-4">
+                <div class="section-title">{{ lang.presets }}</div>
+                <div class="flex items-center gap-2">
+                    <select v-model="selectedPreset" class="input-field flex-1">
+                        <option value="">{{ lang.presetCustom }}</option>
+                        <option v-for="p in config.presets" :key="p.name" :value="p.name">{{ p.name }} ({{ p.provider }})</option>
+                    </select>
+                    <button @click="applyPreset" class="btn btn-ghost text-sm !py-2 !px-3" :disabled="!selectedPreset">{{ lang.presetApply }}</button>
+                    <button @click="deletePreset" class="btn btn-danger text-sm !py-2 !px-3" :disabled="!selectedPreset">{{ lang.presetDelete }}</button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="text" v-model="newPresetName" class="input-field flex-1" :placeholder="lang.presetNamePlaceholder">
+                    <button @click="savePreset" class="btn btn-ghost text-sm !py-2 !px-3" :disabled="!newPresetName.trim()">{{ lang.presetSaveCurrent }}</button>
+                </div>
+                <div class="text-xs" style="color:var(--text-muted)">{{ lang.presetsDesc }}</div>
+            </div>
+            </div>
+
+            <!-- 翻译行为 -->
+            <div v-show="configSubTab === 'behavior'" class="space-y-6">
+            <div class="card-panel p-6 space-y-4">
+                <div class="section-title">{{ lang.sectionBehavior }}</div>
+                <select-field :label="lang.translationMode" :desc="lang.translationModeHint" v-model="config.translationMode" :options="translationModeOptions"></select-field>
+                <toggle-row :label="lang.debugMode" :desc="lang.debugModeDesc" v-model="config.debug"></toggle-row>
+                <select-field :label="lang.buttonStyle" v-model="config.buttonStyle" :options="buttonStyleOptions"></select-field>
+                <toggle-row :label="lang.enableTranslateButton" :desc="lang.enableTranslateButtonDesc" v-model="config.enableTranslateButton"></toggle-row>
+                <select-field :label="lang.outputMode" v-model="config.outputMode" :options="outputModeOptions"></select-field>
+            </div>
+
+            <!-- 语言与提示词 -->
+            <div class="card-panel p-6 space-y-4">
+                <div class="section-title">{{ lang.sectionLangPrompt }}</div>
                 <div>
                     <label class="input-label">{{ lang.targetLanguage }}</label>
                     <select v-if="config.targetLanguageMode === 'preset'" v-model="config.targetLanguage" class="input-field">
                         <option v-for="l in presetLanguages" :key="l" :value="l">{{ l }}</option>
                     </select>
-                    <input v-else type="text" v-model="config.targetLanguage" class="input-field"
-                           :placeholder="lang.targetLanguageCustomPlaceholder">
-                    <label style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:12px; cursor:pointer;">
-                        <input type="checkbox"
-                               :checked="config.targetLanguageMode === 'custom'"
+                    <input v-else type="text" v-model="config.targetLanguage" class="input-field" :placeholder="lang.targetLanguageCustomPlaceholder">
+                    <label class="flex items-center gap-1.5 mt-1.5 text-xs cursor-pointer" style="color:var(--text-secondary)">
+                        <input type="checkbox" :checked="config.targetLanguageMode === 'custom'"
                                @change="config.targetLanguageMode = $event.target.checked ? 'custom' : 'preset'">
                         {{ lang.targetLanguageModeToggle }}
                     </label>
                 </div>
-                <!-- Proper noun mode -->
-                <div>
-                    <label class="input-label">{{ lang.properNounMode }}</label>
-                    <select v-model="config.properNounMode" class="input-field">
-                        <option value="keep">{{ lang.properNounKeep }}</option>
-                        <option value="translate">{{ lang.properNounTranslate }}</option>
-                        <option value="item_only">{{ lang.properNounItemOnly }}</option>
-                    </select>
-                </div>
-                <!-- Optional user prompts -->
+                <select-field :label="lang.properNounMode" v-model="config.properNounMode" :options="properNounOptions"></select-field>
                 <div>
                     <label class="input-label">{{ lang.userChatPrompt }}</label>
-                    <textarea v-model="config.userChatPrompt" class="input-field" rows="2"
-                              :placeholder="lang.userChatPromptPlaceholder"
-                              style="resize:vertical; min-height:48px;"></textarea>
+                    <textarea v-model="config.userChatPrompt" class="input-field" rows="2" :placeholder="lang.userChatPromptPlaceholder" style="resize:vertical;min-height:48px"></textarea>
                 </div>
                 <div>
                     <label class="input-label">{{ lang.userItemPrompt }}</label>
-                    <textarea v-model="config.userItemPrompt" class="input-field" rows="2"
-                              :placeholder="lang.userItemPromptPlaceholder"
-                              style="resize:vertical; min-height:48px;"></textarea>
+                    <textarea v-model="config.userItemPrompt" class="input-field" rows="2" :placeholder="lang.userItemPromptPlaceholder" style="resize:vertical;min-height:48px"></textarea>
                 </div>
             </div>
-
-            <!-- ─── 翻译行为 ─── -->
-            <div v-show="configSubTab === 'behavior'" class="card-panel p-5 space-y-4">
-                <div class="section-title">{{ lang.sectionBehavior }}</div>
-                <!-- translationMode -->
-                <div>
-                    <label class="input-label">{{ lang.translationMode }}</label>
-                    <select v-model="config.translationMode" class="input-field">
-                        <option value="auto">auto — {{ lang.translationModeAutoDesc }}</option>
-                        <option value="message_id">message_id — {{ lang.translationModeIdDesc }}</option>
-                        <option value="text">text — {{ lang.translationModeTextDesc }}</option>
-                    </select>
-                    <div class="text-xs text-gray-500 mt-1">{{ lang.translationModeHint }}</div>
-                </div>
-                <!-- debug -->
-                <label class="flex items-center justify-between cursor-pointer">
-                    <div>
-                        <div class="text-sm text-gray-300">{{ lang.debugMode }}</div>
-                        <div class="text-xs text-gray-500 mt-0.5">{{ lang.debugModeDesc }}</div>
-                    </div>
-                    <input type="checkbox" v-model="config.debug" class="toggle-switch">
-                </label>
-                <!-- buttonStyle -->
-                <div>
-                    <label class="input-label">{{ lang.buttonStyle }}</label>
-                    <select v-model="config.buttonStyle" class="input-field">
-                        <option value="NORMAL">NORMAL</option>
-                        <option value="COMPACT">COMPACT ([T])</option>
-                    </select>
-                </div>
-                <!-- enableTranslateButton -->
-                <label class="flex items-center justify-between cursor-pointer">
-                    <div>
-                        <div class="text-sm text-gray-300">{{ lang.enableTranslateButton }}</div>
-                        <div class="text-xs text-gray-500 mt-0.5">{{ lang.enableTranslateButtonDesc }}</div>
-                    </div>
-                    <input type="checkbox" v-model="config.enableTranslateButton" class="toggle-switch">
-                </label>
-                <!-- outputMode -->
-                <div>
-                    <label class="input-label">{{ lang.outputMode }}</label>
-                    <select v-model="config.outputMode" class="input-field">
-                        <option value="chat">{{ lang.outputModeChat }}</option>
-                        <option value="temporary">{{ lang.outputModeTemporary }}</option>
-                        <option value="permanent">{{ lang.outputModePermanent }}</option>
-                    </select>
-                </div>
             </div>
 
-            <!-- ─── 缓存设置 ─── -->
-            <div v-show="configSubTab === 'cache'" class="card-panel p-5 space-y-4">
+            <!-- 缓存 -->
+            <div v-show="configSubTab === 'cache'" class="card-panel p-6 space-y-4">
                 <div class="section-title">{{ lang.sectionCache }}</div>
-                <label class="flex items-center justify-between cursor-pointer">
-                    <div>
-                        <div class="text-sm text-gray-300">{{ lang.enableCachePersistence }}</div>
-                        <div class="text-xs text-gray-500 mt-0.5">{{ lang.enableCachePersistenceDesc }}</div>
-                    </div>
-                    <input type="checkbox" v-model="config.enableCachePersistence" class="toggle-switch">
-                </label>
-                <label class="flex items-center justify-between cursor-pointer">
-                    <div>
-                        <div class="text-sm text-gray-300">{{ lang.enablePeriodicSave }}</div>
-                        <div class="text-xs text-gray-500 mt-0.5">{{ lang.enablePeriodicSaveDesc }}</div>
-                    </div>
-                    <input type="checkbox" v-model="config.enablePeriodicSave" class="toggle-switch">
-                </label>
-                <!-- periodicSaveInterval (仅当启用时显示) -->
+                <toggle-row :label="lang.enableCachePersistence" :desc="lang.enableCachePersistenceDesc" v-model="config.enableCachePersistence"></toggle-row>
+                <toggle-row :label="lang.enablePeriodicSave" :desc="lang.enablePeriodicSaveDesc" v-model="config.enablePeriodicSave"></toggle-row>
                 <div v-show="config.enablePeriodicSave">
                     <label class="input-label">{{ lang.periodicSaveInterval }}</label>
-                    <input type="number" v-model.number="config.periodicSaveInterval" class="input-field w-32"
-                           min="1200" max="240000" step="1200">
-                    <div class="text-xs text-gray-500 mt-1">{{ lang.periodicSaveIntervalDesc }}</div>
+                    <input type="number" v-model.number="config.periodicSaveInterval" class="input-field w-32" min="1200" max="240000" step="1200">
+                    <div class="text-xs mt-1" style="color:var(--text-muted)">{{ lang.periodicSaveIntervalDesc }}</div>
                 </div>
-
-                <!-- cacheMaxEntries -->
                 <div>
                     <label class="input-label">{{ lang.cacheMaxEntries }}</label>
-                    <input type="number" v-model.number="config.cacheMaxEntries" class="input-field w-32"
-                           min="100" max="1000000" step="1000">
-                    <div class="text-xs text-gray-500 mt-1">{{ lang.cacheMaxEntriesDesc }}</div>
+                    <input type="number" v-model.number="config.cacheMaxEntries" class="input-field w-32" min="100" max="1000000" step="1000">
+                    <div class="text-xs mt-1" style="color:var(--text-muted)">{{ lang.cacheMaxEntriesDesc }}</div>
                 </div>
             </div>
 
-            <!-- ─── 聊天折叠 ─── -->
-            <div v-show="configSubTab === 'compact'" class="card-panel p-5 space-y-4">
+            <!-- 聊天折叠 -->
+            <div v-show="configSubTab === 'compact'" class="card-panel p-6 space-y-4">
                 <div class="section-title">{{ lang.sectionCompact }}</div>
-                <label class="flex items-center justify-between cursor-pointer">
-                    <div>
-                        <div class="text-sm text-gray-300">{{ lang.enableChatCompact }}</div>
-                        <div class="text-xs text-gray-500 mt-0.5">{{ lang.enableChatCompactDesc }}</div>
-                    </div>
-                    <input type="checkbox" v-model="config.enableChatCompact" class="toggle-switch">
-                </label>
+                <toggle-row :label="lang.enableChatCompact" :desc="lang.enableChatCompactDesc" v-model="config.enableChatCompact"></toggle-row>
                 <div v-show="config.enableChatCompact" class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="input-label">{{ lang.compactTimeSeconds }}</label>
-                        <input type="number" v-model.number="config.compactTimeSeconds" class="input-field"
-                               min="10" max="600" step="10">
+                        <input type="number" v-model.number="config.compactTimeSeconds" class="input-field" min="10" max="600" step="10">
                     </div>
-                    <div>
-                        <label class="input-label">{{ lang.compactColorCode }}</label>
-                        <select v-model="config.compactColorCode" class="input-field">
-                            <option value="GRAY">GRAY</option>
-                            <option value="DARK_GRAY">DARK_GRAY</option>
-                            <option value="GREEN">GREEN</option>
-                            <option value="DARK_GREEN">DARK_GREEN</option>
-                            <option value="AQUA">AQUA</option>
-                            <option value="YELLOW">YELLOW</option>
-                            <option value="GOLD">GOLD</option>
-                            <option value="RED">RED</option>
-                        </select>
-                    </div>
+                    <select-field :label="lang.compactColorCode" v-model="config.compactColorCode" :options="compactColorOptions"></select-field>
                 </div>
             </div>
 
-            <!-- 保存 / 重载按钮 -->
+            <!-- 保存/重载 -->
             <div class="flex items-center gap-3">
-                <button @click="saveConfig" class="btn btn-primary" :disabled="configSaving">
-                    <span v-if="configSaving" class="inline-block w-4 h-4 border-2 border-cyber-dark border-t-transparent rounded-full animate-spin"></span>
-                    {{ configSaving ? lang.saving : lang.saveConfig }}
-                </button>
-                <button @click="fetchConfig" class="btn btn-ghost" :disabled="configLoading">
-                    {{ lang.reloadConfig }}
-                </button>
+                <save-button :loading="configSaving" :loading-text="lang.saving" :text="lang.saveConfig" @click="saveConfig"></save-button>
+                <button @click="fetchConfig" class="btn btn-ghost" :disabled="configLoading">{{ lang.reloadConfig }}</button>
             </div>
         </section>
 
-        <!-- ===== Tab 3: 网络抓包 (Network Trace) ===== -->
+        <!-- ===== Network ===== -->
         <section v-show="activeTab === 'network'" class="space-y-3">
-            <div v-if="traces.length === 0" class="card-panel p-8 text-center text-gray-500">
-                {{ lang.noTraces }}
-            </div>
-            <div v-for="(trace, idx) in traces" :key="idx" class="card-panel overflow-hidden">
-                <!-- 手风琴标题行 -->
-                <button @click="toggleTrace(idx)"
-                        class="w-full flex items-center gap-4 px-5 py-3.5 text-left hover:bg-cyber-hover transition-colors">
-                    <!-- 状态指示 -->
-                    <span :class="['w-2 h-2 rounded-full shrink-0',
-                        trace.success ? 'bg-cyber-green' : 'bg-cyber-red']"></span>
-                    <!-- 请求概要 -->
-                    <span class="text-xs text-gray-400 font-mono shrink-0 w-20">{{ trace.timestamp }}</span>
-                    <span class="text-xs font-semibold text-gray-300 shrink-0 w-14">{{ trace.method }}</span>
-                    <span class="text-sm text-gray-400 truncate flex-1">{{ trace.url }}</span>
-                    <span class="text-xs text-gray-500 shrink-0">{{ trace.durationMs }}ms</span>
-                    <span v-if="trace.estimatedTokens > 0" class="text-xs text-cyber-green shrink-0">~{{ formatTokens(trace.estimatedTokens) }} tok</span>
-                    <span v-if="trace.hasTokenData" class="text-xs text-cyber-blue shrink-0">{{ formatTokens(trace.promptTokens + trace.completionTokens) }} tok</span>
-                    <span class="text-gray-500 shrink-0 transition-transform"
-                          :style="{ transform: trace.expanded ? 'rotate(180deg)' : 'rotate(0deg)' }">▼</span>
-                </button>
-                <!-- 手风琴展开内容 -->
-                <div class="accordion-body" :style="{ maxHeight: trace.expanded ? '900px' : '0px' }">
-                    <div class="px-5 pb-4 space-y-3 border-t border-cyber-border pt-3">
-                        <!-- Request 概要信息 -->
-                        <div v-if="trace.estimatedTokens > 0" class="text-xs text-gray-400 flex items-center gap-3 flex-wrap">
-                            <span>{{ lang.estTokens }}: ~{{ formatTokens(trace.estimatedTokens) }}</span>
-                            <span v-if="trace.estimatedSystemPromptTokens > 0" class="text-gray-500">
-                                ({{ lang.systemPromptLabel }} ~{{ formatTokens(trace.estimatedSystemPromptTokens) }}
-                                + {{ lang.payloadLabel }} ~{{ formatTokens(trace.estimatedPayloadTokens) }})
-                            </span>
-                        </div>
-                        <!-- Request Payload -->
-                        <div>
-                            <div class="text-xs text-cyber-blue font-semibold mb-1.5">{{ lang.requestPayload }}</div>
-                            <pre class="trace-pre text-xs text-gray-300 rounded-lg p-3 font-mono" style="background:var(--bg-input);"
-                                 >{{ formatJson(trace.requestBody) }}</pre>
-                        </div>
-                        <!-- Response Body -->
-                        <div>
-                            <div class="text-xs text-cyber-green font-semibold mb-1.5">{{ lang.responseBody }}</div>
-                            <pre class="trace-pre text-xs text-gray-300 rounded-lg p-3 font-mono" style="background:var(--bg-input);"
-                                 >{{ formatJson(trace.responseBody) }}</pre>
-                        </div>
-                        <!-- Token 用量（有数据时显示） -->
-                        <div v-if="trace.hasTokenData" class="text-xs space-y-1.5 rounded-lg p-3 mt-2" style="background:var(--bg-input);">
-                            <div class="text-gray-400 font-semibold mb-2">{{ lang.tokenUsage }}</div>
-                            <!-- 效率警告横幅 -->
-                            <div v-if="trace.completionTokens > trace.promptTokens * 3 && trace.reasoningTokens <= 0"
-                                 class="text-cyber-amber text-xs mb-2">⚠ {{ lang.tokenWaste }}</div>
-                            <div v-if="trace.reasoningTokens > 0"
-                                 class="text-cyber-red text-xs mb-2">💭 {{ lang.reasoningWaste.replace('{n}', formatTokens(trace.reasoningTokens)) }}</div>
-                            <div class="grid grid-cols-2 gap-x-4 gap-y-1">
-                                <span class="text-gray-400">{{ lang.promptLabel }}</span>
-                                <span class="text-cyber-green text-right">{{ trace.promptTokens }}</span>
-                                <span class="text-gray-400">{{ lang.completionLabel }}</span>
-                                <span class="text-cyber-blue text-right">{{ trace.completionTokens }}</span>
-                                <span v-if="trace.reasoningTokens > 0" class="text-gray-400">{{ lang.reasoningLabel }}</span>
-                                <span v-if="trace.reasoningTokens > 0" class="text-cyber-red text-right">{{ trace.reasoningTokens }}</span>
-                                <span class="text-gray-400">{{ lang.cachedLabel }}</span>
-                                <span class="text-gray-400 text-right">{{ trace.cachedTokens > 0 ? trace.cachedTokens : '—' }}</span>
-                            </div>
-                            <div class="border-t border-cyber-border pt-1.5 flex justify-between">
-                                <span class="text-gray-400">{{ lang.totalLabel }}</span>
-                                <span class="text-cyber-amber font-semibold">{{ trace.totalTokens || (trace.promptTokens + trace.completionTokens) }} tok</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <trace-accordion :traces="traces" @toggle="toggleTrace"></trace-accordion>
         </section>
 
-        <!-- ===== Tab 4: Debug 控制台 ===== -->
-        <section v-show="activeTab === 'debug'" class="space-y-4" style="padding-bottom: 42px;">
-            <!-- 状态卡片 -->
+        <!-- ===== Debug ===== -->
+        <section v-show="activeTab === 'debug'" class="space-y-4">
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div class="card-panel p-3 text-center">
-                    <div class="text-xs text-gray-500">{{ lang.debugStatusSse }}</div>
-                    <div class="text-sm font-semibold" :class="connected ? 'text-cyber-green' : 'text-cyber-red'">
-                        {{ connected ? lang.connected : lang.disconnected }}
-                    </div>
-                </div>
-                <div class="card-panel p-3 text-center">
-                    <div class="text-xs text-gray-500">{{ lang.debugStatusCache }}</div>
-                    <div class="text-sm font-semibold" :class="config.debug ? 'text-cyber-amber' : 'text-cyber-green'">
-                        {{ config.debug ? lang.disabled : lang.enabled }}
-                    </div>
-                </div>
-                <div class="card-panel p-3 text-center">
-                    <div class="text-xs text-gray-500">{{ lang.debugStatusMode }}</div>
-                    <div class="text-sm font-semibold text-cyber-blue">{{ config.translationMode || 'auto' }}</div>
-                </div>
-                <div class="card-panel p-3 text-center">
-                    <div class="text-xs text-gray-500">{{ lang.debugStatusApi }}</div>
-                    <div class="text-sm font-semibold text-cyber-blue truncate" :title="config.apiUrl">{{ config.apiUrl || '—' }}</div>
+                <div v-for="(s,i) in debugStatusCards" :key="i" class="card-panel p-3 text-center">
+                    <div class="text-xs" style="color:var(--text-muted)">{{ s.label }}</div>
+                    <div class="text-sm font-semibold truncate" :title="s.title||''" :style="{ color: s.color ? 'var(--'+s.color+')' : 'var(--text-primary)' }">{{ s.value }}</div>
                 </div>
             </div>
-
-            <!-- 控制台全高度视图 -->
-            <div class="card-panel flex flex-col" style="min-height: 55vh;">
-                <div class="flex items-center justify-between px-4 py-3 border-b border-cyber-border">
-                    <div class="flex items-center gap-2 text-sm text-gray-400">
-                        <span class="text-cyber-green">〉_</span>
-                        <span>{{ lang.liveConsole }}</span>
-                        <span class="text-gray-600">({{ filteredConsoleLines.length }})</span>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <!-- 级别过滤 -->
-                        <select v-model="consoleLevelFilter" class="text-xs bg-cyber-dark border border-cyber-border rounded px-2 py-1 text-gray-300">
-                            <option value="all">ALL</option>
-                            <option value="DEBUG">DEBUG</option>
-                            <option value="INFO">INFO</option>
-                            <option value="WARN">WARN</option>
-                            <option value="ERROR">ERROR</option>
-                        </select>
-                        <button @click="clearConsole" class="text-xs text-gray-500 hover:text-gray-300">{{ lang.clear }}</button>
-                    </div>
-                </div>
-                <div ref="debugConsoleEl" class="terminal p-4 flex-1 overflow-y-auto"
-                     style="max-height: 60vh; font-size: 12px; line-height: 1.7;">
-                    <div v-for="(line, i) in filteredConsoleLines" :key="i" :class="'log-' + line.level.toLowerCase()">
-                        <span class="text-gray-600">[{{ line.timestamp }}]</span>
-                        <span :class="levelBadgeClass(line.level)">{{ line.level }}</span>
-                        {{ line.message }}
-                    </div>
-                    <div v-if="filteredConsoleLines.length === 0" class="text-gray-600 select-none">
-                        {{ consoleLevelFilter === 'all' ? lang.consolePlaceholder : lang.debugNoMatch }}
-                    </div>
-                </div>
-            </div>
+            <console-panel :lines="filteredConsoleLines" v-model:level-filter="consoleLevelFilter"
+                           :empty-text="consoleLevelFilter==='all' ? lang.consolePlaceholder : lang.debugNoMatch"
+                           :live-label="lang.liveConsole" @clear="clearConsole"></console-panel>
         </section>
 
-        <!-- ===== Tab 5: Spam Hider ===== -->
+        <!-- ===== Spam ===== -->
         <section v-show="activeTab === 'spam'" class="space-y-6">
-            <!-- Enable Toggle -->
             <div class="card-panel p-5">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-sm font-semibold text-gray-300">{{ lang.spamEnable }}</div>
-                        <div class="text-xs text-gray-500 mt-0.5">{{ lang.spamEnableDesc }}</div>
-                    </div>
-                    <input type="checkbox" v-model="spamEnabled" class="toggle-switch">
-                </div>
+                <toggle-row :label="lang.spamEnable" :desc="lang.spamEnableDesc" v-model="spamEnabled"></toggle-row>
             </div>
-
-            <!-- Filter List -->
             <div class="card-panel p-5 space-y-4">
                 <div class="flex items-center justify-between">
-                    <div class="section-title m-0 p-0 border-0">{{ lang.spamFilters }} ({{ spamFilters.length }})</div>
+                    <div class="section-title m-0 p-0" style="border:0">{{ lang.spamFilters }} ({{ spamFilters.length }})</div>
                     <button @click="addSpamFilter" class="btn btn-ghost text-xs !py-1.5 !px-3">+ {{ lang.spamAdd }}</button>
                 </div>
-
-                <div v-if="spamFilters.length === 0" class="text-center text-gray-500 py-12 text-sm">
-                    {{ lang.spamEmpty }}
-                </div>
-
-                <!-- Column Headers (desktop) -->
-                <div v-if="spamFilters.length > 0" class="hidden md:grid gap-2 px-2 text-xs text-gray-500"
-                     style="grid-template-columns:1.2fr 1.5fr 100px 110px auto 40px">
-                    <span>{{ lang.spamName }}</span>
-                    <span>{{ lang.spamPattern }}</span>
-                    <span>{{ lang.spamType }}</span>
-                    <span>{{ lang.spamState }}</span>
-                    <span class="text-center">{{ lang.spamColorCode }}</span>
-                    <span></span>
-                </div>
-
-                <!-- Filter Rows -->
-                <div v-for="(f, i) in spamFilters" :key="i" class="filter-row">
-                    <input v-model="f.name" class="input-field" :placeholder="lang.spamNamePlaceholder">
-                    <input v-model="f.patternString" class="input-field font-mono text-xs" :placeholder="lang.spamPatternPlaceholder">
-                    <select v-model="f.type" class="input-field select-field text-xs">
-                        <option value="STARTSWITH">StartsWith</option>
-                        <option value="CONTAINS">Contains</option>
-                        <option value="REGEX">Regex</option>
-                    </select>
-                    <select v-model="f.state" class="input-field select-field text-xs"
-                            :class="{'text-cyber-red':f.state==='HIDDEN','text-cyber-blue':f.state==='SEPARATE'}">
-                        <option value="NORMAL">Normal</option>
-                        <option value="HIDDEN">Hidden</option>
-                        <option value="SEPARATE">Separate</option>
-                    </select>
-                    <label class="flex items-center justify-center gap-1 text-xs text-gray-500 cursor-pointer select-none whitespace-nowrap">
-                        <span class="hidden sm:inline">{{ lang.spamColorCodeLabel }}</span>
-                        <span class="help-badge" :title="lang.spamColorCodeHelp">?</span>
-                        <input type="checkbox" v-model="f.formatted" class="toggle-switch !w-32 !h-18" style="transform:scale(0.65)">
-                    </label>
-                    <button @click="removeSpamFilter(i)" class="btn btn-danger !p-1.5 !rounded-lg text-xs" :title="lang.spamDelete">✕</button>
-                </div>
+                <div v-if="spamFilters.length === 0" class="text-center py-12 text-sm" style="color:var(--text-muted)">{{ lang.spamEmpty }}</div>
+                <filter-row v-for="(f,i) in spamFilters" :key="i" v-model="spamFilters[i]" :placeholders="spamRowPlaceholders()" @remove="removeSpamFilter(i)"></filter-row>
             </div>
-
-            <!-- Action Buttons -->
             <div class="flex items-center gap-3">
-                <button @click="saveSpamFilters" class="btn btn-primary" :disabled="spamSaving">
-                    <span v-if="spamSaving" class="inline-block w-4 h-4 border-2 border-cyber-dark border-t-transparent rounded-full animate-spin"></span>
-                    {{ spamSaving ? lang.saving : lang.spamSave }}
-                </button>
+                <save-button :loading="spamSaving" :loading-text="lang.saving" :text="lang.spamSave" @click="saveSpamFilters"></save-button>
                 <button @click="loadSpamFilters" class="btn btn-ghost" :disabled="spamLoading">{{ lang.spamReload }}</button>
             </div>
-
-            <!-- Quick Reference -->
             <div class="card-panel p-5">
                 <div class="section-title">{{ lang.spamRefTitle }}</div>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div class="space-y-1">
-                        <span class="text-gray-300 font-medium">Normal</span>
-                        <p class="text-xs text-gray-500">{{ lang.spamRefNormal }}</p>
-                    </div>
-                    <div class="space-y-1">
-                        <span class="text-cyber-red font-medium">Hidden</span>
-                        <p class="text-xs text-gray-500">{{ lang.spamRefHidden }}</p>
-                    </div>
-                    <div class="space-y-1">
-                        <span class="text-cyber-blue font-medium">Separate</span>
-                        <p class="text-xs text-gray-500">{{ lang.spamRefSeparate }}</p>
-                    </div>
-                </div>
-                <div class="mt-4 pt-3 border-t border-cyber-border">
-                    <div class="text-xs text-gray-400 space-y-1">
-                        <p><strong class="text-gray-300">{{ lang.spamRefMatchTitle }}</strong>
-                            <code class="text-cyber-green bg-cyber-dark px-1 rounded">StartsWith</code> {{ lang.spamRefStartsWith }} ·
-                            <code class="text-cyber-green bg-cyber-dark px-1 rounded">Contains</code> {{ lang.spamRefContains }} ·
-                            <code class="text-cyber-green bg-cyber-dark px-1 rounded">Regex</code> {{ lang.spamRefRegex }}
-                        </p>
-                        <p v-html="lang.spamRefColorCodeNote"></p>
-                    </div>
+                    <div class="space-y-1"><span class="font-medium">Normal</span><p class="text-xs" style="color:var(--text-muted)">{{ lang.spamRefNormal }}</p></div>
+                    <div class="space-y-1"><span class="font-medium" style="color:var(--danger)">Hidden</span><p class="text-xs" style="color:var(--text-muted)">{{ lang.spamRefHidden }}</p></div>
+                    <div class="space-y-1"><span class="font-medium" style="color:var(--accent)">Separate</span><p class="text-xs" style="color:var(--text-muted)">{{ lang.spamRefSeparate }}</p></div>
                 </div>
             </div>
         </section>
 
     </main>
 
-    <!-- ========== 底部：实时控制台（常驻） ========== -->
-    <footer class="fixed bottom-0 left-0 right-0 z-40 border-t border-cyber-border bg-cyber-dark"
-            :style="{ height: terminalCollapsed ? '36px' : terminalHeight + 'px', transition: 'height .25s ease' }">
-        <!-- 控制台标题栏 -->
-        <div class="flex items-center justify-between h-9 px-4 bg-cyber-card cursor-pointer select-none"
-             @click="terminalCollapsed = !terminalCollapsed">
-            <div class="flex items-center gap-2 text-xs text-gray-400">
-                <span class="text-cyber-green text-sm">〉_</span>
-                <span>{{ lang.liveConsole }}</span>
-                <span class="text-gray-600">({{ consoleLines.length }})</span>
-            </div>
-            <div class="flex items-center gap-2">
-                <button @click.stop="clearConsole" class="text-xs text-gray-500 hover:text-gray-300 px-2">{{ lang.clear }}</button>
-                <span class="text-gray-500 text-xs">{{ terminalCollapsed ? '▲' : '▼' }}</span>
-            </div>
-        </div>
-        <!-- 控制台输出区 -->
-        <div ref="terminalEl" class="terminal px-4"
-             :style="{ height: (terminalCollapsed ? 0 : terminalHeight - 36) + 'px' }">
-            <div v-for="(line, i) in consoleLines" :key="i" :class="'log-' + line.level.toLowerCase()">
-                <span class="text-gray-600">[{{ line.timestamp }}]</span> {{ line.message }}
-            </div>
-            <div v-if="consoleLines.length === 0" class="text-gray-600 select-none">
-                {{ lang.consolePlaceholder }}
-            </div>
-        </div>
-    </footer>
-
-    <!-- ========== Toast 通知容器 ========== -->
+    <!-- Toast -->
     <div class="toast-wrap">
-        <div v-for="(t, i) in toasts" :key="i" :class="['toast-item', 'toast-' + t.type]">
-            {{ t.message }}
-        </div>
+        <div v-for="t in toasts" :key="t.id" :class="'toast-item toast-' + t.type">{{ t.message }}</div>
     </div>
 
-</div><!-- /#app -->
-
-<!-- ============================================================
-     第三方库 & 应用逻辑
-     ============================================================ -->
-<!-- ApexCharts -->
-<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
-<!-- Vue 3 生产版 -->
-<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-
-<script>
-const { createApp } = Vue;
-
-/* ============================================================
-   i18n 轻量多语言字典（中/英）
-   通过 URL 参数 ?lang=zh|en 驱动，默认跟随浏览器语言
-   ============================================================ */
-const I18N_DICT = {
-    zh: {
-        subtitle: 'AI 翻译控制面板',
-        connected: '已连接',
-        disconnected: '未连接',
-        switchLangHint: '切换语言',
-        dashboard: '运行看板',
-        config: '配置管理',
-        network: '网络抓包',
-        debugTab: '调试',
-        debugStatusSse: 'SSE 连接',
-        debugStatusCache: '缓存状态',
-        debugStatusMode: '翻译模式',
-        debugStatusApi: 'API 地址',
-        debugNoMatch: '没有匹配的日志行',
-        connected: '已连接',
-        disconnected: '未连接',
-        enabled: '已启用',
-        disabled: '已禁用',
-        liveConsole: '实时控制台',
-        cacheHits: '本地规则命中',
-        aiRequests: 'AI 请求数',
-        tokenSaveRate: 'Token 节省率',
-        avgLatency: '平均延迟',
-        hitRatio: '命中率分布（本地缓存 vs AI 请求）',
-        latencyTrend: '最近 20 次 API 响应延迟趋势',
-        refresh: '刷新数据',
-        loading: '加载中...',
-        reloadConfig: '重新加载',
-        saveConfig: '保存配置',
-        saving: '保存中...',
-        apiKey: 'API Key',
-        apiKeyPlaceholder: '请输入你的 API Key...',
-        apiKeyHint: '⬆ 请替换为你的真实 Key',
-        showKey: '显示',
-        hideKey: '隐藏',
-        apiUrl: 'API URL',
-        apiUrlPlaceholder: 'https://api.openai.com/v1/chat/completions',
-        model: 'Model（模型标识）',
-        modelPlaceholder: '例如: gpt-4o, claude-sonnet-4-6',
-        provider: 'AI 供应商格式',
-        providerDesc: 'OpenAI 兼容适用于 DeepSeek/OpenAI 等；Anthropic 为 Claude 原生格式',
-        maxTokens: '最大输出 Token',
-        maxTokensDesc: 'Anthropic 必需。OpenAI 兼容端点忽略此项',
-        anthropicVersion: 'anthropic-version 头',
-        anthropicVersionDesc: '仅 Anthropic 使用，一般保持默认 2023-06-01',
-        presets: '连接预设',
-        presetsDesc: '保存多套供应商/密钥/模型组合，一键切换。应用后记得点保存配置',
-        presetCustom: '（自定义连接）',
-        presetApply: '应用',
-        presetDelete: '删除',
-        presetSaveCurrent: '存为预设',
-        presetNamePlaceholder: '新预设名称',
-        targetLanguage: '目标语言（翻译成）',
-        targetLanguageCustomPlaceholder: '自定义语言，如 Italiano',
-        targetLanguageModeToggle: '自定义语言',
-        userChatPrompt: '聊天附加指令（可选）',
-        userChatPromptPlaceholder: '留空则不发送。例如：口语化、保留游戏梗',
-        userItemPrompt: '物品附加指令（可选）',
-        userItemPromptPlaceholder: '留空则不发送。例如：保留装备词条缩写',
-        properNounMode: '专有名词处理',
-        properNounKeep: '保留英文（物品名/附魔/能力）',
-        properNounTranslate: '全部翻译',
-        properNounItemOnly: '只保留物品名',
-        saveSuccess: '配置已保存并重载成功 ✓',
-        saveFailed: '配置保存失败，请检查后端日志',
-        loadFailed: '加载配置失败',
-        requestPayload: '📤 Request Payload',
-        responseBody: '📥 Response Body',
-        noTraces: '暂无请求记录',
-        consolePlaceholder: '等待后端日志推送... 控制台自动滚动到底部。',
-        clear: '清屏',
-        totalRequests: '总请求数',
-        themeHint: '切换主题 (系统 → 深色 → 浅色 → 系统)',
-        themeLabel: '主题',
-        tokensConsumed: 'Token 消耗',
-        tokensSaved: '缓存节省 (估算)',
-        est: '本地估算',
-        api: 'API 实际',
-        tokenUsage: 'Token',
-        estTokens: '请求侧估算',
-        systemPromptLabel: '提示词',
-        payloadLabel: '载荷',
-        promptLabel: '输入',
-        completionLabel: '输出',
-        cachedLabel: '服务器端缓存命中',
-        reasoningLabel: '其中 Reasoning',
-        totalLabel: '合计',
-        tokenWaste: '输出 token 超过输入 3 倍，建议检查 System Prompt 是否过于复杂，或模型是否开启了 thinking 模式',
-        reasoningWaste: '检测到 Reasoning token ({n})！建议在 API 请求中关闭 thinking 模式以节省成本',
-
-        // -- 配置区块标题 --
-        sectionApi: 'API 连接',
-        sectionBehavior: '翻译行为',
-        sectionCache: '缓存设置',
-        sectionCompact: '聊天折叠',
-        subTabApi: 'API 连接',
-        subTabBehavior: '翻译行为',
-        subTabCache: '缓存设置',
-        subTabCompact: '聊天折叠',
-
-        // -- 新增字段 --
-        translationMode: '翻译模式',
-        translationModeAutoDesc: '自动选择（短消息用文本，长消息用ID）',
-        translationModeIdDesc: '仅消息ID模式',
-        translationModeTextDesc: '仅文本命令模式',
-        translationModeHint: 'Auto 模式下短消息直接附带文本，长消息自动切换 ID 模式。需重启生效。',
-        debugMode: '调试模式',
-        debugModeDesc: '启动时自动打开浏览器并导航到网络抓包页面',
-        welcomeTitle: '🎉 欢迎使用 Translex！',
-        welcomeText: '请先在 <code>配置管理</code> 标签页中设置 <b>API Key</b> 以启用翻译功能。<br>配置完成后，返回游戏即可使用翻译按钮或按下 <code>P</code> 键翻译物品 Lore。',
-        welcomeDismiss: '知道了',
-        buttonStyle: '按钮样式',
-        enableTranslateButton: '显示翻译按钮',
-        enableTranslateButtonDesc: '在聊天消息旁显示 [翻译] 按钮，关闭后按钮不再出现',
-        outputMode: '翻译输出模式',
-        outputModeChat: 'chat — 直接替换聊天消息',
-        outputModeTemporary: 'temporary — 临时 Tooltip 显示',
-        outputModePermanent: 'permanent — 永久写入物品缓存',
-        enableCachePersistence: '缓存持久化',
-        enableCachePersistenceDesc: '将翻译缓存写入磁盘，重启后保留',
-        enablePeriodicSave: '定时自动保存',
-        enablePeriodicSaveDesc: '每隔一定 tick 自动将缓存刷写到磁盘',
-        periodicSaveInterval: '保存间隔 (ticks)',
-        periodicSaveIntervalDesc: '24000 ticks ≈ 20 分钟。范围: 1200~240000',
-        cacheMaxEntries: '内存缓存上限 (条)',
-        cacheMaxEntriesDesc: '超过后按 LRU 淘汰最久未访问的条目。默认 20000',
-        enableChatCompact: '聊天折叠',
-        enableChatCompactDesc: '将连续重复的聊天消息折叠为一条，附带次数标记',
-        compactTimeSeconds: '折叠时间窗口 (秒)',
-        compactColorCode: '折叠计数器颜色',
-        // Spam Hider
-        spamEnable: '启用 Spam Hider',
-        spamEnableDesc: '关闭后所有过滤规则不生效，消息正常显示',
-        spamFilters: '过滤规则',
-        spamAdd: '添加规则',
-        spamEmpty: '还没有过滤规则，点击「添加规则」创建一个',
-        spamName: '名称',
-        spamPattern: '匹配内容',
-        spamType: '匹配方式',
-        spamState: '状态',
-        spamColorCode: '§码',
-        spamNamePlaceholder: '过滤器名称',
-        spamPatternPlaceholder: '要匹配的文字...',
-        spamColorCodeLabel: '§码',
-        spamColorCodeHelp: '开启后按带 Minecraft § 颜色码的文本匹配。关闭则按纯文本匹配。',
-        spamDelete: '删除此规则',
-        spamSave: '保存规则',
-        spamReload: '重新加载',
-        spamSaved: '规则已保存',
-        spamSaveFailed: '保存失败',
-        spamLoadFailed: '加载过滤规则失败',
-        spamNewFilter: '新过滤器',
-        spamRefTitle: '状态说明',
-        spamRefNormal: '消息正常显示在聊天栏，不做任何处理',
-        spamRefHidden: '消息被完全丢弃，不进入聊天栏也不在别处显示',
-        spamRefSeparate: '消息从聊天栏移除，改为在浮动 HUD 中显示',
-        spamRefMatchTitle: '匹配方式：',
-        spamRefStartsWith: '前缀匹配',
-        spamRefContains: '包含匹配',
-        spamRefRegex: 'Java 正则',
-        spamRefColorCodeNote: '<strong class="text-gray-300">§码开关：</strong>开启后按带颜色码的文本匹配（如 <code class="text-cyber-green bg-cyber-dark px-1 rounded">§r§cThere are no enemies nearby!</code>）。注意 § 在输入框中显示为纯文本 <code class="text-gray-500 bg-cyber-dark px-1 rounded">§</code>。',
-    },
-    en: {
-        subtitle: 'AI Translation Dashboard',
-        connected: 'Connected',
-        disconnected: 'Disconnected',
-        switchLangHint: 'Switch Language',
-        dashboard: 'Dashboard',
-        config: 'Configuration',
-        network: 'Network Trace',
-        debugTab: 'Debug',
-        debugStatusSse: 'SSE Status',
-        debugStatusCache: 'Cache',
-        debugStatusMode: 'Mode',
-        debugStatusApi: 'API URL',
-        debugNoMatch: 'No matching log lines',
-        connected: 'Connected',
-        disconnected: 'Disconnected',
-        enabled: 'Enabled',
-        disabled: 'Disabled',
-        liveConsole: 'Live Console',
-        cacheHits: 'Local Cache Hits',
-        aiRequests: 'AI Requests',
-        tokenSaveRate: 'Token Save Rate',
-        avgLatency: 'Avg Latency',
-        hitRatio: 'Hit Ratio (Local Cache vs AI)',
-        latencyTrend: 'Last 20 API Latency Trend',
-        refresh: 'Refresh',
-        loading: 'Loading...',
-        reloadConfig: 'Reload',
-        saveConfig: 'Save Config',
-        saving: 'Saving...',
-        apiKey: 'API Key',
-        apiKeyPlaceholder: 'Enter your API Key...',
-        apiKeyHint: '⬆ Replace with your real key',
-        showKey: 'Show',
-        hideKey: 'Hide',
-        apiUrl: 'API URL',
-        apiUrlPlaceholder: 'https://api.openai.com/v1/chat/completions',
-        model: 'Model',
-        modelPlaceholder: 'e.g. gpt-4o, claude-sonnet-4-6',
-        provider: 'AI Provider Format',
-        providerDesc: 'OpenAI-compatible for DeepSeek/OpenAI etc.; Anthropic for Claude native format',
-        maxTokens: 'Max Output Tokens',
-        maxTokensDesc: 'Required by Anthropic. Ignored by OpenAI-compatible endpoints',
-        anthropicVersion: 'anthropic-version Header',
-        anthropicVersionDesc: 'Anthropic only; usually keep default 2023-06-01',
-        presets: 'Connection Presets',
-        presetsDesc: 'Save multiple provider/key/model combos, switch with one click. Remember to Save Config after applying',
-        presetCustom: '(Custom connection)',
-        presetApply: 'Apply',
-        presetDelete: 'Delete',
-        presetSaveCurrent: 'Save Preset',
-        presetNamePlaceholder: 'New preset name',
-        targetLanguage: 'Target Language (translate into)',
-        targetLanguageCustomPlaceholder: 'Custom language, e.g. Italiano',
-        targetLanguageModeToggle: 'Custom language',
-        userChatPrompt: 'Extra Chat Instructions (optional)',
-        userChatPromptPlaceholder: 'Empty = not sent. e.g. casual tone, keep memes',
-        userItemPrompt: 'Extra Item Instructions (optional)',
-        userItemPromptPlaceholder: 'Empty = not sent. e.g. keep stat abbreviations',
-        properNounMode: 'Proper Noun Handling',
-        properNounKeep: 'Keep All English (items/enchants/abilities)',
-        properNounTranslate: 'Translate Everything',
-        properNounItemOnly: 'Keep Item Names Only',
-        saveSuccess: 'Config saved & reloaded successfully ✓',
-        saveFailed: 'Failed to save config, check backend logs',
-        loadFailed: 'Failed to load config',
-        requestPayload: '📤 Request Payload',
-        responseBody: '📥 Response Body',
-        noTraces: 'No request traces yet',
-        consolePlaceholder: 'Waiting for backend log stream... Console auto-scrolls to bottom.',
-        clear: 'Clear',
-        totalRequests: 'Total Requests',
-        themeHint: 'Switch theme (System → Dark → Light → System)',
-        themeLabel: 'Theme',
-        tokensConsumed: 'Token Usage',
-        tokensSaved: 'Saved by Cache (est.)',
-        est: 'Local est.',
-        api: 'API actual',
-        tokenUsage: 'Token',
-        estTokens: 'Request est. tokens',
-        systemPromptLabel: 'system prompt',
-        payloadLabel: 'payload',
-        promptLabel: 'Prompt',
-        completionLabel: 'Completion',
-        cachedLabel: 'Server cache hit',
-        reasoningLabel: 'Of which Reasoning',
-        totalLabel: 'Total',
-        tokenWaste: 'Output tokens > 3x input. Consider simplifying System Prompt or disabling thinking mode.',
-        reasoningWaste: 'Reasoning tokens detected ({n})! Disable thinking mode in API request to save cost.',
-
-        // -- Config section titles --
-        sectionApi: 'API Connection',
-        sectionBehavior: 'Translation Behavior',
-        sectionCache: 'Cache Settings',
-        sectionCompact: 'Chat Compact',
-        subTabApi: 'API Connection',
-        subTabBehavior: 'Translation',
-        subTabCache: 'Cache',
-        subTabCompact: 'Chat Compact',
-
-        // -- Additional fields --
-        translationMode: 'Translation Mode',
-        translationModeAutoDesc: 'Auto (short→text, long→ID)',
-        translationModeIdDesc: 'Message ID only',
-        translationModeTextDesc: 'Text command only',
-        translationModeHint: 'Auto mode uses text commands for short messages and ID mode for long ones. Requires restart.',
-        debugMode: 'Debug Mode',
-        debugModeDesc: 'Auto-open browser to network traces page on startup',
-        welcomeTitle: '🎉 Welcome to Translex!',
-        welcomeText: 'Please set your <b>API Key</b> in the <code>Configuration</code> tab to enable translation.<br>Once configured, return to the game to use the translate button or press <code>P</code> to translate item lore.',
-        welcomeDismiss: 'Got it',
-        buttonStyle: 'Button Style',
-        enableTranslateButton: 'Show Translate Button',
-        enableTranslateButtonDesc: 'Show [Translate] button next to chat messages. Turn off to hide the button.',
-        outputMode: 'Translation Output Mode',
-        outputModeChat: 'chat — Replace chat message inline',
-        outputModeTemporary: 'temporary — Show as temporary tooltip',
-        outputModePermanent: 'permanent — Save permanently to item cache',
-        enableCachePersistence: 'Cache Persistence',
-        enableCachePersistenceDesc: 'Write translation cache to disk, survives restarts',
-        enablePeriodicSave: 'Periodic Auto-Save',
-        enablePeriodicSaveDesc: 'Flush cache to disk at regular intervals',
-        periodicSaveInterval: 'Save Interval (ticks)',
-        periodicSaveIntervalDesc: '24000 ticks ≈ 20 min. Range: 1200–240000',
-        cacheMaxEntries: 'Max Cache Entries',
-        cacheMaxEntriesDesc: 'Evicts least-recently-used entries beyond this. Default 20000',
-        enableChatCompact: 'Chat Compact',
-        enableChatCompactDesc: 'Fold duplicate chat messages with a repeat counter',
-        compactTimeSeconds: 'Compact Time Window (seconds)',
-        compactColorCode: 'Compact Counter Color',
-        // Spam Hider
-        spamEnable: 'Enable Spam Hider',
-        spamEnableDesc: 'When disabled, all filter rules are inactive and messages appear normally',
-        spamFilters: 'Filter Rules',
-        spamAdd: 'Add Rule',
-        spamEmpty: 'No filter rules yet. Click "Add Rule" to create one.',
-        spamName: 'Name',
-        spamPattern: 'Match Pattern',
-        spamType: 'Match Mode',
-        spamState: 'Action',
-        spamColorCode: '§ code',
-        spamNamePlaceholder: 'Filter name',
-        spamPatternPlaceholder: 'Text to match...',
-        spamColorCodeLabel: '§ code',
-        spamColorCodeHelp: 'When enabled, matches against formatted text with Minecraft § color codes. When disabled, matches plain text only.',
-        spamDelete: 'Delete this rule',
-        spamSave: 'Save Rules',
-        spamReload: 'Reload',
-        spamSaved: 'Rules saved',
-        spamSaveFailed: 'Failed to save',
-        spamLoadFailed: 'Failed to load filter rules',
-        spamNewFilter: 'New Filter',
-        spamRefTitle: 'Action Reference',
-        spamRefNormal: 'Message displays normally in chat, no filtering applied',
-        spamRefHidden: 'Message is completely discarded from chat and all other displays',
-        spamRefSeparate: 'Message is removed from chat and shown in a floating HUD overlay',
-        spamRefMatchTitle: 'Match Modes: ',
-        spamRefStartsWith: 'prefix match',
-        spamRefContains: 'contains match',
-        spamRefRegex: 'Java regex',
-        spamRefColorCodeNote: '<strong class="text-gray-300">§ code toggle:</strong> When enabled, matches against text with color codes (e.g. <code class="text-cyber-green bg-cyber-dark px-1 rounded">§r§cThere are no enemies nearby!</code>). Note: § appears as plain text <code class="text-gray-500 bg-cyber-dark px-1 rounded">§</code> in the input field.',
-    },
-};
-
-/* ============================================================
-   Vue 3 应用主逻辑
-   ============================================================ */
-createApp({
-    data() {
-        return {
-            /* ---- i18n ---- */
-            currentLang: 'zh',
-            lang: I18N_DICT.zh,
-
-            /* ---- 标签页 ---- */
-            activeTab: 'dashboard',
-            showWelcome: false,
-            tabs: [
-                { id: 'dashboard', label: '' },
-                { id: 'config',    label: '' },
-                { id: 'network',   label: '' },
-                { id: 'debug',     label: '' },
-            ],
-            /** 配置标签页内的子标签 */
-            configSubTab: 'api',
-            configSubTabs: [
-                { id: 'api',      label: '' },
-                { id: 'behavior', label: '' },
-                { id: 'cache',    label: '' },
-                { id: 'compact',  label: '' },
-            ],
-
-            /* ---- 连接状态 ---- */
-            connected: false,
-            /** 安全 Token，由 /translex config 命令传入 URL，防御本地其他应用访问 API */
-            token: '',
-
-            /* ---- 主题 ---- */
-            theme: 'system',   // 'system' | 'dark' | 'light'
-            themeMedia: null,  // matchMedia 监听器引用
-
-            /* ---- 配置表单 ---- */
-            config: {
-                apiKey:                '',
-                apiUrl:                '',
-                model:                 '',
-                provider:              'openai',
-                maxTokens:             4096,
-                anthropicVersion:      '2023-06-01',
-                presets:               [],
-                activePreset:          '',
-                targetLanguage:        'Simplified Chinese (简体中文)',
-                targetLanguageMode:    'preset',   // 'preset' | 'custom'（仅前端 UI 状态，不发送）
-                userChatPrompt:        '',
-                userItemPrompt:        '',
-                properNounMode:        'keep',
-                translationMode: 'auto',
-                buttonStyle:           'NORMAL',
-                enableTranslateButton: true,
-                outputMode:            'chat',
-                enableCachePersistence: true,
-                enablePeriodicSave:    true,
-                periodicSaveInterval:  24000,
-                cacheMaxEntries:       20000,
-                enableChatCompact:     true,
-                compactTimeSeconds:    120,
-                compactColorCode:      'GRAY',
-                debug:                 false,
-            },
-            presetLanguages: [
-                'Simplified Chinese (简体中文)',
-                'English',
-                '日本語 (Japanese)',
-                '繁體中文 (Traditional Chinese)',
-                '한국어 (Korean)',
-                'Français',
-                'Deutsch',
-                'Español',
-                'Русский (Russian)',
-                'Português',
-            ],
-            showApiKey: false,
-            configLoading: false,
-            configSaving: false,
-            availableProviders: [{ id: 'openai', name: 'OpenAI Compatible' }, { id: 'anthropic', name: 'Anthropic (Claude)' }],
-            selectedPreset: '',
-            newPresetName: '',
-
-            /* ---- 运行指标 ---- */
-            metrics: {
-                localHits:            0,
-                aiRequests:           0,
-                totalEstimatedTokens:     0,
-                totalSavedTokens:         0,
-                totalActualPromptTokens:  0,
-                totalActualCompletionTokens: 0,
-                totalActualTokens:        0,
-                hasActualTokenData:     false,
-                latencyHistory:       [],
-            },
-            metricsLoading: false,
-
-            /* ---- 网络抓包 ---- */
-            traces: [],
-
-            /* ---- 控制台 ---- */
-            consoleLines: [],
-            consoleLevelFilter: 'all',
-            terminalCollapsed: false,
-            terminalHeight: 260,
-
-            /* ---- 图表实例 ---- */
-            donutChart: null,
-            lineChart: null,
-
-            /* ---- Toast ---- */
-            toasts: [],
-
-            /* ---- Spam Hider ---- */
-            spamEnabled: true,
-            spamFilters: [],
-            spamLoaded: false,
-            spamLoading: false,
-            spamSaving: false,
-
-            /* ---- SSE ---- */
-            eventSource: null,
-            metricsTimer: null,
-            tracesTimer: null,
-        };
-    },
-
-    computed: {
-        /** Token 节省率 = 本地命中 / (本地命中 + AI请求) */
-        tokenSaveRate() {
-            const total = this.metrics.localHits + this.metrics.aiRequests;
-            if (total === 0) return 0;
-            return Math.round((this.metrics.localHits / total) * 100);
-        },
-        /** 平均延迟 */
-        avgLatency() {
-            const arr = this.metrics.latencyHistory;
-            if (!arr || arr.length === 0) return 0;
-            const sum = arr.reduce((a,b) => a + b, 0);
-            return Math.round(sum / arr.length);
-        },
-        /** 主题图标 */
-        themeIcon() {
-            if (this.theme === 'system') return '🌓';
-            if (this.theme === 'dark')   return '🌙';
-            return '☀️';
-        },
-        /** 按级别过滤控制台行 */
-        filteredConsoleLines() {
-            if (this.consoleLevelFilter === 'all') return this.consoleLines;
-            const lvl = this.consoleLevelFilter;
-            return this.consoleLines.filter(l => l.level === lvl);
-        },
-        /** API Key 是占位符时，输入框强制明文提示用户填入 */
-        isApiKeyPlaceholder() {
-            return !this.config.apiKey || this.config.apiKey === 'YOUR_API_KEY_HERE';
-        },
-        /** API Key 输入框的 type：占位符时强制 text，否则看 showApiKey */
-        apiKeyInputType() {
-            return this.isApiKeyPlaceholder ? 'text' : (this.showApiKey ? 'text' : 'password');
-        },
-    },
-
-    watch: {
-        /** 标签页切换时，触发表格重绘（ApexCharts 在隐藏容器中需手动 resize） */
-        activeTab(val) {
-            if (val === 'dashboard') {
-                this.$nextTick(() => {
-                    if (this.donutChart) this.donutChart.updateOptions({}, false, false);
-                    if (this.lineChart)  this.lineChart.updateOptions({}, false, false);
-                });
-            }
-            if (val === 'debug') {
-                this.$nextTick(() => this.scrollDebugConsole());
-            }
-            if (val === 'spam' && !this.spamLoaded) {
-                this.loadSpamFilters();
-            }
-        },
-        /** 当控制台行变化且 Debug 标签页可见时自动滚动到底部 */
-        consoleLines() {
-            if (this.activeTab === 'debug') {
-                this.$nextTick(() => this.scrollDebugConsole());
-            }
-        },
-        /** i18n 响应式更新标签页文案 */
-        currentLang() {
-            this.updateTabLabels();
-        },
-    },
-
-    methods: {
-        /* ==================== i18n ==================== */
-        detectLanguage() {
-            const params = new URLSearchParams(window.location.search);
-
-            // 提取安全 Token
-            this.token = params.get('token') || '';
-
-            const urlLang = params.get('lang');
-            if (urlLang && I18N_DICT[urlLang]) {
-                this.currentLang = urlLang;
-            } else {
-                // 回退到浏览器语言
-                const nav = navigator.language || '';
-                this.currentLang = nav.startsWith('zh') ? 'zh' : 'en';
-            }
-            this.lang = I18N_DICT[this.currentLang];
-            this.updateTabLabels();
-        },
-        /** 构造带安全 Token 的 API URL */
-        apiUrl(path) {
-            const sep = path.includes('?') ? '&' : '?';
-            return path + sep + 'token=' + encodeURIComponent(this.token);
-        },
-        switchLanguage() {
-            this.currentLang = this.currentLang === 'zh' ? 'en' : 'zh';
-            this.lang = I18N_DICT[this.currentLang];
-            // 同步更新 URL 参数（不刷新页面）
-            const url = new URL(window.location);
-            url.searchParams.set('lang', this.currentLang);
-            window.history.replaceState({}, '', url);
-        },
-        updateTabLabels() {
-            this.tabs[0].label = this.lang.dashboard;
-            this.tabs[1].label = this.lang.config;
-            this.tabs[2].label = this.lang.network;
-            this.tabs[3].label = this.lang.debugTab;
-            this.configSubTabs[0].label = this.lang.subTabApi;
-            this.configSubTabs[1].label = this.lang.subTabBehavior;
-            this.configSubTabs[2].label = this.lang.subTabCache;
-            this.configSubTabs[3].label = this.lang.subTabCompact;
-        },
-
-        /* ==================== 主题切换 ==================== */
-        /** 初始化主题：优先 localStorage，回退跟随系统 */
-        /** 解析 URL hash 并跳转到对应标签页。支持 #dashboard, #config, #network, #debug, #welcome */
-        handleHashNavigation() {
-            const hash = window.location.hash.replace('#', '');
-            if (hash === 'welcome') {
-                this.checkWelcome();
-            } else if (hash === 'spam') {
-                this.activeTab = 'spam';
-                if (!this.spamLoaded) this.loadSpamFilters();
-            } else if (hash === 'network' || hash === 'debug' || hash === 'traces') {
-                this.activeTab = 'network';
-            } else if (hash === 'config') {
-                this.activeTab = 'config';
-            } else if (hash === 'dashboard') {
-                this.activeTab = 'dashboard';
-            }
-        },
-
-        /** 检测是否应显示首次欢迎横幅（sessionStorage + URL hash 双重检查） */
-        checkWelcome() {
-            // 仅在 #welcome hash 且本会话未关闭过横幅时显示
-            if (window.location.hash === '#welcome' && !sessionStorage.getItem('translex-welcome-dismissed')) {
-                this.showWelcome = true;
-                // 清除 hash，避免刷新页面再次触发
-                history.replaceState(null, '', window.location.pathname + window.location.search);
-            }
-        },
-
-        /** 关闭欢迎横幅并记住本会话 */
-        dismissWelcome() {
-            this.showWelcome = false;
-            sessionStorage.setItem('translex-welcome-dismissed', '1');
-        },
-
-        initTheme() {
-            const saved = localStorage.getItem('translex-theme');
-            if (saved === 'dark' || saved === 'light') {
-                this.theme = saved;
-            } else {
-                this.theme = 'system';
-            }
-            this.applyTheme();
-
-            // 监听系统主题变化
-            this.themeMedia = window.matchMedia('(prefers-color-scheme: dark)');
-            this.themeMedia.addEventListener('change', () => {
-                if (this.theme === 'system') this.applyTheme();
-            });
-        },
-        /** 循环切换：system → dark → light → system */
-        cycleTheme() {
-            if (this.theme === 'system') this.theme = 'dark';
-            else if (this.theme === 'dark') this.theme = 'light';
-            else this.theme = 'system';
-            localStorage.setItem('translex-theme', this.theme);
-            this.applyTheme();
-        },
-        /** 将当前主题应用到 <html> 的 data-theme 属性 */
-        applyTheme() {
-            const isDark = this.theme === 'dark'
-                || (this.theme === 'system' && this.themeMedia && this.themeMedia.matches);
-            document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
-        },
-
-        /* ==================== Toast 通知 ==================== */
-        showToast(message, type) {
-            type = type || 'info';
-            const t = { message, type, id: Date.now() };
-            this.toasts.push(t);
-            // 3 秒后自动移除
-            setTimeout(() => {
-                const idx = this.toasts.indexOf(t);
-                if (idx > -1) this.toasts.splice(idx, 1);
-            }, 3500);
-        },
-
-        /* ==================== 连接预设 ==================== */
-        /** 把选中预设的连接字段载入当前编辑区（不自动保存，需用户点保存配置）。 */
-        applyPreset() {
-            const p = (this.config.presets || []).find(x => x.name === this.selectedPreset);
-            if (!p) return;
-            this.config.provider         = p.provider || 'openai';
-            this.config.apiUrl           = p.apiUrl || '';
-            this.config.model            = p.model || '';
-            this.config.maxTokens        = p.maxTokens || 4096;
-            this.config.anthropicVersion = p.anthropicVersion || '2023-06-01';
-            // 如果预设里的 key 是占位符，保留用户当前已填的 key（避免把真 key 冲掉）
-            if (p.apiKey && p.apiKey !== 'YOUR_API_KEY_HERE') {
-                this.config.apiKey = p.apiKey;
-            } else if (!this.config.apiKey) {
-                this.config.apiKey = 'YOUR_API_KEY_HERE';
-            }
-            this.config.activePreset     = p.name;
-            this.showToast(this.lang.presetApply + ': ' + p.name, 'success');
-        },
-        /** 把当前编辑区的连接保存为命名预设（同名则覆盖）。 */
-        savePreset() {
-            const name = this.newPresetName.trim();
-            if (!name) return;
-            const preset = {
-                name,
-                provider: this.config.provider,
-                apiUrl: this.config.apiUrl,
-                apiKey: this.config.apiKey,
-                model: this.config.model,
-                maxTokens: this.config.maxTokens,
-                anthropicVersion: this.config.anthropicVersion
-            };
-            if (!Array.isArray(this.config.presets)) this.config.presets = [];
-            const idx = this.config.presets.findIndex(x => x.name === name);
-            if (idx >= 0) this.config.presets.splice(idx, 1, preset);
-            else this.config.presets.push(preset);
-            this.config.activePreset = name;
-            this.selectedPreset = name;
-            this.newPresetName = '';
-            this.showToast(this.lang.presetSaveCurrent + ': ' + name, 'success');
-        },
-        /** 删除选中预设。 */
-        deletePreset() {
-            if (!this.selectedPreset) return;
-            this.config.presets = (this.config.presets || []).filter(x => x.name !== this.selectedPreset);
-            if (this.config.activePreset === this.selectedPreset) this.config.activePreset = '';
-            this.selectedPreset = '';
-            this.showToast(this.lang.presetDelete, 'success');
-        },
-
-        /* ==================== API 调用 ==================== */
-        /** GET /api/config —— 拉取当前 TOML 内存配置的 JSON 表示 */
-        async fetchConfig() {
-            this.configLoading = true;
-            try {
-                const res = await fetch(this.apiUrl('/api/config'));
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                const data = await res.json();
-                this.config.apiKey                = data.apiKey                || '';
-                this.config.apiUrl                = data.apiUrl                || data.api_url || '';
-                this.config.model                 = data.model                 || '';
-                this.config.provider              = data.provider              || 'openai';
-                this.config.maxTokens             = data.maxTokens             || 4096;
-                this.config.anthropicVersion      = data.anthropicVersion      || '2023-06-01';
-                this.config.presets               = Array.isArray(data.presets) ? data.presets : [];
-                this.config.activePreset          = data.activePreset          || '';
-                this.selectedPreset               = this.config.activePreset;
-                if (Array.isArray(data.availableProviders) && data.availableProviders.length) {
-                    this.availableProviders = data.availableProviders;
-                }
-                this.config.targetLanguage        = data.targetLanguage        || 'Simplified Chinese (简体中文)';
-                this.config.targetLanguageMode    = this.presetLanguages.includes(this.config.targetLanguage) ? 'preset' : 'custom';
-                this.config.userChatPrompt        = data.userChatPrompt        || '';
-                this.config.userItemPrompt        = data.userItemPrompt        || '';
-                this.config.properNounMode        = data.properNounMode        || 'keep';
-                this.config.translationMode = data.translationMode || 'auto';
-                this.config.buttonStyle           = data.buttonStyle           || 'NORMAL';
-                this.config.enableTranslateButton = data.enableTranslateButton ?? true;
-                this.config.outputMode            = data.outputMode            || 'chat';
-                this.config.enableCachePersistence = data.enableCachePersistence ?? true;
-                this.config.enablePeriodicSave    = data.enablePeriodicSave    ?? true;
-                this.config.periodicSaveInterval  = data.periodicSaveInterval  || 24000;
-                this.config.cacheMaxEntries       = data.cacheMaxEntries       || 20000;
-                this.config.enableChatCompact     = data.enableChatCompact     ?? true;
-                this.config.compactTimeSeconds    = data.compactTimeSeconds    || 120;
-                this.config.compactColorCode      = data.compactColorCode      || 'GRAY';
-                this.config.debug                = data.debug                ?? false;
-            } catch (err) {
-                console.error('[Translex] fetchConfig error:', err);
-                this.showToast(this.lang.loadFailed, 'error');
-            } finally {
-                this.configLoading = false;
-            }
-        },
-
-        /** POST /api/config/save —— 提交配置 JSON，后端负责写回 TOML 并热重载 */
-        async saveConfig() {
-            this.configSaving = true;
-            try {
-                const res = await fetch(this.apiUrl('/api/config/save'), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        apiKey:                this.config.apiKey,
-                        apiUrl:                this.config.apiUrl,
-                        model:                 this.config.model,
-                        provider:              this.config.provider,
-                        maxTokens:             this.config.maxTokens,
-                        anthropicVersion:      this.config.anthropicVersion,
-                        presets:               this.config.presets,
-                        activePreset:          this.config.activePreset,
-                        targetLanguage:        (this.config.targetLanguage && this.config.targetLanguage.trim())
-                                                   ? this.config.targetLanguage.trim()
-                                                   : 'Simplified Chinese (简体中文)',
-                        userChatPrompt:        this.config.userChatPrompt,
-                        userItemPrompt:        this.config.userItemPrompt,
-                        properNounMode:        this.config.properNounMode,
-                        translationMode: this.config.translationMode,
-                        buttonStyle:           this.config.buttonStyle,
-                        enableTranslateButton: this.config.enableTranslateButton,
-                        outputMode:            this.config.outputMode,
-                        enableCachePersistence: this.config.enableCachePersistence,
-                        enablePeriodicSave:    this.config.enablePeriodicSave,
-                        periodicSaveInterval:  this.config.periodicSaveInterval,
-                        cacheMaxEntries:       this.config.cacheMaxEntries,
-                        enableChatCompact:     this.config.enableChatCompact,
-                        compactTimeSeconds:    this.config.compactTimeSeconds,
-                        compactColorCode:      this.config.compactColorCode,
-                        debug:                 this.config.debug,
-                    }),
-                });
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                const result = await res.json();
-                if (result.success) {
-                    this.showToast(this.lang.saveSuccess, 'success');
-                } else {
-                    throw new Error(result.error || 'unknown');
-                }
-            } catch (err) {
-                console.error('[Translex] saveConfig error:', err);
-                this.showToast(this.lang.saveFailed, 'error');
-            } finally {
-                this.configSaving = false;
-            }
-        },
-
-        /** GET /api/metrics —— 获取运行期可观测性指标 */
-        async fetchMetrics() {
-            this.metricsLoading = true;
-            try {
-                const res = await fetch(this.apiUrl('/api/metrics'));
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                const data = await res.json();
-                this.metrics.localHits            = data.localHits            || data.local_hits || 0;
-                this.metrics.aiRequests           = data.aiRequests           || data.ai_requests || 0;
-                this.metrics.totalEstimatedTokens      = data.totalEstimatedTokens      || data.total_estimated_tokens || 0;
-                this.metrics.totalSavedTokens          = data.totalSavedTokens          || data.total_saved_tokens || 0;
-                this.metrics.totalActualPromptTokens   = data.totalActualPromptTokens   || data.total_actual_prompt_tokens || 0;
-                this.metrics.totalActualCompletionTokens = data.totalActualCompletionTokens || data.total_actual_completion_tokens || 0;
-                this.metrics.totalActualTokens         = data.totalActualTokens         || data.total_actual_tokens || 0;
-                this.metrics.hasActualTokenData      = data.hasActualTokenData      || false;
-                this.metrics.latencyHistory       = data.latencyHistory       || data.latency_history || [];
-                // 更新图表数据
-                this.updateCharts();
-            } catch (err) {
-                console.error('[Translex] fetchMetrics error:', err);
-            } finally {
-                this.metricsLoading = false;
-            }
-        },
-
-        /** GET /api/traces —— 获取最近 N 条网络抓包记录 */
-        async fetchTraces() {
-            try {
-                const res = await fetch(this.apiUrl('/api/traces'));
-                if (!res.ok) return;
-                const data = await res.json();
-                if (Array.isArray(data)) {
-                    const oldMap = {};
-                    this.traces.forEach(t => { oldMap[t.id] = t.expanded; });
-                    this.traces = data.map(t => ({
-                        ...t,
-                        expanded: oldMap[t.id] || false,
-                    }));
-                }
-            } catch (err) {
-                // traces 端点可能尚未实现，静默失败
-            }
-        },
-
-        /* ==================== 图表 (ApexCharts) ==================== */
-        /** 初始化环形图（本地命中 vs AI 请求） */
-        initDonutChart() {
-            const opts = {
-                chart: {
-                    type: 'donut',
-                    height: 300,
-                    background: 'transparent',
-                    animations: { enabled: true, easing: 'easeinout', speed: 800 },
-                },
-                series: [this.metrics.localHits, this.metrics.aiRequests],
-                labels: [this.lang.cacheHits, this.lang.aiRequests],
-                colors: ['#00ff41', '#00d4ff'],
-                stroke: { width: 0 },
-                plotOptions: {
-                    pie: {
-                        donut: {
-                            size: '68%',
-                            labels: {
-                                show: true,
-                                total: {
-                                    show: true,
-                                    label: this.lang.totalRequests,
-                                    color: '#99a2b0',
-                                    fontSize: '13px',
-                                    fontFamily: 'inherit',
-                                },
-                                value: {
-                                    color: '#e0e4ea',
-                                    fontSize: '28px',
-                                    fontFamily: 'inherit',
-                                    fontWeight: 600,
-                                },
-                            },
-                        },
-                    },
-                },
-                dataLabels: { enabled: false },
-                legend: {
-                    position: 'bottom',
-                    labels: { colors: '#99a2b0', useSeriesColors: false },
-                    fontSize: '13px',
-                    fontFamily: 'inherit',
-                },
-                tooltip: {
-                    theme: 'dark',
-                    style: { fontSize: '13px', fontFamily: 'inherit' },
-                },
-            };
-            if (this.$refs.donutChartEl) {
-                this.donutChart = new ApexCharts(this.$refs.donutChartEl, opts);
-                this.donutChart.render();
-            }
-        },
-
-        /** 初始化折线图（最近 20 次延迟趋势） */
-        initLineChart() {
-            const opts = {
-                chart: {
-                    type: 'line',
-                    height: 300,
-                    background: 'transparent',
-                    animations: { enabled: true, easing: 'easeinout', speed: 800 },
-                    toolbar: { show: false },
-                    zoom: { enabled: false },
-                },
-                series: [{
-                    name: this.lang.avgLatency + ' (ms)',
-                    data: this.buildLatencySeries(),
-                }],
-                colors: ['#00d4ff'],
-                stroke: { curve: 'smooth', width: 2.5 },
-                fill: {
-                    type: 'gradient',
-                    gradient: {
-                        shade: 'dark',
-                        type: 'vertical',
-                        opacityFrom: .35,
-                        opacityTo: 0,
-                        stops: [0, 100],
-                        colorStops: [
-                            { offset: 0,   color: '#00d4ff', opacity: .35 },
-                            { offset: 100, color: '#00d4ff', opacity: 0 },
-                        ],
-                    },
-                },
-                markers: { size: 3, colors: ['#00d4ff'], strokeWidth: 0 },
-                grid: {
-                    borderColor: '#1e1e2e',
-                    strokeDashArray: 4,
-                    xaxis: { lines: { show: false } },
-                },
-                xaxis: {
-                    categories: this.buildLatencyXLabels(),
-                    labels: { style: { colors: '#6b7280', fontSize: '11px', fontFamily: 'inherit' } },
-                    axisBorder: { color: '#1e1e2e' },
-                    axisTicks: { show: false },
-                },
-                yaxis: {
-                    labels: {
-                        style: { colors: '#6b7280', fontSize: '11px', fontFamily: 'inherit' },
-                        formatter: (v) => v + 'ms',
-                    },
-                },
-                tooltip: {
-                    theme: 'dark',
-                    style: { fontSize: '13px', fontFamily: 'inherit' },
-                    y: { formatter: (v) => v + ' ms' },
-                },
-                noData: {
-                    text: this.lang.noTraces,
-                    style: { color: '#6b7280', fontSize: '14px', fontFamily: 'inherit' },
-                },
-            };
-            if (this.$refs.lineChartEl) {
-                this.lineChart = new ApexCharts(this.$refs.lineChartEl, opts);
-                this.lineChart.render();
-            }
-        },
-
-        /** 构建延迟序列（最近 20 个点，不足补 0） */
-        buildLatencySeries() {
-            const arr = this.metrics.latencyHistory || [];
-            const recent = arr.slice(-20);
-            // 不足 20 个时前端不补零，直接返回实际数据，图表更真实
-            return recent.length > 0 ? recent : [0];
-        },
-        buildLatencyXLabels() {
-            const arr = this.metrics.latencyHistory || [];
-            const len = Math.min(arr.length, 20);
-            if (len === 0) return [''];
-            return Array.from({ length: len }, (_, i) => '#' + (i + 1));
-        },
-
-        /** 更新图表数据（指标刷新后调用） */
-        updateCharts() {
-            if (this.donutChart) {
-                this.donutChart.updateSeries([this.metrics.localHits, this.metrics.aiRequests]);
-            }
-            if (this.lineChart) {
-                this.lineChart.updateSeries([{ name: this.lang.avgLatency + ' (ms)', data: this.buildLatencySeries() }]);
-                this.lineChart.updateOptions({ xaxis: { categories: this.buildLatencyXLabels() } });
-            }
-        },
-
-        /* ==================== SSE 实时控制台 ==================== */
-        connectSSE() {
-            if (this.eventSource) {
-                this.eventSource.close();
-            }
-            try {
-                this.eventSource = new EventSource(this.apiUrl('/api/debug/console'));
-                this.eventSource.onopen = () => {
-                    this.connected = true;
-                };
-                // 默认 message 事件（部分后端不指定 event 类型）
-                this.eventSource.onmessage = (e) => {
-                    this.appendConsoleLine(e.data);
-                };
-                // 具名 log 事件
-                this.eventSource.addEventListener('log', (e) => {
-                    this.appendConsoleLine(e.data);
-                });
-                this.eventSource.onerror = () => {
-                    this.connected = false;
-                    // EventSource 原生支持自动重连，无需手动干预
-                };
-            } catch (err) {
-                console.error('[Translex] SSE connect error:', err);
-                this.connected = false;
-            }
-        },
-
-        /** 解析 SSE 推送的日志行并追加到控制台 */
-        appendConsoleLine(raw) {
-            let parsed;
-            try {
-                parsed = JSON.parse(raw);
-            } catch (_) {
-                // 非 JSON 格式的直接作为纯文本
-                parsed = {
-                    timestamp: new Date().toLocaleTimeString('en-GB', { hour12: false }),
-                    level: 'INFO',
-                    message: raw,
-                };
-            }
-            const line = {
-                timestamp: parsed.timestamp || new Date().toLocaleTimeString('en-GB', { hour12: false }),
-                level:    (parsed.level || 'INFO').toUpperCase(),
-                message:  parsed.message || '',
-            };
-            this.consoleLines.push(line);
-
-            // 保留最近 500 行，防止内存溢出
-            if (this.consoleLines.length > 500) {
-                this.consoleLines.splice(0, this.consoleLines.length - 500);
-            }
-            // 自动滚动到底部
-            this.$nextTick(() => {
-                const el = this.$refs.terminalEl;
-                if (el) {
-                    // 如果用户在底部附近（30px 以内），自动滚到底
-                    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
-                    if (nearBottom) el.scrollTop = el.scrollHeight;
-                }
-            });
-        },
-
-        /** 滚动 Debug 控制台到底部 */
-        scrollDebugConsole() {
-            const el = this.$refs.debugConsoleEl;
-            if (el) el.scrollTop = el.scrollHeight;
-        },
-
-        /** 清空控制台 */
-        clearConsole() {
-            this.consoleLines = [];
-        },
-
-        /** 控制台日志级别徽章样式 */
-        levelBadgeClass(level) {
-            switch (level) {
-                case 'ERROR': return 'inline-block text-xs px-1 rounded mr-1 bg-red-900 text-red-300';
-                case 'WARN':  return 'inline-block text-xs px-1 rounded mr-1 bg-amber-900 text-amber-300';
-                case 'INFO':  return 'inline-block text-xs px-1 rounded mr-1 bg-blue-900 text-blue-300';
-                case 'DEBUG': return 'inline-block text-xs px-1 rounded mr-1 bg-gray-700 text-gray-400';
-                default:      return '';
-            }
-        },
-
-        /* ==================== 网络抓包手风琴 ==================== */
-        toggleTrace(idx) {
-            if (idx >= 0 && idx < this.traces.length) {
-                this.traces[idx].expanded = !this.traces[idx].expanded;
-            }
-        },
-
-        /* ==================== 工具函数 ==================== */
-        /** 格式化 JSON 为缩进可读字符串 */
-        formatJson(obj) {
-            if (!obj) return '—';
-            try {
-                if (typeof obj === 'string') {
-                    const parsed = JSON.parse(obj);
-                    return JSON.stringify(parsed, null, 2);
-                }
-                return JSON.stringify(obj, null, 2);
-            } catch (_) {
-                return String(obj);
-            }
-        },
-
-        /** Token 数量格式化（≥1000 → 1.2k，≥1M → 3.5M） */
-        formatTokens(n) {
-            if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
-            if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'k';
-            return String(n);
-        },
-    },
-
-        /* ==================== Spam Hider ==================== */
-        async loadSpamFilters() {
-            this.spamLoading = true;
-            try {
-                const res = await fetch(this.apiUrl('/api/spam-filters'));
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                const data = await res.json();
-                this.spamEnabled = data.enabled ?? true;
-                this.spamFilters = (data.filters || []).map(f => ({
-                    name: f.name || '',
-                    patternString: f.patternString || '',
-                    type: f.type || 'CONTAINS',
-                    state: f.state || 'NORMAL',
-                    formatted: f.formatted ?? false,
-                }));
-                this.spamLoaded = true;
-            } catch (err) {
-                console.error('[Translex] loadSpamFilters error:', err);
-                this.showToast(this.lang.spamLoadFailed, 'error');
-            } finally {
-                this.spamLoading = false;
-            }
-        },
-
-        async saveSpamFilters() {
-            this.spamSaving = true;
-            try {
-                const res = await fetch(this.apiUrl('/api/spam-filters/save'), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        enabled: this.spamEnabled,
-                        filters: this.spamFilters,
-                    }),
-                });
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                const result = await res.json();
-                if (result.success) {
-                    this.showToast(result.message || this.lang.spamSaved, 'success');
-                } else {
-                    throw new Error(result.error || 'unknown');
-                }
-            } catch (err) {
-                console.error('[Translex] saveSpamFilters error:', err);
-                this.showToast(this.lang.spamSaveFailed, 'error');
-            } finally {
-                this.spamSaving = false;
-            }
-        },
-
-        addSpamFilter() {
-            this.spamFilters.push({
-                name: this.lang.spamNewFilter,
-                patternString: '',
-                type: 'CONTAINS',
-                state: 'HIDDEN',
-                formatted: false,
-            });
-        },
-
-        removeSpamFilter(index) {
-            this.spamFilters.splice(index, 1);
-        },
-
-    /* ==================== 生命周期 ==================== */
-    mounted() {
-        // 0. 主题初始化（尽可能早，避免闪烁）
-        this.initTheme();
-        // 1. 语言检测
-        this.detectLanguage();
-        // 2. 初始化图表（需要 DOM 就绪）
-        this.$nextTick(() => {
-            this.initDonutChart();
-            this.initLineChart();
-        });
-        // 3. 首次数据拉取
-        this.fetchConfig();
-        this.fetchMetrics();
-        this.fetchTraces();
-        // 4. 建立 SSE 连接
-        this.connectSSE();
-        // 5. 定时轮询指标（每 5 秒）
-        this.metricsTimer = setInterval(() => this.fetchMetrics(), 5000);
-        // 6. 定时轮询抓包记录（每 3 秒）
-        this.tracesTimer = setInterval(() => this.fetchTraces(), 3000);
-        // 7. URL hash 导航（支持直接打开 #network 等标签页）
-        this.handleHashNavigation();
-        window.addEventListener('hashchange', () => this.handleHashNavigation());
-    },
-
-    beforeUnmount() {
-        // 清理资源
-        if (this.eventSource) this.eventSource.close();
-        if (this.donutChart)  this.donutChart.destroy();
-        if (this.lineChart)   this.lineChart.destroy();
-        if (this.metricsTimer) clearInterval(this.metricsTimer);
-        if (this.tracesTimer)  clearInterval(this.tracesTimer);
-    },
-}).mount('#app');
-</script>
+</div>
 
 </body>
 </html>
