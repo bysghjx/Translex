@@ -40,9 +40,10 @@ public class LineTemplate {
     private static final Pattern STYLE_TAG = Pattern.compile(
             "<s(\\d+)>(.*?)</s\\1>", Pattern.DOTALL);
 
-    /** 至少一个 ASCII 数字。涵盖 (+30)、-5、2.5s、+250% 等 SkyBlock 常见数值格式。 */
+    /** 至少一个 ASCII 数字。涵盖 (+30)、-5、2.5s、+250% 等 SkyBlock 常见数值格式。
+     *  不含空格——避免空样式段被误当数字保护成多余的 {0} 占位符。 */
     private static final Pattern NUMBER = Pattern.compile(
-            "[\\d,+.%kmb\\-\\s()s]+", Pattern.CASE_INSENSITIVE);
+            "[\\d.,+%kmb\\-s()]*\\d[\\d.,+%kmb\\-s()]*", Pattern.CASE_INSENSITIVE);
 
     /** {@code {0}}、{@code {1}}、… 标记。 */
     private static final Pattern MARKER = Pattern.compile("\\{(\\d+)\\}");
@@ -238,6 +239,10 @@ public class LineTemplate {
     /** 核心构建：填充数字，重新应用样式。 */
     private Component buildWithStyleMap(String translatedTemplate, Map<Integer, Style> styleMap) {
         String filled = fillNumbers(translatedTemplate);
+        // 兜底：清除残留 {i} 占位符（AI 多加或 vals 不匹配时），避免游戏里显示 {0}
+        if (MARKER.matcher(filled).find()) {
+            filled = MARKER.matcher(filled).replaceAll("");
+        }
         return StyleCodec.reapply(filled, styleMap);
     }
 

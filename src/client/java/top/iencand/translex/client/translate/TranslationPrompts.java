@@ -16,38 +16,26 @@ public final class TranslationPrompts {
 
     /** 聊天 / 自由文本翻译的强制 system prompt 模板。第一个 {@code %s} = 目标语言，第二个 {@code %s} = 专有名词指令。 */
     private static final String CHAT_SYSTEM_TEMPLATE =
-            "You are a translation engine. The user message is a JSON object whose values are texts to translate. "
-          + "Translate every value into %s. "
-          + "Return a JSON object with exactly the same keys, each value being the translation. "
-          + "Preserve placeholders like {0} {1} exactly as-is. "
-          + "Preserve Minecraft section-sign color codes (e.g. §a §7) exactly as-is and in the same positions. "
+            "You are a translation engine. Translate every value of the JSON object into %s, "
+          + "returning a JSON object with the same keys. "
+          + "{0} {1} etc. are opaque tokens — output them literally in place, never fill or remove. "
+          + "Preserve §a §7 color codes as-is. "
           + "%s"
-          + "Before returning, verify each value is actually translated into the target language. "
-          + "If any value would be identical to the source text and the source is not already in the target language, re-translate it. "
-          + "Never return the input unchanged. "
-          + "Output ONLY the JSON object - no markdown, no code fences, no explanations, no extra text.";
+          + "Actually translate every value; never return the input unchanged. "
+          + "Output ONLY the JSON object.";
 
     /** 物品 lore 翻译的强制 system prompt 模板，额外要求保留 &lt;sN&gt; 样式标签。 */
     private static final String ITEM_SYSTEM_TEMPLATE =
-            "You are a translation engine for Minecraft item tooltips. The user message is a JSON object whose values are texts to translate. "
-          + "Translate every value into %s. "
-          + "Return a JSON object with exactly the same keys, each value being the translation. "
-          + "Each line (JSON value) is independent — translate it as a self-contained unit. "
-          + "CRITICAL: {0} {1} {2} etc. are opaque protection tokens, NOT variables to resolve. "
-          + "You do NOT know what numbers they represent — NEVER fill them with concrete values like \"+30\" or \"(+30)\". "
-          + "Output them literally as {0} {1} {2} in the exact same positions relative to the surrounding text. "
-          + "Each placeholder is a distinct value — keep all of them even if two happen to represent the same number. "
-          + "CRITICAL: Preserve style tags <s0> </s0> <s1> </s1> etc. exactly. "
-          + "Keep the SAME tag IDs, the SAME number of tags, and the SAME sequential order as the input. "
-          + "NEVER collapse multiple tags into one, NEVER create new tags, NEVER remove existing ones. "
-          + "Even if two adjacent segments would look identical after translation, keep their tags separate. "
-          + "Only translate the visible text between tags — treat tags and placeholders as untouchable tokens. "
-          + "Preserve Minecraft section-sign color codes (e.g. §a §7) exactly as-is. "
+            "You are a Minecraft item tooltip translation engine. Translate every value of the "
+          + "JSON object into %s, returning a JSON object with the same keys. Each value is an "
+          + "independent line. "
+          + "{0} {1} etc. are opaque tokens — output them literally in place, never fill or remove. "
+          + "<s0> </s0> etc. are style tags — keep the same IDs, count, and order; translate only "
+          + "the text between them. "
+          + "Preserve §a §7 color codes as-is. "
           + "%s"
-          + "Before returning, verify each value is actually translated into the target language. "
-          + "If any value would be identical to the source text and the source is not already in the target language, re-translate it. "
-          + "Never return the input unchanged. "
-          + "Output ONLY the JSON object - no markdown, no code fences, no explanations, no extra text.";
+          + "Actually translate every value; never return the input unchanged. "
+          + "Output ONLY the JSON object.";
 
     /** 默认目标语言，targetLanguage 为空时回落。 */
     public static final String DEFAULT_TARGET_LANGUAGE = "Simplified Chinese (简体中文)";

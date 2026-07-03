@@ -93,6 +93,16 @@ public class ItemTranslationPipeline {
         for (int i = 0; i < n; i++) {
             LineTemplate tmpl = LineTemplate.fromText(originalLines.get(i));
             String lineText = originalLines.get(i).getString();
+
+            // Bazaar 价格行不翻译（保留原文）：价格行每次都因数值变化 miss 缓存，
+            // 反复送 AI 既浪费 token 又容易出 {0} 占位符问题
+            if (isBazaarPriceLine(lineText)) {
+                result[i] = originalLines.get(i);
+                storedTemplates[i] = tmpl.getTemplate();
+                if (debug) originalTemplates[i] = tmpl.getTemplate();
+                continue;
+            }
+
             String glossed = cacheManager.applyGlossary(lineText);  // 纯文本版（仅用于回退）
 
             // 调试：输出每行原始样式信息
@@ -308,6 +318,16 @@ public class ItemTranslationPipeline {
             return null;  // null = 回退到英文原文
         }
 
+        // 4. AI 多加占位符 → 清洗多余 {i}（不回退，保留翻译）
+        java.util.Set<String> extraPH = new java.util.LinkedHashSet<>(aiPH);
+        extraPH.removeAll(origPH);
+        if (!extraPH.isEmpty()) {
+            LOGGER.warn("⚠ Line {} EXTRA placeholders {} — cleaned, kept translation", lineIdx, extraPH);
+            String cleaned = aiResult;
+            for (String ph : extraPH) cleaned = cleaned.replace(ph, "");
+            return cleaned;
+        }
+
         return aiResult;
     }
 
@@ -369,6 +389,12 @@ public class ItemTranslationPipeline {
         } catch (Exception ignored) {}
         // 旧版缓存（纯译文字符串，无标签）：原样返回（Mixin 用 apply() 回退上色）
         return cacheJson;
+    }
+
+    /** Bazaar 价格行（买/卖均价）跳过翻译，保留原文，避免价格行反复请求和 {0} 占位符问题。 */
+    private static boolean isBazaarPriceLine(String text) {
+        return text != null
+                && (text.contains("Bazaar Buy-Avg") || text.contains("Bazaar Sell-Avg"));
     }
 
     public void shutdown() {
