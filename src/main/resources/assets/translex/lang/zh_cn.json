@@ -92,5 +92,7 @@
 
   "translex.info.debug_enabled": "调试模式已 §a开启§r — 翻译无需 API Key，返回原文加 [DEBUG] 标记",
   "translex.info.debug_disabled": "调试模式已 §c关闭§r — 恢复正常的 API 翻译流程",
-  "translex.info.debug_hint": "翻译结果将在原文前添加 §e[DEBUG]§r 前缀，方便识别为模拟翻译"
+  "translex.info.debug_hint": "翻译结果将在原文前添加 §e[DEBUG]§r 前缀，方便识别为模拟翻译",
+
+  "translex.help.text": "§a━━━ Translex 帮助 ━━━\n§e/translex §7— 显示此帮助\n§e/translex translate <id> §7— 按 ID 翻译消息\n§e/translex text <消息> §7— 翻译任意文本\n§e/translex say <消息> §7— 译成英文并发送到聊天\n§e/translex reload §7— 从磁盘重新加载配置\n§e/translex compat §7— 切换按钮样式 [翻译]/[T]\n§e/translex button §7— 开启/关闭翻译按钮\n§e/translex mode <chat|temporary|permanent> §7— 设置输出模式\n§e/translex reset [itemId] §7— 清除预置库条目\n§e/translex debug §7— 切换调试模式 (无需 API Key)\n§e/translex config §7— 打开 Web 配置面板"
 }

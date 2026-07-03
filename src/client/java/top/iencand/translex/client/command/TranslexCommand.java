@@ -105,18 +105,10 @@ public class TranslexCommand {
 
     private int executeHelp(CommandContext<FabricClientCommandSource> context) {
         FabricClientCommandSource source = context.getSource();
-        source.sendFeedback(Component.literal("§a━━━ Translex Help ━━━"));
-        source.sendFeedback(Component.literal("§e/translex §7— Show this help"));
-        source.sendFeedback(Component.literal("§e/translex translate <id> §7— Translate message by ID"));
-        source.sendFeedback(Component.literal("§e/translex text <message> §7— Translate arbitrary text"));
-        source.sendFeedback(Component.literal("§e/translex say <message> §7— Translate to English & send to chat"));
-        source.sendFeedback(Component.literal("§e/translex reload §7— Reload configuration from disk"));
-        source.sendFeedback(Component.literal("§e/translex compat §7— Toggle button style [翻译]/[T]"));
-        source.sendFeedback(Component.literal("§e/translex button §7— Toggle translation button on/off"));
-        source.sendFeedback(Component.literal("§e/translex mode <chat|temporary|permanent> §7— Set output mode"));
-        source.sendFeedback(Component.literal("§e/translex reset [itemId] §7— Clear preset library entries"));
-        source.sendFeedback(Component.literal("§e/translex debug §7— Toggle debug mode (no API key needed)"));
-        source.sendFeedback(Component.literal("§e/translex config §7— Open web configuration panel"));
+        // 帮助文本走 i18n，按行拆分逐条发送，颜色码由语言文件控制
+        for (String line : I18nHelper.translate("translex.help.text").split("\n")) {
+            source.sendFeedback(Component.literal(line));
+        }
         return Command.SINGLE_SUCCESS;
     }
 

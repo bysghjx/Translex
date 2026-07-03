@@ -92,5 +92,7 @@
 
   "translex.info.debug_enabled": "Debug mode §aenabled§r — translation works without API key, returns original text with [DEBUG] marker",
   "translex.info.debug_disabled": "Debug mode §cdisabled§r — normal API translation flow restored",
-  "translex.info.debug_hint": "Translated text will have a §e[DEBUG]§r prefix to identify it as mock translation"
+  "translex.info.debug_hint": "Translated text will have a §e[DEBUG]§r prefix to identify it as mock translation",
+
+  "translex.help.text": "§a━━━ Translex Help ━━━\n§e/translex §7— Show this help\n§e/translex translate <id> §7— Translate message by ID\n§e/translex text <message> §7— Translate arbitrary text\n§e/translex say <message> §7— Translate to English & send to chat\n§e/translex reload §7— Reload configuration from disk\n§e/translex compat §7— Toggle button style [翻译]/[T]\n§e/translex button §7— Toggle translation button on/off\n§e/translex mode <chat|temporary|permanent> §7— Set output mode\n§e/translex reset [itemId] §7— Clear preset library entries\n§e/translex debug §7— Toggle debug mode (no API key needed)\n§e/translex config §7— Open web configuration panel"
 }
