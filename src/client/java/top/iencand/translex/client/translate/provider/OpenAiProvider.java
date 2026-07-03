@@ -8,6 +8,7 @@ import com.google.gson.JsonParser;
 import okhttp3.MediaType;
 import okhttp3.Request;
 import okhttp3.RequestBody;
+import top.iencand.translex.client.config.ModConfig;
 
 /**
  * OpenAI 兼容格式适配器（DeepSeek / OpenAI / 各类兼容端点）。
@@ -45,6 +46,15 @@ public class OpenAiProvider implements AiProvider {
         JsonObject thinking = new JsonObject();
         thinking.addProperty("type", "disabled");
         root.add("thinking", thinking);
+
+        // 采样温度（降低随机性，减少幻觉）；structured output 强制合法 JSON
+        ModConfig cfg = ModConfig.get();
+        if (cfg.temperature >= 0) root.addProperty("temperature", cfg.temperature);
+        if (cfg.structuredOutput) {
+            JsonObject fmt = new JsonObject();
+            fmt.addProperty("type", "json_object");
+            root.add("response_format", fmt);
+        }
 
         return GSON.toJson(root);
     }

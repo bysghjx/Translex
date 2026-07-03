@@ -133,6 +133,16 @@
                     </div>
                 </div>
 
+                <!-- 采样温度 + structured output（通用，跨供应商） -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="input-label">{{ lang.temperature }}</label>
+                        <input type="number" v-model.number="config.temperature" class="input-field w-32" min="-1" max="2" step="0.1">
+                        <div class="text-xs mt-1" style="color:var(--text-muted)">{{ lang.temperatureDesc }}</div>
+                    </div>
+                    <toggle-row :label="lang.structuredOutput" :desc="lang.structuredOutputDesc" v-model="config.structuredOutput"></toggle-row>
+                </div>
+
                 <!-- 测试连接（新） -->
                 <div class="pt-2 border-t" style="border-color:var(--border-color)">
                     <div class="flex items-center gap-3">

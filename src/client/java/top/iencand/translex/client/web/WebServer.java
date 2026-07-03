@@ -162,6 +162,8 @@ public class WebServer {
         json.addProperty("provider",              cfg.provider);
         json.addProperty("maxTokens",             cfg.maxTokens);
         json.addProperty("anthropicVersion",      cfg.anthropicVersion);
+        json.addProperty("temperature",           cfg.temperature);
+        json.addProperty("structuredOutput",      cfg.structuredOutput);
         json.addProperty("activePreset",          cfg.activePreset);
         json.add("presets",                       GSON.toJsonTree(cfg.presets));
         json.add("availableProviders",            buildProvidersJson());
@@ -205,6 +207,8 @@ public class WebServer {
             if (input.has("provider"))     { cfg.provider = input.get("provider").getAsString(); changed = true; }
             if (input.has("maxTokens"))    { cfg.maxTokens = input.get("maxTokens").getAsInt(); changed = true; }
             if (input.has("anthropicVersion")) { cfg.anthropicVersion = input.get("anthropicVersion").getAsString(); changed = true; }
+            if (input.has("temperature"))       { cfg.temperature = input.get("temperature").getAsDouble(); changed = true; }
+            if (input.has("structuredOutput"))  { cfg.structuredOutput = input.get("structuredOutput").getAsBoolean(); changed = true; }
             if (input.has("activePreset")) { cfg.activePreset = input.get("activePreset").getAsString(); changed = true; }
             if (input.has("presets") && input.get("presets").isJsonArray()) {
                 cfg.presets = parsePresets(input.getAsJsonArray("presets"));

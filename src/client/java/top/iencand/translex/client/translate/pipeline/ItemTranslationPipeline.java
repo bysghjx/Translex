@@ -402,4 +402,9 @@ public class ItemTranslationPipeline {
         cacheManager.shutdown();
         presetLibrary.shutdown();
     }
+
+    /** 使当前物品翻译会话失效（关 GUI 时调用），丢弃进行中的异步回调。 */
+    public void invalidateSession() {
+        dispatcher.invalidateSession();
+    }
 }

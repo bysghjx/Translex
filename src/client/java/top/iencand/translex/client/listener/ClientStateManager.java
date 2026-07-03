@@ -92,6 +92,7 @@ public class ClientStateManager {
                 lastHoveredItem = null;
                 HoverSlotTracker.clearAll();
                 TemporaryTooltipCache.clear();
+                translationManager.invalidateItemSession();
             });
         });
     }

@@ -8,6 +8,7 @@ import com.google.gson.JsonParser;
 import okhttp3.MediaType;
 import okhttp3.Request;
 import okhttp3.RequestBody;
+import top.iencand.translex.client.config.ModConfig;
 
 /**
  * Anthropic 原生 Messages API 适配器。
@@ -39,6 +40,9 @@ public class AnthropicProvider implements AiProvider {
         JsonObject thinking = new JsonObject();
         thinking.addProperty("type", "disabled");
         root.add("thinking", thinking);
+
+        // 采样温度（Anthropic 支持；structured output 不适用，Anthropic 无 response_format）
+        if (ModConfig.get().temperature >= 0) root.addProperty("temperature", ModConfig.get().temperature);
 
         // Anthropic 要求 messages 以 user 开头，无独立 system 消息。
         // 可选补充指令拼到载荷前，作为单条 user 消息发送。

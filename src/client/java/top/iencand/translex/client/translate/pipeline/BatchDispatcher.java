@@ -54,6 +54,14 @@ public class BatchDispatcher {
     private volatile int batchSeq = 0;
     private volatile boolean shutdown;
 
+    /** 会话纪元：关 GUI/切会话时递增，用于丢弃旧异步回调，防止写入新会话。 */
+    private final java.util.concurrent.atomic.AtomicLong sessionEpoch = new java.util.concurrent.atomic.AtomicLong(0);
+    /** 单条重试失败后的延迟重试最大次数（每次间隔 5s）。 */
+    private static final int MAX_ERROR_RETRIES = 2;
+
+    /** 使当前会话失效：递增 epoch，进行中的异步回调将被丢弃。 */
+    public void invalidateSession() { sessionEpoch.incrementAndGet(); }
+
     private record BatchEntry(int index, String text, CompletableFuture<String> future) {}
 
     public BatchDispatcher(PipelineConfig config, TranslationRequester sharedRequester) {
@@ -124,6 +132,7 @@ public class BatchDispatcher {
         if (batch.isEmpty()) return;
 
         final int seq = ++batchSeq;
+        final long batchEpoch = sessionEpoch.get();
 
         JsonObject dict = new JsonObject();
         for (int i = 0; i < batch.size(); i++) {
@@ -175,15 +184,23 @@ public class BatchDispatcher {
                         ConsoleBroadcaster.broadcast("INFO",
                                 "AI batch #" + seq + " completed in " + duration + "ms");
                     }
-                    handleBatchResponse(rawResult, batch, seq);
+                    handleBatchResponse(rawResult, batch, seq, batchEpoch);
                 }
         );
     }
 
-    private void handleBatchResponse(String rawResult, List<BatchEntry> batch, int seq) {
+    private void handleBatchResponse(String rawResult, List<BatchEntry> batch, int seq, long batchEpoch) {
         if (shutdown) return;
         Minecraft.getInstance().execute(() -> {
             try {
+                // session-epoch 守卫：会话失效（关 GUI/切会话）后丢弃旧回调，complete 原文不写缓存
+                if (sessionEpoch.get() != batchEpoch) {
+                    ConsoleBroadcaster.broadcast("WARN",
+                            "Batch #" + seq + " discarded — session invalidated (epoch mismatch)");
+                    for (BatchEntry entry : batch) entry.future().complete(entry.text());
+                    return;
+                }
+
                 // 整批请求失败（如网络/HTTP/API 错误）：rawResult 是 §c 开头的错误串，
                 // 不是可解析的字典。直接把错误传播给每个 future，让上层渲染红字，
                 // 而不是误判为"缺失"再单条重试（同样会失败并被静默吞掉）。
@@ -196,10 +213,21 @@ public class BatchDispatcher {
 
                 Map<Integer, String> parsed = parseDictResponse(rawResult, batch.size());
 
+                // key-mismatch 检测：parsed 有多余键（不在 batch 索引内）说明 AI 返回错乱
+                Set<Integer> expectedIndices = new HashSet<>();
+                for (BatchEntry e : batch) expectedIndices.add(e.index());
+                Set<Integer> extraKeys = new HashSet<>(parsed.keySet());
+                extraKeys.removeAll(expectedIndices);
+                boolean keyMismatch = !extraKeys.isEmpty();
+                if (keyMismatch) {
+                    ConsoleBroadcaster.broadcast("WARN",
+                            "Batch #" + seq + " key-mismatch (extra keys " + extraKeys + ") — retrying all singly");
+                }
+
                 List<BatchEntry> missing = new ArrayList<>();
                 for (BatchEntry entry : batch) {
                     String translated = parsed.get(entry.index());
-                    if (translated != null && !translated.isBlank()) {
+                    if (!keyMismatch && translated != null && !translated.isBlank()) {
                         entry.future().complete(translated);
                     } else {
                         missing.add(entry);
@@ -207,7 +235,7 @@ public class BatchDispatcher {
                 }
 
                 for (BatchEntry entry : missing) {
-                    retrySingle(entry);
+                    retrySingle(entry, 0);
                 }
 
             } catch (Exception e) {
@@ -261,7 +289,7 @@ public class BatchDispatcher {
     // 单条重试
     // ===============================================================
 
-    private void retrySingle(BatchEntry entry) {
+    private void retrySingle(BatchEntry entry, int retryCount) {
         NetworkConfig.RETRY_EXECUTOR.execute(() -> {
             try {
                 JsonObject dict = new JsonObject();
@@ -278,7 +306,7 @@ public class BatchDispatcher {
                 final long startTime = System.currentTimeMillis();
                 final String apiUrlSnapshot = ModConfig.get().apiUrl;
                 ConsoleBroadcaster.broadcast("WARN",
-                        "Retrying single entry #" + entry.index() + " after batch miss");
+                        "Retrying single entry #" + entry.index() + " (attempt " + (retryCount + 1) + ") after batch miss");
 
                 requester.requestTranslation(
                         ModConfig.get().apiKey,
@@ -302,24 +330,39 @@ public class BatchDispatcher {
                             te.estimatedPayloadTokens      = payTokens;
                             MetricsCollector.get().recordTrace(te);
                             Map<Integer, String> parsed = parseDictResponse(rawResult, 1);
-                            String result = parsed.getOrDefault(0, entry.text());
-                            if (!shutdown) {
-                                Minecraft.getInstance().execute(() ->
-                                        entry.future().complete(result));
+                            String result = parsed.get(0);
+                            if (result != null && !result.isBlank()) {
+                                final String r = result;
+                                if (!shutdown) {
+                                    Minecraft.getInstance().execute(() -> entry.future().complete(r));
+                                } else {
+                                    entry.future().complete(r);
+                                }
                             } else {
-                                entry.future().complete(result);
+                                scheduleRetryOrFallback(entry, retryCount);
                             }
                         }
                 );
             } catch (Exception e) {
-                if (!shutdown) {
-                    Minecraft.getInstance().execute(() ->
-                            entry.future().complete(entry.text()));
-                } else {
-                    entry.future().complete(entry.text());
-                }
+                scheduleRetryOrFallback(entry, retryCount);
             }
         });
+    }
+
+    /** 单条重试失败后：未达上限则延迟 5s 重试，否则回退英文原文。 */
+    private void scheduleRetryOrFallback(BatchEntry entry, int retryCount) {
+        if (retryCount < MAX_ERROR_RETRIES && !shutdown) {
+            ConsoleBroadcaster.broadcast("WARN",
+                    "Single retry #" + entry.index() + " failed, scheduling retry "
+                            + (retryCount + 1) + "/" + MAX_ERROR_RETRIES + " in 5s");
+            windowScheduler.schedule(() -> retrySingle(entry, retryCount + 1), 5, TimeUnit.SECONDS);
+        } else {
+            if (!shutdown) {
+                Minecraft.getInstance().execute(() -> entry.future().complete(entry.text()));
+            } else {
+                entry.future().complete(entry.text());
+            }
+        }
     }
 
     // ===============================================================

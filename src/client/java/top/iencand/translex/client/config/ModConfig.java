@@ -33,6 +33,12 @@ public class ModConfig {
     /** anthropic-version 请求头取值，仅 Anthropic 供应商使用。 */
     public String anthropicVersion = "2023-06-01";
 
+    /** 采样温度。低值（0~0.3）降低随机性，减少幻觉和占位符模仿。负值表示不发送该字段。 */
+    public double temperature = 0.3;
+
+    /** 是否启用 structured output（response_format=json_object），强制 AI 返回合法 JSON。部分端点不支持。 */
+    public boolean structuredOutput = false;
+
     /** 已保存的连接预设库。当前激活的连接由上面的 apiKey/apiUrl/modelName/provider 等字段持有。 */
     public List<Preset> presets = new ArrayList<>();
 
@@ -235,6 +241,8 @@ public class ModConfig {
             instance.provider = toml.getString("provider", instance.provider);
             instance.maxTokens = toml.getLong("maxTokens", (long) instance.maxTokens).intValue();
             instance.anthropicVersion = toml.getString("anthropicVersion", instance.anthropicVersion);
+            instance.temperature = toml.getDouble("temperature", instance.temperature);
+            instance.structuredOutput = toml.getBoolean("structuredOutput", instance.structuredOutput);
             instance.activePreset = toml.getString("activePreset", instance.activePreset);
             loadPresets(toml);
             if (instance.presets.isEmpty()) {
@@ -378,6 +386,10 @@ public class ModConfig {
         sb.append("maxTokens = ").append(instance.maxTokens).append("\n");
         sb.append("# anthropic-version header value (Anthropic only)\n");
         sb.append("anthropicVersion = \"").append(escapeToml(instance.anthropicVersion)).append("\"\n");
+        sb.append("# Sampling temperature (low = less hallucination; negative = omit field)\n");
+        sb.append("temperature = ").append(instance.temperature).append("\n");
+        sb.append("# Use structured output (response_format=json_object); unsupported by some endpoints\n");
+        sb.append("structuredOutput = ").append(instance.structuredOutput).append("\n");
         sb.append("# Name of the currently active saved preset (empty = custom connection)\n");
         sb.append("activePreset = \"").append(escapeToml(instance.activePreset)).append("\"\n");
         sb.append("\n");

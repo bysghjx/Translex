@@ -29,6 +29,8 @@ const I18N_DICT = {
         provider: 'AI 供应商格式', providerDesc: 'OpenAI 兼容适用于 DeepSeek/OpenAI 等；Anthropic 为 Claude 原生格式',
         maxTokens: '最大输出 Token', maxTokensDesc: 'Anthropic 必需。OpenAI 兼容端点忽略此项',
         anthropicVersion: 'anthropic-version 头', anthropicVersionDesc: '仅 Anthropic 使用，一般保持默认 2023-06-01',
+        temperature: '采样温度', temperatureDesc: '0~0.3 降低幻觉；负值表示不发送该字段',
+        structuredOutput: 'Structured Output', structuredOutputDesc: '强制 JSON 输出（部分端点不支持）',
         presets: '连接预设', presetsDesc: '保存多套供应商/密钥/模型组合，一键切换。应用后记得点保存配置',
         presetCustom: '（自定义连接）', presetApply: '应用', presetDelete: '删除', presetSaveCurrent: '存为预设', presetNamePlaceholder: '新预设名称',
         targetLanguage: '目标语言（翻译成）', targetLanguageCustomPlaceholder: '自定义语言，如 Italiano', targetLanguageModeToggle: '自定义语言',
@@ -93,6 +95,8 @@ const I18N_DICT = {
         provider: 'AI Provider Format', providerDesc: 'OpenAI-compatible for DeepSeek/OpenAI etc.; Anthropic for Claude native format',
         maxTokens: 'Max Output Tokens', maxTokensDesc: 'Required by Anthropic. Ignored by OpenAI-compatible endpoints',
         anthropicVersion: 'anthropic-version Header', anthropicVersionDesc: 'Anthropic only; usually keep default 2023-06-01',
+        temperature: 'Temperature', temperatureDesc: '0~0.3 reduces hallucination; negative to omit the field',
+        structuredOutput: 'Structured Output', structuredOutputDesc: 'Force JSON output (unsupported by some endpoints)',
         presets: 'Connection Presets', presetsDesc: 'Save multiple provider/key/model combos, switch with one click. Remember to Save Config after applying',
         presetCustom: '(Custom connection)', presetApply: 'Apply', presetDelete: 'Delete', presetSaveCurrent: 'Save Preset', presetNamePlaceholder: 'New preset name',
         targetLanguage: 'Target Language (translate into)', targetLanguageCustomPlaceholder: 'Custom language, e.g. Italiano', targetLanguageModeToggle: 'Custom language',
@@ -164,6 +168,7 @@ const app = createApp({
                 translationMode:'auto', buttonStyle:'NORMAL', enableTranslateButton:true, outputMode:'chat',
                 enableCachePersistence:true, enablePeriodicSave:true, periodicSaveInterval:24000, cacheMaxEntries:20000,
                 enableChatCompact:true, compactTimeSeconds:120, compactColorCode:'GRAY', debug:false,
+                temperature:0.3, structuredOutput:false,
             },
             configBaseline: null,   // 未保存检测基线（深拷贝）
             configLoading: false, configSaving: false,
@@ -296,6 +301,7 @@ const app = createApp({
                 translationMode:c.translationMode, buttonStyle:c.buttonStyle, enableTranslateButton:c.enableTranslateButton, outputMode:c.outputMode,
                 enableCachePersistence:c.enableCachePersistence, enablePeriodicSave:c.enablePeriodicSave, periodicSaveInterval:c.periodicSaveInterval, cacheMaxEntries:c.cacheMaxEntries,
                 enableChatCompact:c.enableChatCompact, compactTimeSeconds:c.compactTimeSeconds, compactColorCode:c.compactColorCode, debug:c.debug,
+                temperature:c.temperature, structuredOutput:c.structuredOutput,
             };
         },
         async fetchConfig() {
@@ -318,6 +324,7 @@ const app = createApp({
                 c.periodicSaveInterval=d.periodicSaveInterval||24000; c.cacheMaxEntries=d.cacheMaxEntries||20000;
                 c.enableChatCompact=d.enableChatCompact!==false; c.compactTimeSeconds=d.compactTimeSeconds||120;
                 c.compactColorCode=d.compactColorCode||'GRAY'; c.debug=!!d.debug;
+                c.temperature=(typeof d.temperature==='number')?d.temperature:0.3; c.structuredOutput=!!d.structuredOutput;
                 if (Array.isArray(d.availableProviders) && d.availableProviders.length) this.availableProviders = d.availableProviders;
                 this.configBaseline = JSON.parse(JSON.stringify(this.sanitizedConfig()));
             } catch(e) { this.showToast(this.lang.loadFailed+': '+e.message, 'error'); }

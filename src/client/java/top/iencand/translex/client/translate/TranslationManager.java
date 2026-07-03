@@ -71,4 +71,9 @@ public class TranslationManager {
         chatPipeline.shutdown();
         itemPipeline.shutdown();
     }
+
+    /** 使物品翻译会话失效：进行中的异步回调将被丢弃，不写入新会话的缓存。 */
+    public void invalidateItemSession() {
+        itemPipeline.invalidateSession();
+    }
 }
