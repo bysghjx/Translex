@@ -250,7 +250,7 @@
 
         <!-- ===== Network ===== -->
         <section v-show="activeTab === 'network'" class="space-y-3">
-            <trace-accordion :traces="traces" @toggle="toggleTrace"></trace-accordion>
+            <trace-accordion :traces="traces" :debug="config.debug" @toggle="toggleTrace"></trace-accordion>
         </section>
 
         <!-- ===== Debug ===== -->

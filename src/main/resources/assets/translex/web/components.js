@@ -136,7 +136,7 @@ app.component('filter-row', {
 
 /* 抓包手风琴（整块） */
 app.component('trace-accordion', {
-    props: { traces: { type: Array, default: () => [] } },
+    props: { traces: { type: Array, default: () => [] }, debug: { type: Boolean, default: false } },
     emits: ['toggle'],
     template: `
     <div class="space-y-3">
@@ -168,7 +168,7 @@ app.component('trace-accordion', {
                     </div>
                     <div>
                         <div class="text-xs font-semibold mb-1.5" style="color:var(--success)">Response</div>
-                        <pre class="trace-pre text-xs rounded-lg p-3 font-mono" style="background:var(--bg-input);color:var(--text-secondary)">{{ pretty(trace.responseBody) }}</pre>
+                        <pre class="trace-pre text-xs rounded-lg p-3 font-mono" style="background:var(--bg-input);color:var(--text-secondary)">{{ prettyResponse(trace) }}</pre>
                     </div>
                     <div v-if="trace.hasTokenData" class="text-xs space-y-1.5 rounded-lg p-3 mt-2" style="background:var(--bg-input)">
                         <div class="grid grid-cols-2 gap-x-4 gap-y-1">
@@ -192,7 +192,20 @@ app.component('trace-accordion', {
     </div>`,
     methods: {
         fmt(n) { if (!n) return '0'; if (n >= 1e6) return (n/1e6).toFixed(1)+'M'; if (n >= 1e3) return (n/1e3).toFixed(1)+'k'; return String(n); },
-        pretty(s) { if (!s) return ''; try { return JSON.stringify(JSON.parse(s), null, 2); } catch(e) { return s; } }
+        pretty(s) { if (!s) return ''; try { return JSON.stringify(JSON.parse(s), null, 2); } catch(e) { return s; } },
+        // debug 模式显示完整 response body；非 debug 只保留 choices/model，去掉 id/object/created/usage 等元数据
+        prettyResponse(trace) {
+            if (this.debug) return this.pretty(trace.responseBody);
+            try {
+                const obj = JSON.parse(trace.responseBody);
+                const slim = {};
+                if (obj.model) slim.model = obj.model;
+                if (obj.choices) slim.choices = obj.choices;
+                return this.pretty(JSON.stringify(slim));
+            } catch (e) {
+                return this.pretty(trace.responseBody);
+            }
+        }
     }
 });
 
