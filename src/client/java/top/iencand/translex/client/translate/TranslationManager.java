@@ -58,8 +58,8 @@ public class TranslationManager {
     // -------- 物品管线转发 --------
 
     public void translateItemLoreTemplates(List<Component> originalLines, String itemId,
-                                            String itemDisplayName, ItemStack stack) {
-        itemPipeline.translateItemLoreTemplates(originalLines, itemId, itemDisplayName, stack);
+                                            String itemDisplayName, ItemStack stack, boolean force) {
+        itemPipeline.translateItemLoreTemplates(originalLines, itemId, itemDisplayName, stack, force);
     }
 
     // -------- 共享组件访问（命令 / ClientStateManager 依赖） --------

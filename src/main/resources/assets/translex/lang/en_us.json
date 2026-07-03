@@ -14,6 +14,7 @@
   "translex.info.mode_message_id": "Current mode: Message ID + Button (§eRestart required to switch§r).",
   "translex.info.mode_command_text": "Current mode: Command + Text (§eRestart required to switch§r).",
   "translex.info.request_sent": "§eTranslation request sent, please wait...§r",
+  "translex.info.force_retranslate": "§eForce re-translating… (cache ignored)§r",
   "translex.info.preset_hit": "§aFound in preset library!§r",
   "translex.info.preset_saved": "§aSaved to preset library.§r",
 

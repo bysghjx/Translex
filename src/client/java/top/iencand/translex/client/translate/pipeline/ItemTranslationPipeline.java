@@ -71,7 +71,7 @@ public class ItemTranslationPipeline {
      * 各行并行处理，全部完成后统一渲染，并按输出模式以组合键存储。
      */
     public void translateItemLoreTemplates(List<Component> originalLines, String itemId,
-                                            String itemDisplayName, ItemStack stack) {
+                                            String itemDisplayName, ItemStack stack, boolean force) {
         if (originalLines == null || originalLines.isEmpty()) return;
         int n = originalLines.size();
 
@@ -113,7 +113,8 @@ public class ItemTranslationPipeline {
                 storedTemplates[i] = glossedTmpl;
             } else {
                 String ck = cacheManager.buildCacheKey(StyleCodec.stripTags(tmpl.getTemplate()));
-                String cachedJson = cacheManager.getByCacheKey(ck);
+                // force=true（Ctrl+P 强制重译）时跳过行级缓存，直接请求 AI
+                String cachedJson = force ? null : cacheManager.getByCacheKey(ck);
                 if (cachedJson != null) {
                     // 从缓存 JSON 中提取翻译后的模板
                     String cachedTmpl = fromCacheOrRaw(cachedJson);

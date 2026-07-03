@@ -14,6 +14,7 @@
   "translex.info.mode_message_id": "当前启用模式：消息 ID + 按钮 (§e需要重启游戏切换§a)。",
   "translex.info.mode_command_text": "当前启用模式：命令 + 文本 (§e需要重启游戏切换§a)。",
   "translex.info.request_sent": "§e已发送翻译请求，请稍候...§r",
+  "translex.info.force_retranslate": "§e强制重新翻译中…（忽略缓存）§r",
   "translex.info.preset_hit": "§a预置库命中！§r",
   "translex.info.preset_saved": "§a已保存到预置库。§r",
 

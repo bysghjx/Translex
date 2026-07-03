@@ -22,6 +22,9 @@ public final class TranslationPrompts {
           + "Preserve placeholders like {0} {1} exactly as-is. "
           + "Preserve Minecraft section-sign color codes (e.g. §a §7) exactly as-is and in the same positions. "
           + "%s"
+          + "Before returning, verify each value is actually translated into the target language. "
+          + "If any value would be identical to the source text and the source is not already in the target language, re-translate it. "
+          + "Never return the input unchanged. "
           + "Output ONLY the JSON object - no markdown, no code fences, no explanations, no extra text.";
 
     /** 物品 lore 翻译的强制 system prompt 模板，额外要求保留 &lt;sN&gt; 样式标签。 */
@@ -41,6 +44,9 @@ public final class TranslationPrompts {
           + "Only translate the visible text between tags — treat tags and placeholders as untouchable tokens. "
           + "Preserve Minecraft section-sign color codes (e.g. §a §7) exactly as-is. "
           + "%s"
+          + "Before returning, verify each value is actually translated into the target language. "
+          + "If any value would be identical to the source text and the source is not already in the target language, re-translate it. "
+          + "Never return the input unchanged. "
           + "Output ONLY the JSON object - no markdown, no code fences, no explanations, no extra text.";
 
     /** 默认目标语言，targetLanguage 为空时回落。 */

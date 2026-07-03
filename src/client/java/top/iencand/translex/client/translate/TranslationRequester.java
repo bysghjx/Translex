@@ -157,6 +157,14 @@ public class TranslationRequester {
                         AiResponse parsed = provider.parseResponse(bodyString);
                         if (parsed.success()) {
                             resultMessage = parsed.content();
+                            // 未翻译检测：响应与输入一致时标记 warning（不阻塞流程，仍显示原文）
+                            if (isUntranslated(userContent, parsed.content())) {
+                                String snippet = parsed.content().length() > 120
+                                        ? parsed.content().substring(0, 120) + "…" : parsed.content();
+                                ConsoleBroadcaster.broadcast("WARN",
+                                        "模型原样返回，可能未翻译 — " + displayIdentifier
+                                                + " | content=" + snippet);
+                            }
                             if (parsed.prompt() > 0 || parsed.completion() > 0) {
                                 MetricsCollector.get().recordActualTokenUsage(parsed.prompt(), parsed.completion());
                                 MetricsCollector.get().stageTokenData(parsed.prompt(), parsed.completion(),
@@ -254,5 +262,32 @@ public class TranslationRequester {
             result.addProperty("0", "§e[DEBUG]§r " + inputJson);
         }
         return result.toString();
+    }
+
+    /**
+     * 检测 AI 是否原样返回了输入（未翻译）。
+     * 解析两边 JSON 对象，若所有 value 与原文逐字相同则判定为未翻译；
+     * JSON 解析失败时回退到 trim 后的字符串比较。
+     * 用于在模型退化（如 flash 模型复制输入）时标记 warning，而非静默当成成功。
+     */
+    private static boolean isUntranslated(String userContent, String aiContent) {
+        if (userContent == null || aiContent == null) return false;
+        if (userContent.isBlank() || aiContent.isBlank()) return false;
+        // 快速路径：整体完全相同
+        if (userContent.trim().equals(aiContent.trim())) return true;
+        // JSON 路径：逐 value 比较（容忍键序差异）
+        try {
+            JsonObject u = JsonParser.parseString(userContent).getAsJsonObject();
+            JsonObject a = JsonParser.parseString(aiContent).getAsJsonObject();
+            if (!u.keySet().equals(a.keySet())) return false;
+            for (String key : u.keySet()) {
+                if (!u.get(key).getAsString().equals(a.get(key).getAsString())) {
+                    return false; // 任一 value 不同 → 有翻译
+                }
+            }
+            return true; // 所有 value 都相同 → 未翻译
+        } catch (Exception e) {
+            return false; // 非 JSON 或解析失败，不判定
+        }
     }
 }

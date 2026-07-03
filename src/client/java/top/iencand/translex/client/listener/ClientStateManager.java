@@ -14,6 +14,7 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.network.chat.Component;
 import net.minecraft.client.input.KeyEvent;
 import org.jetbrains.annotations.NotNull;
+import org.lwjgl.glfw.GLFW;
 import top.iencand.translex.client.mixin.HandledScreenAccessor;
 import top.iencand.translex.client.translate.cache.TemporaryTooltipCache;
 import top.iencand.translex.client.config.ModConfig;
@@ -103,6 +104,8 @@ public class ClientStateManager {
         if (ModKeybindings.TRANSLATE_LORE_KEY.matches(input)) {
             Minecraft mc = Minecraft.getInstance();
             LocalPlayer player = mc.player;
+            // Ctrl+P = 强制重新翻译（忽略缓存）；单独 P = 普通翻译
+            boolean force = isCtrlDown();
 
             if (screen instanceof AbstractContainerScreen) {
                 if (lastHoveredItem != null && !lastHoveredItem.isEmpty()) {
@@ -135,19 +138,22 @@ public class ClientStateManager {
                     }
 
                     // 0. 先用组合键检查永久预设库（itemId#loreHash），命中则直接回显
-                    String presetKey = TooltipKeyUtil.buildKey(lastHoveredItem, fullTooltip);
-                    if (presetKey != null) {
-                        List<String> presetLines =
-                                translationManager.getPresetLibrary().getTooltip(presetKey);
-                        if (presetLines != null && !presetLines.isEmpty()) {
-                            if (player != null) {
-                                player.sendSystemMessage(Component.literal(
-                                        I18nHelper.getPrefixed("translex.info.preset_hit")));
-                                for (String line : presetLines) {
-                                    player.sendSystemMessage(Component.literal("§7" + line));
+                    //    force（Ctrl+P）时跳过，强制重新翻译
+                    if (!force) {
+                        String presetKey = TooltipKeyUtil.buildKey(lastHoveredItem, fullTooltip);
+                        if (presetKey != null) {
+                            List<String> presetLines =
+                                    translationManager.getPresetLibrary().getTooltip(presetKey);
+                            if (presetLines != null && !presetLines.isEmpty()) {
+                                if (player != null) {
+                                    player.sendSystemMessage(Component.literal(
+                                            I18nHelper.getPrefixed("translex.info.preset_hit")));
+                                    for (String line : presetLines) {
+                                        player.sendSystemMessage(Component.literal("§7" + line));
+                                    }
                                 }
+                                return;
                             }
-                            return;
                         }
                     }
 
@@ -160,9 +166,9 @@ public class ClientStateManager {
                         return;
                     }
 
-                    // 3. 提交翻译，传入原始 Component 对象用于模板提取
+                    // 3. 提交翻译，传入原始 Component 对象用于模板提取（force=true 时忽略行级缓存）
                     this.translationManager.translateItemLoreTemplates(
-                            fullTooltip, itemId, itemDisplayName, lastHoveredItem);
+                            fullTooltip, itemId, itemDisplayName, lastHoveredItem, force);
 
                     // temporary 模式：激活当前悬停槽位的译文显示门控（#3）。
                     // 用按 P 当帧的悬停槽位号 + 本次 tooltip 的 loreHash，与异步翻译解耦。
@@ -174,7 +180,9 @@ public class ClientStateManager {
 
                     if (player != null) {
                         player.sendSystemMessage(Component.literal(
-                                I18nHelper.getPrefixed("translex.info.request_sent")));
+                                I18nHelper.getPrefixed(force
+                                        ? "translex.info.force_retranslate"
+                                        : "translex.info.request_sent")));
 
                         String mode = ModConfig.get().outputMode;
                         if ("temporary".equals(mode)) {
@@ -199,6 +207,13 @@ public class ClientStateManager {
     // ===============================================================
     // 辅助方法
     // ===============================================================
+
+    /** 检测当前是否按下了 Ctrl 键（左或右），用于 Ctrl+P 强制重译。 */
+    private static boolean isCtrlDown() {
+        long handle = GLFW.glfwGetCurrentContext();
+        return GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_LEFT_CONTROL) == GLFW.GLFW_PRESS
+                || GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_RIGHT_CONTROL) == GLFW.GLFW_PRESS;
+    }
 
     private static String concatenateTooltip(List<Component> tooltip) {
         StringBuilder sb = new StringBuilder();
