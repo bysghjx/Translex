@@ -8,7 +8,12 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallba
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
-import java.awt.Desktop; import java.net.URI;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.Style;
+import net.minecraft.ChatFormatting;
+import java.awt.Desktop;
+import java.net.URI;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import top.iencand.translex.client.translate.cache.TemporaryTooltipCache;
@@ -397,8 +402,16 @@ public class TranslexCommand {
             }
         }, "Translex-BrowserOpener").start();
 
+        // 构造可点击链接：青色 + 下划线，点击在浏览器打开，悬停显示提示
+        Component link = Component.literal(url)
+                .setStyle(Style.EMPTY
+                        .withColor(ChatFormatting.AQUA)
+                        .withUnderlined(true)
+                        .withClickEvent(new ClickEvent.OpenUrl(URI.create(url)))
+                        .withHoverEvent(new HoverEvent.ShowText(Component.literal(
+                                I18nHelper.translate("translex.info.config_open_hover")))));
         source.sendFeedback(Component.literal(
-                I18nHelper.getPrefixed("translex.info.config_opened", url)));
+                I18nHelper.getPrefixed("translex.info.config_opened")).append(link));
         return Command.SINGLE_SUCCESS;
     }
 

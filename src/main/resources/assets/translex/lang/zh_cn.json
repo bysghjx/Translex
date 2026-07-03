@@ -87,7 +87,8 @@
   "translex.info.perm_mode_hint": "§7[永久模式] 翻译后将存入预置库，以后永久显示。§r",
   "translex.error.invalid_mode": "无效的输出模式 '%s'，可选: chat, temporary, permanent",
 
-  "translex.info.config_opened": "已打开 Web 配置面板: %s",
+  "translex.info.config_opened": "已打开 Web 配置面板，点击链接打开: ",
+  "translex.info.config_open_hover": "点击在浏览器中打开 Web 配置面板",
 
   "translex.info.debug_enabled": "调试模式已 §a开启§r — 翻译无需 API Key，返回原文加 [DEBUG] 标记",
   "translex.info.debug_disabled": "调试模式已 §c关闭§r — 恢复正常的 API 翻译流程",
