@@ -153,6 +153,9 @@ public class ItemTranslationPipeline {
             if (debug) originalTemplates[i] = tmpl.getTemplate();
         }
 
+        // 所有行已 submit 到 dispatcher，立即触发批 flush（自适应窗口：行到齐即发，不等 2.5s 固定窗口）
+        dispatcher.flushNow();
+
         if (aiIndices.isEmpty()) {
             if (debug) LOGGER.info("══════ StyleDump END — all lines pre-translated, item={} ══════", itemId);
             renderer.renderResult(joinTexts(originalLines), joinTexts(List.of(result)), displayId);

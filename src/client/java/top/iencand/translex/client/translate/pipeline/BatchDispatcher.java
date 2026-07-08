@@ -62,6 +62,15 @@ public class BatchDispatcher {
     /** 使当前会话失效：递增 epoch，进行中的异步回调将被丢弃。 */
     public void invalidateSession() { sessionEpoch.incrementAndGet(); }
 
+    /** 立即 flush 当前队列（取消待触发的窗口定时器）。物品管线在所有行 submit 后调用，
+     *  行到齐即发，不等固定窗口。 */
+    public void flushNow() {
+        ScheduledFuture<?> wf;
+        synchronized (this) { wf = windowFuture; windowFuture = null; }
+        if (wf != null) wf.cancel(false);
+        flush();
+    }
+
     private record BatchEntry(int index, String text, CompletableFuture<String> future) {}
 
     public BatchDispatcher(PipelineConfig config, TranslationRequester sharedRequester) {
