@@ -14,11 +14,11 @@ public final class TranslationPrompts {
 
     private TranslationPrompts() {}
 
-    /** 聊天 / 自由文本翻译的强制 system prompt 模板。第一个 {@code %s} = 目标语言，第二个 {@code %s} = 专有名词指令。 */
+    /** 聊天 / 自由文本翻译的强制 system prompt 模板。第一个 {@code %s} = 目标语言，第二个 {@code %s} = 专有名词指令。
+     *  聊天管线 normalizeNumbers=false（数字原样发，无 {num} 占位符），故无占位符保留指令。 */
     private static final String CHAT_SYSTEM_TEMPLATE =
             "You are a translation engine. Translate every value of the JSON object into %s, "
           + "returning a JSON object with the same keys. "
-          + "{0} {1} etc. are opaque tokens — output them literally in place, never fill or remove. "
           + "Preserve §a §7 color codes as-is. "
           + "%s"
           + "Actually translate every value; never return the input unchanged. "
