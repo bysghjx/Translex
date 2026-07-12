@@ -159,7 +159,7 @@ const app = createApp({
             configSubTab: 'api',
             configSubTabs: [ {id:'api',label:''}, {id:'behavior',label:''}, {id:'cache',label:''}, {id:'compact',label:''} ],
             connected: false, token: '',
-            theme: 'system', themeMedia: null,
+            theme: 'system', systemDark: false,
             config: {
                 apiKey:'', apiUrl:'', model:'', provider:'openai', maxTokens:4096, anthropicVersion:'2023-06-01',
                 presets:[], activePreset:'',
@@ -271,8 +271,20 @@ const app = createApp({
         initTheme() {
             const saved = safeStorage('getItem', 'translex-theme');
             this.theme = saved || 'system';
-            this.themeMedia = matchMedia('(prefers-color-scheme: dark)');
-            this.themeMedia.addEventListener('change', () => { if (this.theme === 'system') this.applyTheme(); });
+            // MediaQueryList 留在局部变量（存进 data 会被 Vue reactivity Proxy 化，导致 change 监听失效）
+            const mq = matchMedia('(prefers-color-scheme: dark)');
+            this.systemDark = mq.matches;
+            mq.addEventListener('change', e => {
+                this.systemDark = e.matches;
+                if (this.theme === 'system') this.applyTheme();
+            });
+            // 切回 WebUI 标签页时重新读取系统主题（处理切系统后未触发 change 的情况）
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden && this.theme === 'system') {
+                    this.systemDark = matchMedia('(prefers-color-scheme: dark)').matches;
+                    this.applyTheme();
+                }
+            });
             this.applyTheme();
         },
         cycleTheme() {
@@ -281,7 +293,7 @@ const app = createApp({
             this.applyTheme();
         },
         applyTheme() {
-            const dark = this.theme === 'dark' || (this.theme === 'system' && this.themeMedia && this.themeMedia.matches);
+            const dark = this.theme === 'dark' || (this.theme === 'system' && this.systemDark);
             document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
         },
         /* ── Toast ── */
