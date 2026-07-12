@@ -409,11 +409,8 @@ const app = createApp({
                     totalActualTokens:d.totalActualTokens||0, hasActualTokenData:!!d.hasActualTokenData,
                     latencyHistory:Array.isArray(d.latencyHistory)?d.latencyHistory:[],
                 };
-                // 成本趋势：累积实际 token
-                if (d.hasActualTokenData) {
-                    this.costHistory.push(d.totalActualTokens);
-                    if (this.costHistory.length > 30) this.costHistory.shift();
-                }
+                // 成本趋势：每次请求的实际 token 消耗（非累计值，真实起伏）
+                this.costHistory = Array.isArray(d.tokenHistory) ? d.tokenHistory.slice(-30) : [];
                 this.updateCharts();
             } catch(e) {} finally { this.metricsLoading = false; }
         },

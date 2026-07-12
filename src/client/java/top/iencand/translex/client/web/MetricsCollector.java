@@ -45,6 +45,10 @@ public class MetricsCollector {
     private final Deque<Long> latencyHistory = new ConcurrentLinkedDeque<>();
     private static final int MAX_LATENCY_SIZE = 20;
 
+    // -------- Token 消耗历史（最近 20 次请求的实际消耗，供前端趋势图） --------
+    private final Deque<Long> tokenHistory = new ConcurrentLinkedDeque<>();
+    private static final int MAX_TOKEN_HISTORY_SIZE = 20;
+
     // -------- 网络抓包（最近 10 条） --------
     private final Deque<TraceEntry> traceDeque = new ConcurrentLinkedDeque<>();
     private static final AtomicLong traceIdCounter = new AtomicLong(0);
@@ -91,6 +95,8 @@ public class MetricsCollector {
         totalActualPromptTokens.addAndGet(promptTokens);
         totalActualCompletionTokens.addAndGet(completionTokens);
         hasActualTokenData = true;
+        tokenHistory.addLast(promptTokens + completionTokens);
+        while (tokenHistory.size() > MAX_TOKEN_HISTORY_SIZE) tokenHistory.pollFirst();
     }
 
     public void recordLatency(long millis) {
@@ -141,6 +147,7 @@ public class MetricsCollector {
     public long getTotalActualTokens()         { return totalActualPromptTokens.get() + totalActualCompletionTokens.get(); }
     public boolean hasActualTokenData()        { return hasActualTokenData; }
     public List<Long> getLatencyHistory() { return List.copyOf(latencyHistory); }
+    public List<Long> getTokenHistory()   { return List.copyOf(tokenHistory); }
     public List<TraceEntry> getTraces()   { return new ArrayList<>(traceDeque); }
 
     // ===============================================================
@@ -199,6 +206,7 @@ public class MetricsCollector {
         json.addProperty("totalActualCompletionTokens",totalActualCompletionTokens.get());
         json.addProperty("hasActualTokenData",         hasActualTokenData);
         json.add("latencyHistory", GSON.toJsonTree(new ArrayList<>(latencyHistory)));
+        json.add("tokenHistory",   GSON.toJsonTree(new ArrayList<>(tokenHistory)));
         try {
             Files.createDirectories(file.getParent());
             Files.writeString(file, GSON.toJson(json), StandardCharsets.UTF_8);
@@ -226,6 +234,16 @@ public class MetricsCollector {
                     for (Long v : restored) {
                         if (latencyHistory.size() >= MAX_LATENCY_SIZE) break;
                         latencyHistory.add(v);
+                    }
+                }
+            }
+            if (json.has("tokenHistory")) {
+                List<Long> restoredTokens = GSON.fromJson(json.get("tokenHistory"), LONG_LIST_TYPE);
+                if (restoredTokens != null) {
+                    tokenHistory.clear();
+                    for (Long v : restoredTokens) {
+                        if (tokenHistory.size() >= MAX_TOKEN_HISTORY_SIZE) break;
+                        tokenHistory.add(v);
                     }
                 }
             }

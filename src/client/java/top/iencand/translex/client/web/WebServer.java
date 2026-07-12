@@ -305,6 +305,7 @@ public class WebServer {
         json.addProperty("totalActualTokens",        mc.getTotalActualTokens());
         json.addProperty("hasActualTokenData",      mc.hasActualTokenData());
         json.add("latencyHistory",               GSON.toJsonTree(mc.getLatencyHistory()));
+        json.add("tokenHistory",                 GSON.toJsonTree(mc.getTokenHistory()));
         json.addProperty("sseClientCount",       ConsoleBroadcaster.getClientCount());
         sendJson(ex, 200, json);
     }
