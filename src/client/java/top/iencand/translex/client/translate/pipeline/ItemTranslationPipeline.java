@@ -491,7 +491,9 @@ public class ItemTranslationPipeline {
     private static boolean isSkippedPriceLine(String text) {
         if (text == null) return false;
         return text.contains("Bazaar Buy-Avg") || text.contains("Bazaar Sell-Avg")
-                || text.contains("Crafting Price");
+                || text.contains("Crafting Price")
+                || text.contains("Auction Lowest BIN")
+                || text.contains("Est. Item Value");
     }
 
     public void shutdown() {
