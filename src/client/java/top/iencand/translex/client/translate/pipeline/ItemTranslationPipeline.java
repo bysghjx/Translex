@@ -118,6 +118,7 @@ public class ItemTranslationPipeline {
                 if (paraCached != null) {
                     String cachedTmpl = fromCacheOrRaw(paraCached);
                     List<String> parts = paraTmpl.splitParagraphTemplates(cachedTmpl);
+                    if (parts.size() > cnt) parts = alignParagraphParts(parts, cnt);
                     if (parts.size() == cnt) {
                         Map<Integer, net.minecraft.network.chat.Style> sm = paraTmpl.extractionResult().styleMap();
                         for (int j = 0; j < cnt; j++) {
@@ -275,6 +276,7 @@ public class ItemTranslationPipeline {
                 } else {
                     // 段落拆回：按 \n 分行，行数必须与原段落一致
                     List<String> parts = paraTmpl.splitParagraphTemplates(translated);
+                    if (parts.size() > cnt) parts = alignParagraphParts(parts, cnt);
                     if (parts.size() == cnt) {
                         cacheManager.putByCacheKey(p.cacheKey(), paraTmpl.toCacheEntry(translated));
                         Map<Integer, net.minecraft.network.chat.Style> sm = paraTmpl.extractionResult().styleMap();
@@ -494,6 +496,19 @@ public class ItemTranslationPipeline {
                 || text.contains("Crafting Price")
                 || text.contains("Auction Lowest BIN")
                 || text.contains("Est. Item Value");
+    }
+
+    /** 段落拆回行数容错：译文行数 > 原行数时，把多余尾行合并到第 cnt 行
+     * （前 cnt-1 行各自，第 cnt 行 = 剩余全部拼接）。应对 AI 把句号等标点单独拆成一行的常见情况。
+     * 行数不足（< cnt）则原样返回，由调用方回退原文。 */
+    private static List<String> alignParagraphParts(List<String> parts, int cnt) {
+        if (parts == null || parts.size() <= cnt) return parts;
+        List<String> aligned = new ArrayList<>(cnt);
+        for (int i = 0; i < cnt - 1; i++) aligned.add(parts.get(i));
+        StringBuilder last = new StringBuilder();
+        for (int i = cnt - 1; i < parts.size(); i++) last.append(parts.get(i));
+        aligned.add(last.toString());
+        return aligned;
     }
 
     public void shutdown() {
