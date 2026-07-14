@@ -143,7 +143,7 @@ public class ItemTranslationPipeline {
 
                 // Bazaar 价格行不翻译（保留原文）：价格行每次都因数值变化 miss 缓存，
                 // 反复送 AI 既浪费 token 又容易出 {0} 占位符问题
-                if (isBazaarPriceLine(lineText)) {
+                if (isSkippedPriceLine(lineText)) {
                     result[i] = originalLines.get(i);
                     storedTemplates[i] = tmpl.getTemplate();
                     if (debug) originalTemplates[i] = tmpl.getTemplate();
@@ -487,10 +487,11 @@ public class ItemTranslationPipeline {
         return cacheJson;
     }
 
-    /** Bazaar 价格行（买/卖均价）跳过翻译，保留原文，避免价格行反复请求和 {0} 占位符问题。 */
-    private static boolean isBazaarPriceLine(String text) {
-        return text != null
-                && (text.contains("Bazaar Buy-Avg") || text.contains("Bazaar Sell-Avg"));
+    /** 价格行跳过翻译（保留原文）：Bazaar 买/卖均价、合成价格。数值常变且翻译价值低。 */
+    private static boolean isSkippedPriceLine(String text) {
+        if (text == null) return false;
+        return text.contains("Bazaar Buy-Avg") || text.contains("Bazaar Sell-Avg")
+                || text.contains("Crafting Price");
     }
 
     public void shutdown() {
