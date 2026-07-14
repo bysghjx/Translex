@@ -30,7 +30,7 @@ public final class ParagraphGrouper {
     private static final Pattern HAS_LETTER = Pattern.compile("[a-zA-Z]");
     private static final Pattern TERMINAL_PUNCT = Pattern.compile("[.!?。！？]\\s*$");
     private static final Pattern BULLET_OR_HEADER = Pattern.compile(
-            "(?i)^\\s*(\\d+[.)]\\s|[-*•]\\s|[A-Z][A-Z ]{2,})");
+            "^\\s*(\\d+[.)]\\s|[-*•]\\s|[A-Z][A-Z ]{2,})");
 
     /** 一个分组：标记行范围 [startIndex, endIndexExclusive) 及是否段落。 */
     public record Group(int startIndex, int endIndexExclusive, boolean isParagraph) {
