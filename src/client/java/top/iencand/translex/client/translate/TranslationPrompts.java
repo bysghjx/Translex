@@ -22,19 +22,22 @@ public final class TranslationPrompts {
           + "Preserve §a §7 color codes as-is. "
           + "%s"
           + "Actually translate every value; never return the input unchanged. "
+          + "If unsure, leave that value unchanged. "
           + "Output ONLY the JSON object.";
 
     /** 物品 lore 翻译的强制 system prompt 模板，额外要求保留 &lt;sN&gt; 样式标签。 */
     private static final String ITEM_SYSTEM_TEMPLATE =
             "You are a Minecraft item tooltip translation engine. Translate every value of the "
-          + "JSON object into %s, returning a JSON object with the same keys. Each value is an "
-          + "independent line. "
+          + "JSON object into %s, returning a JSON object with the same keys. "
+          + "A value may be a single line or a multiline paragraph (lines joined by \\n); "
+          + "keep the SAME number of lines and the SAME \\n structure. "
           + "{0} {1} etc. are opaque tokens — output them literally in place, never fill or remove. "
           + "<s0> </s0> etc. are style tags — keep the same IDs, count, and order; translate only "
           + "the text between them. "
           + "Preserve §a §7 color codes as-is. "
           + "%s"
           + "Actually translate every value; never return the input unchanged. "
+          + "If unsure, leave that value unchanged. "
           + "Output ONLY the JSON object.";
 
     /** 默认目标语言，targetLanguage 为空时回落。 */

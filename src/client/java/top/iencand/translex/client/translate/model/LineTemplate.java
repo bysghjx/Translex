@@ -137,6 +137,24 @@ public class LineTemplate {
     }
 
     /**
+     * 段落模式：把 AI 返回的整段译文（含 {@code \n} 分隔多行）拆回每行的模板字符串。
+     *
+     * <p>用于段落合并翻译：本 LineTemplate 由 {@code fromText(合并多行 Component)} 构造，
+     * 样式 ID / 数字占位符全局唯一。AI 译完整段后，本方法先 fillNumbers 填回数字，
+     * 清除残留占位符，再按 {@code \n} 拆成每行模板（含 {@code <sN>} 标签）。</p>
+     *
+     * @return 拆回的每行模板字符串；行数由译文 {@code \n} 决定，调用方需校验与原行数一致
+     */
+    public List<String> splitParagraphTemplates(String translatedParagraph) {
+        String filled = fillNumbers(translatedParagraph);
+        // 兜底：清除残留 {i} 占位符
+        if (MARKER.matcher(filled).find()) {
+            filled = MARKER.matcher(filled).replaceAll("");
+        }
+        return Arrays.asList(filled.split("\n", -1));
+    }
+
+    /**
      * 从缓存条目构建带样式的 {@link Component}，合并缓存的非数字快照
      * 和当前物品的数字段样式。
      *

@@ -30,7 +30,8 @@ import java.util.regex.Pattern;
  *
  * <p>独立的 {@link BatchDispatcher}（item 配置，使用 itemTranslationPrompt）+ 行级 shard 缓存
  * （{@link TranslationCacheManager}，保留）+ {@link ItemPresetLibrary}（permanent）
- * + {@link TemporaryTooltipCache}（temporary）。逐行模板化翻译，全部完成后统一渲染并按输出模式存储。</p>
+ * + {@link TemporaryTooltipCache}（temporary）。段落合并翻译（跨行描述行整段送 AI），
+ * 全部完成后统一渲染并按输出模式存储。</p>
  *
  * <p>存储缓存键统一经 {@link TooltipKeyUtil}（{@code itemId#loreHash}），与替换查找一致，避免串台。</p>
  */
@@ -66,9 +67,8 @@ public class ItemTranslationPipeline {
     public TranslationCacheManager getCacheManager() { return cacheManager; }
 
     /**
-     * 按行翻译物品说明（模板模式）。
-     * 每行先检查是否为纯中文（无需翻译），再查行级缓存，最后提交 AI。
-     * 各行并行处理，全部完成后统一渲染，并按输出模式以组合键存储。
+     * 翻译物品说明。先按段落分组（连续无冒号描述行合并），段落整段翻译给 AI 跨行上下文；
+     * 独立行（stat/标题/Bazaar）走逐行逻辑。各行/段落并行，全部完成后统一渲染并按输出模式存储。
      */
     public void translateItemLoreTemplates(List<Component> originalLines, String itemId,
                                             String itemDisplayName, ItemStack stack, boolean force) {
@@ -79,85 +79,133 @@ public class ItemTranslationPipeline {
         String[] storedTemplates = new String[n];
         String displayId = "IL_" + System.currentTimeMillis();
 
-        record Pending(int index, CompletableFuture<String> future, LineTemplate tmpl, String cacheKey, String glossed) {}
-        List<Pending> pending = new ArrayList<>();
+        record LinePending(int index, CompletableFuture<String> future, LineTemplate tmpl, String cacheKey, String glossed) {}
+        record ParaPending(int startLine, int lineCount, CompletableFuture<String> future,
+                           LineTemplate paraTmpl, String cacheKey, List<String> glossedLines) {}
+        List<LinePending> linePending = new ArrayList<>();
+        List<ParaPending> paraPending = new ArrayList<>();
         java.util.Set<Integer> aiIndices = new java.util.LinkedHashSet<>();
 
-        // ── 调试：记录每行的原始模板，用于跨行占位符移动检测 ──
         boolean debug = ModConfig.get().debug;
         String[] originalTemplates = debug ? new String[n] : null;
         if (debug) {
-            LOGGER.info("══════ StyleDump START — item={} ══════", itemId);
+            LOGGER.info("══════ StyleDump START - item={} ══════", itemId);
         }
 
-        for (int i = 0; i < n; i++) {
-            LineTemplate tmpl = LineTemplate.fromText(originalLines.get(i));
-            String lineText = originalLines.get(i).getString();
-
-            // Bazaar 价格行不翻译（保留原文）：价格行每次都因数值变化 miss 缓存，
-            // 反复送 AI 既浪费 token 又容易出 {0} 占位符问题
-            if (isBazaarPriceLine(lineText)) {
-                result[i] = originalLines.get(i);
-                storedTemplates[i] = tmpl.getTemplate();
-                if (debug) originalTemplates[i] = tmpl.getTemplate();
-                continue;
-            }
-
-            String glossed = cacheManager.applyGlossary(lineText);  // 纯文本版（仅用于回退）
-
-            // 调试：输出每行原始样式信息
-            if (debug) {
-                String type = (i == 0) ? "NAME" : "LORE";
-                LOGGER.info(StyleCodec.dumpExtraction(
-                        String.format("%s#%d", type, i),
-                        tmpl.extractionResult().styleMap(),
-                        tmpl.getTemplate()));
-            }
-
-            // 词库替换作用于带样式标签的模板（保留颜色结构），而非纯文本
-            String glossedTmpl = TranslationCacheManager.applyGlossaryToTemplate(tmpl.getTemplate());
-
-            if (!TranslationCacheManager.templateStillHasEnglish(glossedTmpl)) {
-                // 词库完整处理（模板内不再含英文）→ 直接渲染，颜色完整保留
-                result[i] = tmpl.buildText(glossedTmpl);
-                storedTemplates[i] = glossedTmpl;
+        // 段落分组：连续无冒号描述行合并成段落整段翻译，给 AI 跨行上下文，避免逐行脑补
+        List<ParagraphGrouper.Group> groups = ParagraphGrouper.group(originalLines);
+        for (ParagraphGrouper.Group g : groups) {
+            if (g.isParagraph()) {
+                // ── 段落路径：合并多行整段翻译 ──
+                int start = g.startIndex();
+                int cnt = g.lineCount();
+                List<Component> paraLines = originalLines.subList(start, g.endIndexExclusive());
+                // 合并成一个 Text（\n 分隔），fromText 自然产生全局唯一样式 ID
+                net.minecraft.network.chat.MutableComponent combined = net.minecraft.network.chat.Component.literal("");
+                for (int j = 0; j < paraLines.size(); j++) {
+                    if (j > 0) combined.append(net.minecraft.network.chat.Component.literal("\n"));
+                    combined.append(paraLines.get(j));
+                }
+                LineTemplate paraTmpl = LineTemplate.fromText(combined);
+                String paraCacheKey = cacheManager.buildCacheKey(StyleCodec.stripTags(paraTmpl.getTemplate()));
+                List<String> glossedLines = new ArrayList<>();
+                for (Component pl : paraLines) glossedLines.add(cacheManager.applyGlossary(pl.getString()));
+                if (debug) {
+                    for (int j = 0; j < cnt; j++) originalTemplates[start + j] = paraTmpl.getTemplate();
+                }
+                String paraCached = force ? null : cacheManager.getByCacheKey(paraCacheKey);
+                boolean cacheHit = false;
+                if (paraCached != null) {
+                    String cachedTmpl = fromCacheOrRaw(paraCached);
+                    List<String> parts = paraTmpl.splitParagraphTemplates(cachedTmpl);
+                    if (parts.size() == cnt) {
+                        Map<Integer, net.minecraft.network.chat.Style> sm = paraTmpl.extractionResult().styleMap();
+                        for (int j = 0; j < cnt; j++) {
+                            storedTemplates[start + j] = parts.get(j);
+                            result[start + j] = StyleCodec.reapply(parts.get(j), sm);
+                        }
+                        cacheHit = true;
+                    }
+                }
+                if (!cacheHit) {
+                    for (int j = 0; j < cnt; j++) {
+                        result[start + j] = originalLines.get(start + j);  // 临时原文，future 完成后替换
+                        aiIndices.add(start + j);
+                    }
+                    paraPending.add(new ParaPending(start, cnt, dispatcher.submit(paraTmpl.getTemplate()),
+                            paraTmpl, paraCacheKey, glossedLines));
+                }
             } else {
-                String ck = cacheManager.buildCacheKey(StyleCodec.stripTags(tmpl.getTemplate()));
-                // force=true（Ctrl+P 强制重译）时跳过行级缓存，直接请求 AI
-                String cachedJson = force ? null : cacheManager.getByCacheKey(ck);
-                if (cachedJson != null) {
-                    // 从缓存 JSON 中提取翻译后的模板
-                    String cachedTmpl = fromCacheOrRaw(cachedJson);
-                    // 验证缓存结果（防止旧版已缓存的损坏数据绕过验证）
-                    String validated = validateTranslation(tmpl.getTemplate(), cachedTmpl, i);
-                    if (validated != null) {
-                        result[i] = tmpl.buildFromCache(cachedJson);
-                        storedTemplates[i] = cachedTmpl;
+                // ── 单行路径：原逐行逻辑 ──
+                int i = g.startIndex();
+                LineTemplate tmpl = LineTemplate.fromText(originalLines.get(i));
+                String lineText = originalLines.get(i).getString();
+
+                // Bazaar 价格行不翻译（保留原文）：价格行每次都因数值变化 miss 缓存，
+                // 反复送 AI 既浪费 token 又容易出 {0} 占位符问题
+                if (isBazaarPriceLine(lineText)) {
+                    result[i] = originalLines.get(i);
+                    storedTemplates[i] = tmpl.getTemplate();
+                    if (debug) originalTemplates[i] = tmpl.getTemplate();
+                    continue;
+                }
+
+                String glossed = cacheManager.applyGlossary(lineText);  // 纯文本版（仅用于回退）
+
+                // 调试：输出每行原始样式信息
+                if (debug) {
+                    String type = (i == 0) ? "NAME" : "LORE";
+                    LOGGER.info(StyleCodec.dumpExtraction(
+                            String.format("%s#%d", type, i),
+                            tmpl.extractionResult().styleMap(),
+                            tmpl.getTemplate()));
+                }
+
+                // 词库替换作用于带样式标签的模板（保留颜色结构），而非纯文本
+                String glossedTmpl = TranslationCacheManager.applyGlossaryToTemplate(tmpl.getTemplate());
+
+                if (!TranslationCacheManager.templateStillHasEnglish(glossedTmpl)) {
+                    // 词库完整处理（模板内不再含英文）-> 直接渲染，颜色完整保留
+                    result[i] = tmpl.buildText(glossedTmpl);
+                    storedTemplates[i] = glossedTmpl;
+                } else {
+                    String ck = cacheManager.buildCacheKey(StyleCodec.stripTags(tmpl.getTemplate()));
+                    // force=true（Ctrl+P 强制重译）时跳过行级缓存，直接请求 AI
+                    String cachedJson = force ? null : cacheManager.getByCacheKey(ck);
+                    if (cachedJson != null) {
+                        // 从缓存 JSON 中提取翻译后的模板
+                        String cachedTmpl = fromCacheOrRaw(cachedJson);
+                        // 验证缓存结果（防止旧版已缓存的损坏数据绕过验证）
+                        String validated = validateTranslation(tmpl.getTemplate(), cachedTmpl, i);
+                        if (validated != null) {
+                            result[i] = tmpl.buildFromCache(cachedJson);
+                            storedTemplates[i] = cachedTmpl;
+                        } else {
+                            // 缓存的翻译已损坏 -> 丢弃缓存，重新请求 AI
+                            LOGGER.warn("⚠ Line {} CACHE REJECTED - stored translation is corrupted, re-requesting AI", i);
+                            cacheManager.removeByCacheKey(ck);
+                            result[i] = tmpl.apply(glossed);
+                            storedTemplates[i] = glossed;
+                            aiIndices.add(i);
+                            linePending.add(new LinePending(i, dispatcher.submit(tmpl.getTemplate()), tmpl, ck, glossed));
+                        }
                     } else {
-                        // 缓存的翻译已损坏 → 丢弃缓存，重新请求 AI
-                        LOGGER.warn("⚠ Line {} CACHE REJECTED — stored translation is corrupted, re-requesting AI", i);
-                        cacheManager.removeByCacheKey(ck);
                         result[i] = tmpl.apply(glossed);
                         storedTemplates[i] = glossed;
                         aiIndices.add(i);
-                        pending.add(new Pending(i, dispatcher.submit(tmpl.getTemplate()), tmpl, ck, glossed));
+                        linePending.add(new LinePending(i, dispatcher.submit(tmpl.getTemplate()), tmpl, ck, glossed));
                     }
-                } else {
-                    result[i] = tmpl.apply(glossed);
-                    storedTemplates[i] = glossed;
-                    aiIndices.add(i);
-                    pending.add(new Pending(i, dispatcher.submit(tmpl.getTemplate()), tmpl, ck, glossed));
                 }
-            }
 
-            if (debug) originalTemplates[i] = tmpl.getTemplate();
+                if (debug) originalTemplates[i] = tmpl.getTemplate();
+            }
         }
 
         // 所有行已 submit 到 dispatcher，立即触发批 flush（自适应窗口：行到齐即发，不等 2.5s 固定窗口）
         dispatcher.flushNow();
 
         if (aiIndices.isEmpty()) {
-            if (debug) LOGGER.info("══════ StyleDump END — all lines pre-translated, item={} ══════", itemId);
+            if (debug) LOGGER.info("══════ StyleDump END - all lines pre-translated, item={} ══════", itemId);
             renderer.renderResult(joinTexts(originalLines), joinTexts(List.of(result)), displayId);
             handleOutputMode(String.join("\n", storedTemplates), itemId, stack, originalLines);
             return;
@@ -167,7 +215,16 @@ public class ItemTranslationPipeline {
         // 整批失败时只向玩家红字提示一次（多行 future 并发完成，避免刷屏）
         final java.util.concurrent.atomic.AtomicBoolean errorReported = new java.util.concurrent.atomic.AtomicBoolean(false);
         final String[] finalOriginalTemplates = originalTemplates;
-        for (Pending p : pending) {
+        final Runnable maybeRender = () -> {
+            if (completed.size() == aiIndices.size()) {
+                if (debug) LOGGER.info("══════ StyleDump END - item={} ══════", itemId);
+                renderer.renderResult(joinTexts(originalLines), joinTexts(List.of(result)), displayId);
+                handleOutputMode(String.join("\n", storedTemplates), itemId, stack, originalLines);
+            }
+        };
+
+        // 单行 future
+        for (LinePending p : linePending) {
             final int idx = p.index();
             final LineTemplate tmpl = p.tmpl();
             final String glossed = p.glossed();
@@ -180,28 +237,64 @@ public class ItemTranslationPipeline {
                     result[idx] = tmpl.apply(glossed);
                     storedTemplates[idx] = "<s0>" + glossed + "</s0>";
                 } else {
-                    // 验证 AI 输出：检测占位符丢失/标签塌缩 → 损坏则回退到英文原文
+                    // 验证 AI 输出：检测占位符丢失/标签塌缩 -> 损坏则回退到英文原文
                     String validated = validateTranslation(tmpl.getTemplate(), translatedTemplate, idx);
                     if (validated != null) {
-                        // AI 输出有效 → 缓存 + 使用
+                        // AI 输出有效 -> 缓存 + 使用
                         cacheManager.putByCacheKey(p.cacheKey(), tmpl.toCacheEntry(validated));
                         result[idx] = tmpl.buildText(validated);
                         storedTemplates[idx] = validated;
                     } else {
-                        // AI 输出损坏（标签塌缩/占位符丢失）→ 回退到英文原文 + 单色
+                        // AI 输出损坏（标签塌缩/占位符丢失）-> 回退到英文原文 + 单色
                         result[idx] = tmpl.apply(glossed);
                         storedTemplates[idx] = "<s0>" + glossed + "</s0>";
                     }
                 }
                 completed.add(idx);
-                if (completed.size() == aiIndices.size()) {
-                    // ── 调试：跨行占位符移动检测 + 每行翻译前后对照 ──
-                    if (debug) {
-                        dumpTranslationResult(itemId, n, finalOriginalTemplates, storedTemplates, tmpl);
+                maybeRender.run();
+            });
+        }
+
+        // 段落 future
+        for (ParaPending p : paraPending) {
+            final int start = p.startLine();
+            final int cnt = p.lineCount();
+            final LineTemplate paraTmpl = p.paraTmpl();
+            final List<String> glossedLines = p.glossedLines();
+            p.future().thenAccept(translated -> {
+                if (translated != null && translated.startsWith("§c")) {
+                    // 段落请求失败：每行回退原文
+                    if (errorReported.compareAndSet(false, true)) {
+                        renderer.renderError(translated, displayId);
                     }
-                    renderer.renderResult(joinTexts(originalLines), joinTexts(List.of(result)), displayId);
-                    handleOutputMode(String.join("\n", storedTemplates), itemId, stack, originalLines);
+                    for (int j = 0; j < cnt; j++) {
+                        result[start + j] = originalLines.get(start + j);
+                        storedTemplates[start + j] = "<s0>" + glossedLines.get(j) + "</s0>";
+                        completed.add(start + j);
+                    }
+                } else {
+                    // 段落拆回：按 \n 分行，行数必须与原段落一致
+                    List<String> parts = paraTmpl.splitParagraphTemplates(translated);
+                    if (parts.size() == cnt) {
+                        cacheManager.putByCacheKey(p.cacheKey(), paraTmpl.toCacheEntry(translated));
+                        Map<Integer, net.minecraft.network.chat.Style> sm = paraTmpl.extractionResult().styleMap();
+                        for (int j = 0; j < cnt; j++) {
+                            storedTemplates[start + j] = parts.get(j);
+                            result[start + j] = StyleCodec.reapply(parts.get(j), sm);
+                            completed.add(start + j);
+                        }
+                    } else {
+                        // 行数不符 -> 回退原文（不丢翻译的最坏情况：显示英文）
+                        LOGGER.warn("⚠ Paragraph lines {}-{} split mismatch (got {} expected {}), fallback to original",
+                                start, start + cnt - 1, parts.size(), cnt);
+                        for (int j = 0; j < cnt; j++) {
+                            result[start + j] = originalLines.get(start + j);
+                            storedTemplates[start + j] = "<s0>" + glossedLines.get(j) + "</s0>";
+                            completed.add(start + j);
+                        }
+                    }
                 }
+                maybeRender.run();
             });
         }
     }
@@ -255,12 +348,12 @@ public class ItemTranslationPipeline {
             Ph origPh = entry.getValue();
             Ph aiPh = aiPlacements.get(placeholder);
             if (aiPh != null && aiPh.line() != origPh.line()) {
-                LOGGER.warn("  ⚠ CROSS-LINE MOVEMENT: {} moved from line {} to line {} — color may be wrong!",
+                LOGGER.warn("  ⚠ CROSS-LINE MOVEMENT: {} moved from line {} to line {} - color may be wrong!",
                         placeholder, origPh.line(), aiPh.line());
             }
         }
 
-        LOGGER.info("══════ StyleDump END — item={} ══════", itemId);
+        LOGGER.info("══════ StyleDump END - item={} ══════", itemId);
     }
 
     /** 从带 &lt;sN&gt; 标签的模板中提取所有标签 ID。 */
@@ -314,18 +407,18 @@ public class ItemTranslationPipeline {
         LOGGER.info("Validator Line {}: origTags={} aiTags={} collapsed={} origPH={} aiPH={} lostPH={}",
                 lineIdx, origTags, aiTags, collapsed, origPH, aiPH, lostPH);
 
-        // 3. 检测到损坏 → 回退到英文原文（保留单色），不缓存损坏结果
+        // 3. 检测到损坏 -> 回退到英文原文（保留单色），不缓存损坏结果
         if (collapsed || lostPlaceholders) {
-            LOGGER.warn("⚠ Line {} REJECTED — tags {}→{}  placeholders lost={}  |  orig={}  |  ai={}",
+            LOGGER.warn("⚠ Line {} REJECTED - tags {}->{}  placeholders lost={}  |  orig={}  |  ai={}",
                     lineIdx, origTags, aiTags, lostPH, original, aiResult);
             return null;  // null = 回退到英文原文
         }
 
-        // 4. AI 多加占位符 → 清洗多余 {i}（不回退，保留翻译）
+        // 4. AI 多加占位符 -> 清洗多余 {i}（不回退，保留翻译）
         java.util.Set<String> extraPH = new java.util.LinkedHashSet<>(aiPH);
         extraPH.removeAll(origPH);
         if (!extraPH.isEmpty()) {
-            LOGGER.warn("⚠ Line {} EXTRA placeholders {} — cleaned, kept translation", lineIdx, extraPH);
+            LOGGER.warn("⚠ Line {} EXTRA placeholders {} - cleaned, kept translation", lineIdx, extraPH);
             String cleaned = aiResult;
             for (String ph : extraPH) cleaned = cleaned.replace(ph, "");
             return cleaned;
