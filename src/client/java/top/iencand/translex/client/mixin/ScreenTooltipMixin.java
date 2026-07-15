@@ -94,10 +94,10 @@ public abstract class ScreenTooltipMixin {
                             original.set(i + j, wrapped.get(j));
                         }
                     } else {
-                        // 行数不匹配：回退到单行逐行渲染（至少有翻译，颜色从单行 styleMap 准）
-                        for (int j = 0; j < paraLineCount && i + j < original.size(); j++) {
-                            original.set(i + j, LineTemplate.fromText(original.get(i + j)).buildText(repl));
-                        }
+                        // 行数不匹配：保留原文（不替换，避免整段重复渲染导致"一堆。"）
+                        System.err.println("[Translex] Paragraph wrap mismatch at line " + i
+                                + ", target " + paraLineCount + " lines, wrapped="
+                                + (wrapped == null ? "null" : wrapped.size()) + ", fallback to original");
                     }
                     i = paraEnd;
                 } else if (repl != null && !repl.isEmpty()) {
