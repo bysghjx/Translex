@@ -126,42 +126,41 @@ public abstract class ScreenTooltipMixin {
         return combined;
     }
 
-    /** 用 Font.split 按宽度 wrap，搜索 wrapWidth 使得行数 = targetLines。
-     *  先二分（Font.split 大致单调），找不到则线性扫描附近值。
-     *  返回 wrap 后的 List<Component>，或 null（无法对齐）。 */
+    /** 用 Font.split 按宽度 wrap，二分找最接近 targetLines 的宽度。
+     *  行数 > target：合并尾行对齐。行数 < target：返回 null（文本太短回退）。 */
     private static List<Component> wrapToLineCount(net.minecraft.client.gui.Font font, Component text, int targetLines, int maxWidth) {
-        // 二分搜索（Font.split 行数大致随宽度单调递减）
-        int lo = 50, hi = maxWidth, best = -1;
+        int lo = 50, hi = maxWidth;
+        int bestWidth = -1, bestDiff = Integer.MAX_VALUE;
         while (lo <= hi) {
             int mid = (lo + hi) / 2;
             int lines = font.split(text, mid).size();
-            if (lines == targetLines) {
-                best = mid;
-                break;
-            } else if (lines > targetLines) {
-                lo = mid + 1;  // 行太多 -> 加宽
-            } else {
-                hi = mid - 1;  // 行太少 -> 减宽
+            int diff = Math.abs(lines - targetLines);
+            if (diff < bestDiff) {
+                bestDiff = diff;
+                bestWidth = mid;
+                if (diff == 0) break;
             }
+            if (lines > targetLines) lo = mid + 1;  // 行多 -> 加宽
+            else hi = mid - 1;  // 行少 -> 减宽
         }
-        // 二分没找到 -> 线性扫描 lo 附近 ±20（应对非单调）
-        if (best < 0) {
-            int base = Math.max(50, lo - 20);
-            for (int w = base; w <= base + 40 && w <= maxWidth; w++) {
-                if (font.split(text, w).size() == targetLines) {
-                    best = w;
-                    break;
-                }
-            }
-        }
-        if (best < 0) return null;
-        // 用 best 宽度 wrap，转回 Component
-        List<net.minecraft.util.FormattedCharSequence> wrapped = font.split(text, best);
-        List<Component> result = new java.util.ArrayList<>(wrapped.size());
+        if (bestWidth < 0) return null;
+        List<net.minecraft.util.FormattedCharSequence> wrapped = font.split(text, bestWidth);
+        List<Component> components = new java.util.ArrayList<>(wrapped.size());
         for (net.minecraft.util.FormattedCharSequence fcs : wrapped) {
-            result.add(formattedCharSequenceToComponent(fcs));
+            components.add(formattedCharSequenceToComponent(fcs));
         }
-        return result;
+        // 行数 > target：合并尾行对齐（前 target-1 行各自，第 target 行 = 剩余合并）
+        if (components.size() > targetLines) {
+            List<Component> aligned = new java.util.ArrayList<>(targetLines);
+            for (int j = 0; j < targetLines - 1; j++) aligned.add(components.get(j));
+            net.minecraft.network.chat.MutableComponent last = net.minecraft.network.chat.Component.empty();
+            for (int j = targetLines - 1; j < components.size(); j++) last.append(components.get(j));
+            aligned.add(last);
+            return aligned;
+        }
+        // 行数 < target：文本太短，无法填满 target 行 -> 回退
+        if (components.size() < targetLines) return null;
+        return components;
     }
 
     /** FormattedCharSequence -> Component（保留样式），复用 DrawContextTooltipMixin 的逻辑。 */
