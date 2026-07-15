@@ -61,13 +61,108 @@ public abstract class ScreenTooltipMixin {
         BUILDING.set(true);
         try {
             // 跳过第 0 行（物品名称），只替换后续的说明行（lore）
-            for (int i = 1; i < original.size() && i < replacement.size(); i++) {
-                original.set(i, LineTemplate.fromText(original.get(i)).buildText(replacement.get(i)));
+            int i = 1;
+            while (i < original.size() && i < replacement.size()) {
+                String repl = replacement.get(i);
+                if (repl != null && !repl.isEmpty() && repl.contains("<s")) {
+                    // 段落首行：整段渲染成一个 Component，用 Font.split 按宽度 wrap
+                    // 收集后续空标记行（段落剩余行）
+                    int paraEnd = i + 1;
+                    while (paraEnd < replacement.size() && (replacement.get(paraEnd) == null || replacement.get(paraEnd).isEmpty())) {
+                        paraEnd++;
+                    }
+                    int paraLineCount = paraEnd - i;  // 段落占的原行数
+
+                    // 渲染整段 Component
+                    Component paraComponent = LineTemplate.fromText(joinComponents(original, i, paraEnd)).buildText(repl);
+
+                    // Font.split wrap，动态调 wrapWidth 直到行数 = paraLineCount
+                    net.minecraft.client.gui.Font font = net.minecraft.client.Minecraft.getInstance().font;
+                    List<Component> wrapped = wrapToLineCount(font, paraComponent, paraLineCount, 320);
+
+                    if (wrapped != null && wrapped.size() == paraLineCount) {
+                        // 行数匹配：逐行替换
+                        for (int j = 0; j < paraLineCount; j++) {
+                            original.set(i + j, wrapped.get(j));
+                        }
+                    } else {
+                        // 行数不匹配：回退原文
+                        for (int j = 0; j < paraLineCount; j++) {
+                            if (i + j < original.size()) original.set(i + j, original.get(i + j));
+                        }
+                    }
+                    i = paraEnd;
+                } else if (repl != null && !repl.isEmpty()) {
+                    // 单行：原逻辑
+                    original.set(i, LineTemplate.fromText(original.get(i)).buildText(repl));
+                    i++;
+                } else {
+                    // 空标记行（段落剩余行已被首行处理）：跳过
+                    i++;
+                }
             }
             cir.setReturnValue(original);
             TranslexTooltipContext.markScreenHandled();
         } finally {
             BUILDING.set(false);
         }
+    }
+
+    /** 合并 original[i..end) 的多个 Component 为一个（\n 分隔），用于段落 fromText。 */
+    private static Component joinComponents(List<Component> original, int start, int end) {
+        net.minecraft.network.chat.MutableComponent combined = net.minecraft.network.chat.Component.literal("");
+        for (int j = start; j < end && j < original.size(); j++) {
+            if (j > start) combined.append(net.minecraft.network.chat.Component.literal("\n"));
+            combined.append(original.get(j));
+        }
+        return combined;
+    }
+
+    /** 用 Font.split 按宽度 wrap，动态调 wrapWidth 直到行数 = targetLines。
+     *  返回 wrap 后的 List<Component>，或 null（无法对齐）。 */
+    private static List<Component> wrapToLineCount(net.minecraft.client.gui.Font font, Component text, int targetLines, int maxWidth) {
+        int lo = 50, hi = maxWidth, best = -1;
+        // 二分搜索 wrapWidth：行数 > target -> 加宽；行数 < target -> 减宽
+        while (lo <= hi) {
+            int mid = (lo + hi) / 2;
+            List<net.minecraft.util.FormattedCharSequence> wrapped = font.split(text, mid);
+            int lines = wrapped.size();
+            if (lines == targetLines) {
+                best = mid;
+                break;
+            } else if (lines > targetLines) {
+                lo = mid + 1;  // 行太多 -> 加宽
+            } else {
+                hi = mid - 1;  // 行太少 -> 减宽
+            }
+        }
+        if (best < 0) return null;
+        // 用 best 宽度 wrap，转回 Component
+        List<net.minecraft.util.FormattedCharSequence> wrapped = font.split(text, best);
+        List<Component> result = new java.util.ArrayList<>(wrapped.size());
+        for (net.minecraft.util.FormattedCharSequence fcs : wrapped) {
+            result.add(formattedCharSequenceToComponent(fcs));
+        }
+        return result;
+    }
+
+    /** FormattedCharSequence -> Component（保留样式），复用 DrawContextTooltipMixin 的逻辑。 */
+    private static Component formattedCharSequenceToComponent(net.minecraft.util.FormattedCharSequence ordered) {
+        net.minecraft.network.chat.MutableComponent result = net.minecraft.network.chat.Component.empty();
+        StringBuilder segment = new StringBuilder();
+        net.minecraft.network.chat.Style[] currentStyle = {net.minecraft.network.chat.Style.EMPTY};
+        ordered.accept((index, style, codePoint) -> {
+            if (!style.equals(currentStyle[0]) && segment.length() > 0) {
+                result.append(net.minecraft.network.chat.Component.literal(segment.toString()).setStyle(currentStyle[0]));
+                segment.setLength(0);
+            }
+            currentStyle[0] = style;
+            segment.appendCodePoint(codePoint);
+            return true;
+        });
+        if (segment.length() > 0) {
+            result.append(net.minecraft.network.chat.Component.literal(segment.toString()).setStyle(currentStyle[0]));
+        }
+        return result;
     }
 }

@@ -117,16 +117,14 @@ public class ItemTranslationPipeline {
                 boolean cacheHit = false;
                 if (paraCached != null) {
                     String cachedTmpl = fromCacheOrRaw(paraCached);
-                    List<String> parts = paraTmpl.splitParagraphTemplates(cachedTmpl);
-                    if (parts.size() > cnt) parts = alignParagraphParts(parts, cnt);
-                    if (parts.size() == cnt) {
-                        Map<Integer, net.minecraft.network.chat.Style> sm = paraTmpl.extractionResult().styleMap();
-                        for (int j = 0; j < cnt; j++) {
-                            storedTemplates[start + j] = parts.get(j);
-                            result[start + j] = StyleCodec.reapply(parts.get(j), sm);
-                        }
-                        cacheHit = true;
+                    // 段落整段渲染成一个 Component（不拆行），存首行 + 空标记
+                    result[start] = paraTmpl.buildParagraphComponent(cachedTmpl);
+                    storedTemplates[start] = cachedTmpl;
+                    for (int j = 1; j < cnt; j++) {
+                        result[start + j] = null;  // 空标记，渲染时由段落首行 wrap 填充
+                        storedTemplates[start + j] = "";
                     }
+                    cacheHit = true;
                 }
                 if (!cacheHit) {
                     for (int j = 0; j < cnt; j++) {
@@ -274,21 +272,21 @@ public class ItemTranslationPipeline {
                         completed.add(start + j);
                     }
                 } else {
-                    // 段落拆回：按 \n 分行，行数必须与原段落一致
-                    List<String> parts = paraTmpl.splitParagraphTemplates(translated);
-                    if (parts.size() > cnt) parts = alignParagraphParts(parts, cnt);
-                    if (parts.size() == cnt) {
+                    // 段落整段渲染成一个 Component（不拆行，\n->空格），存首行 + 空标记
+                    // 渲染层（Mixin）用 Font.split 按宽度重新换行，动态调 wrapWidth 对齐原行数
+                    try {
+                        Component paraComponent = paraTmpl.buildParagraphComponent(translated);
                         cacheManager.putByCacheKey(p.cacheKey(), paraTmpl.toCacheEntry(translated));
-                        Map<Integer, net.minecraft.network.chat.Style> sm = paraTmpl.extractionResult().styleMap();
-                        for (int j = 0; j < cnt; j++) {
-                            storedTemplates[start + j] = parts.get(j);
-                            result[start + j] = StyleCodec.reapply(parts.get(j), sm);
-                            completed.add(start + j);
+                        result[start] = paraComponent;
+                        storedTemplates[start] = translated;
+                        for (int j = 1; j < cnt; j++) {
+                            result[start + j] = null;  // 空标记
+                            storedTemplates[start + j] = "";
                         }
-                    } else {
-                        // 行数不符 -> 回退原文（不丢翻译的最坏情况：显示英文）
-                        LOGGER.warn("⚠ Paragraph lines {}-{} split mismatch (got {} expected {}), fallback to original",
-                                start, start + cnt - 1, parts.size(), cnt);
+                        for (int j = 0; j < cnt; j++) completed.add(start + j);
+                    } catch (Exception e) {
+                        LOGGER.warn("⚠ Paragraph render failed at lines {}-{}, fallback to original: {}",
+                                start, start + cnt - 1, e.getMessage());
                         for (int j = 0; j < cnt; j++) {
                             result[start + j] = originalLines.get(start + j);
                             storedTemplates[start + j] = "<s0>" + glossedLines.get(j) + "</s0>";
