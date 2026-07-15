@@ -205,7 +205,7 @@ public class ItemTranslationPipeline {
 
         if (aiIndices.isEmpty()) {
             if (debug) LOGGER.info("══════ StyleDump END - all lines pre-translated, item={} ══════", itemId);
-            renderer.renderResult(joinTexts(originalLines), joinTexts(List.of(result)), displayId);
+            renderer.renderResult(joinTexts(originalLines), joinTextsSafe(result), displayId);
             handleOutputMode(String.join("\n", storedTemplates), itemId, stack, originalLines);
             return;
         }
@@ -217,7 +217,7 @@ public class ItemTranslationPipeline {
         final Runnable maybeRender = () -> {
             if (completed.size() == aiIndices.size()) {
                 if (debug) LOGGER.info("══════ StyleDump END - item={} ══════", itemId);
-                renderer.renderResult(joinTexts(originalLines), joinTexts(List.of(result)), displayId);
+                renderer.renderResult(joinTexts(originalLines), joinTextsSafe(result), displayId);
                 handleOutputMode(String.join("\n", storedTemplates), itemId, stack, originalLines);
             }
         };
@@ -463,6 +463,18 @@ public class ItemTranslationPipeline {
         for (int i = 0; i < lines.size(); i++) {
             sb.append(lines.get(i).getString());
             if (i < lines.size() - 1) sb.append("\n");
+        }
+        return sb.toString();
+    }
+
+    /** joinTexts 的 null 安全版：段落空标记行（null）跳过，不调 getString()。 */
+    private static String joinTextsSafe(Component[] lines) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            if (lines[i] != null) {
+                sb.append(lines[i].getString());
+            }
+            if (i < lines.length - 1) sb.append("\n");
         }
         return sb.toString();
     }

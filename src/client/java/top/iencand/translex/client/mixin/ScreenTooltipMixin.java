@@ -64,7 +64,11 @@ public abstract class ScreenTooltipMixin {
             int i = 1;
             while (i < original.size() && i < replacement.size()) {
                 String repl = replacement.get(i);
-                if (repl != null && !repl.isEmpty() && repl.contains("<s")) {
+                // 段落首行：含 <s 标签 且 后续有空标记行（段落剩余行）
+                boolean isParaStart = repl != null && !repl.isEmpty() && repl.contains("<s")
+                        && i + 1 < replacement.size()
+                        && (replacement.get(i + 1) == null || replacement.get(i + 1).isEmpty());
+                if (isParaStart) {
                     // 段落首行：整段渲染成一个 Component，用 Font.split 按宽度 wrap
                     // 收集后续空标记行（段落剩余行）
                     int paraEnd = i + 1;
@@ -78,7 +82,7 @@ public abstract class ScreenTooltipMixin {
 
                     // Font.split wrap，动态调 wrapWidth 直到行数 = paraLineCount
                     net.minecraft.client.gui.Font font = net.minecraft.client.Minecraft.getInstance().font;
-                    List<Component> wrapped = wrapToLineCount(font, paraComponent, paraLineCount, 320);
+                    List<Component> wrapped = wrapToLineCount(font, paraComponent, paraLineCount, original.size() > 0 ? 400 : 320);
 
                     if (wrapped != null && wrapped.size() == paraLineCount) {
                         // 行数匹配：逐行替换
@@ -86,9 +90,9 @@ public abstract class ScreenTooltipMixin {
                             original.set(i + j, wrapped.get(j));
                         }
                     } else {
-                        // 行数不匹配：回退原文
-                        for (int j = 0; j < paraLineCount; j++) {
-                            if (i + j < original.size()) original.set(i + j, original.get(i + j));
+                        // 行数不匹配：回退到单行逐行渲染（至少有翻译，颜色从单行 styleMap 准）
+                        for (int j = 0; j < paraLineCount && i + j < original.size(); j++) {
+                            original.set(i + j, LineTemplate.fromText(original.get(i + j)).buildText(repl));
                         }
                     }
                     i = paraEnd;
@@ -118,15 +122,15 @@ public abstract class ScreenTooltipMixin {
         return combined;
     }
 
-    /** 用 Font.split 按宽度 wrap，动态调 wrapWidth 直到行数 = targetLines。
+    /** 用 Font.split 按宽度 wrap，搜索 wrapWidth 使得行数 = targetLines。
+     *  先二分（Font.split 大致单调），找不到则线性扫描附近值。
      *  返回 wrap 后的 List<Component>，或 null（无法对齐）。 */
     private static List<Component> wrapToLineCount(net.minecraft.client.gui.Font font, Component text, int targetLines, int maxWidth) {
+        // 二分搜索（Font.split 行数大致随宽度单调递减）
         int lo = 50, hi = maxWidth, best = -1;
-        // 二分搜索 wrapWidth：行数 > target -> 加宽；行数 < target -> 减宽
         while (lo <= hi) {
             int mid = (lo + hi) / 2;
-            List<net.minecraft.util.FormattedCharSequence> wrapped = font.split(text, mid);
-            int lines = wrapped.size();
+            int lines = font.split(text, mid).size();
             if (lines == targetLines) {
                 best = mid;
                 break;
@@ -134,6 +138,16 @@ public abstract class ScreenTooltipMixin {
                 lo = mid + 1;  // 行太多 -> 加宽
             } else {
                 hi = mid - 1;  // 行太少 -> 减宽
+            }
+        }
+        // 二分没找到 -> 线性扫描 lo 附近 ±20（应对非单调）
+        if (best < 0) {
+            int base = Math.max(50, lo - 20);
+            for (int w = base; w <= base + 40 && w <= maxWidth; w++) {
+                if (font.split(text, w).size() == targetLines) {
+                    best = w;
+                    break;
+                }
             }
         }
         if (best < 0) return null;
