@@ -76,13 +76,17 @@ public abstract class ScreenTooltipMixin {
                         paraEnd++;
                     }
                     int paraLineCount = paraEnd - i;  // 段落占的原行数
+                    // 限制不超过 original 剩余行数（防止 IndexOutOfBounds）
+                    int maxLines = original.size() - i;
+                    if (paraLineCount > maxLines) paraLineCount = maxLines;
+                    if (paraLineCount <= 0) { i = paraEnd; continue; }
 
                     // 渲染整段 Component
-                    Component paraComponent = LineTemplate.fromText(joinComponents(original, i, paraEnd)).buildText(repl);
+                    Component paraComponent = LineTemplate.fromText(joinComponents(original, i, Math.min(paraEnd, original.size()))).buildText(repl);
 
                     // Font.split wrap，动态调 wrapWidth 直到行数 = paraLineCount
                     net.minecraft.client.gui.Font font = net.minecraft.client.Minecraft.getInstance().font;
-                    List<Component> wrapped = wrapToLineCount(font, paraComponent, paraLineCount, original.size() > 0 ? 400 : 320);
+                    List<Component> wrapped = wrapToLineCount(font, paraComponent, paraLineCount, 400);
 
                     if (wrapped != null && wrapped.size() == paraLineCount) {
                         // 行数匹配：逐行替换
