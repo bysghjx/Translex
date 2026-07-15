@@ -112,9 +112,17 @@ public abstract class ScreenTooltipMixin {
                     List<Component> wrapped = wrapToLineCount(font, paraComponent, paraLineCount, 400);
 
                     if (wrapped != null && wrapped.size() == paraLineCount) {
-                        // 行数匹配：逐行替换
+                        // 行数匹配：逐行替换（保留 reapply 多色）
                         for (int j = 0; j < paraLineCount; j++) {
                             original.set(i + j, wrapped.get(j));
+                        }
+                        // 诊断：输出标签 ID 对应关系（看 AI 是否挪标签）
+                        if (doDump) {
+                            System.err.println("[Translex] paraReapply: line=" + i + " repl='" + (repl.length() > 100 ? repl.substring(0, 100) + "..." : repl) + "'");
+                            var sm = LineTemplate.fromText(joinComponents(original, i, Math.min(paraEnd, original.size()))).extractionResult().styleMap();
+                            for (var e : new java.util.TreeMap<>(sm).entrySet()) {
+                                System.err.println("[Translex]   s" + e.getKey() + " = " + e.getValue().getColor());
+                            }
                         }
                     } else {
                         // 行数不匹配：保留原文（不替换，避免整段重复渲染导致"一堆。"）
@@ -146,6 +154,20 @@ public abstract class ScreenTooltipMixin {
         } finally {
             BUILDING.set(false);
         }
+    }
+
+    /** 从 Component 提取第一个有颜色的样式（行级主样式），用于段落行级上色。 */
+    private static net.minecraft.network.chat.Style extractFirstColorFromComponent(Component comp) {
+        if (comp == null) return net.minecraft.network.chat.Style.EMPTY;
+        top.iencand.translex.client.translate.model.StyleCodec.ExtractionResult er =
+                top.iencand.translex.client.translate.model.StyleCodec.extract(comp);
+        var sorted = new java.util.TreeMap<>(er.styleMap());
+        for (var entry : sorted.entrySet()) {
+            if (entry.getValue().getColor() != null) {
+                return net.minecraft.network.chat.Style.EMPTY.withColor(entry.getValue().getColor());
+            }
+        }
+        return net.minecraft.network.chat.Style.EMPTY;
     }
 
     /** 合并 original[i..end) 的多个 Component 为一个（\n 分隔），用于段落 fromText。 */
