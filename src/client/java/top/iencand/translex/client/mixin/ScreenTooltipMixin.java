@@ -81,8 +81,8 @@ public abstract class ScreenTooltipMixin {
                     if (paraLineCount > maxLines) paraLineCount = maxLines;
                     if (paraLineCount <= 0) { i = paraEnd; continue; }
 
-                    // 渲染整段 Component
-                    Component paraComponent = LineTemplate.fromText(joinComponents(original, i, Math.min(paraEnd, original.size()))).buildText(repl);
+                    // 渲染整段 Component（去标签 + 主样式单色，避免 AI 重组标签导致颜色乱）
+                    Component paraComponent = LineTemplate.fromText(joinComponents(original, i, Math.min(paraEnd, original.size()))).buildParagraphComponent(repl);
 
                     // Font.split wrap，动态调 wrapWidth 直到行数 = paraLineCount
                     net.minecraft.client.gui.Font font = net.minecraft.client.Minecraft.getInstance().font;

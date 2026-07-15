@@ -139,12 +139,11 @@ public class LineTemplate {
     /**
      * 段落模式：把 AI 返回的整段译文渲染成一个完整 {@link Component}（不拆行）。
      *
-     * <p>用于段落合并翻译 + wrap 重排：本 LineTemplate 由 {@code fromText(合并多行 Component)} 构造，
-     * 样式 ID / 数字占位符全局唯一。本方法先 fillNumbers 填回数字，清除残留占位符，
-     * 把 {@code \n} 换成空格（合并成连续文本），再用全局 styleMap reapply 成一个 Component。
-     * 调用方随后用 Font.split 按宽度重新换行。</p>
+     * <p>用于段落合并翻译 + wrap 重排。AI 重组段落后标签 ID 不可靠（内容挪到不同 ID），
+     * 按 ID reapply 会导致颜色错乱。因此本方法<strong>去标签 + 用段落主样式统一上色</strong>，
+     * 牺牲段落内多色，换颜色不乱不白。</p>
      *
-     * @return 整段译文的带样式 Component（单段，无 \n）
+     * @return 整段译文的带样式 Component（单色，无 \n）
      */
     public Component buildParagraphComponent(String translatedParagraph) {
         String filled = fillNumbers(translatedParagraph);
@@ -152,9 +151,10 @@ public class LineTemplate {
         if (MARKER.matcher(filled).find()) {
             filled = MARKER.matcher(filled).replaceAll("");
         }
-        // \n -> 空格（合并成连续文本，后续由 Font.split 按宽度换行）
-        filled = filled.replace("\n", " ").replaceAll("\\s{2,}", " ");
-        return StyleCodec.reapply(filled, buildLiveStyleMap());
+        // 去标签 + \n->空格（合并成连续文本，后续由 Font.split 按宽度换行）
+        filled = filled.replaceAll("</?s\\d+>", "").replace("\n", " ").replaceAll("\\s{2,}", " ").trim();
+        // 用段落主样式（第一个有颜色的样式）统一上色
+        return Component.literal(filled).setStyle(extractFirstColor());
     }
 
     /**
