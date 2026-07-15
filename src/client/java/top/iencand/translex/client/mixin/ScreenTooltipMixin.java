@@ -145,6 +145,11 @@ public abstract class ScreenTooltipMixin {
         }
         if (bestWidth < 0) return null;
         List<net.minecraft.util.FormattedCharSequence> wrapped = font.split(text, bestWidth);
+        // 诊断日志
+        String textStr = text.getString();
+        System.err.println("[Translex] wrapDiag: target=" + targetLines + " textLen=" + textStr.length()
+                + " bestWidth=" + bestWidth + " lines=" + wrapped.size()
+                + " text='" + (textStr.length() > 60 ? textStr.substring(0, 60) + "..." : textStr) + "'");
         List<Component> components = new java.util.ArrayList<>(wrapped.size());
         for (net.minecraft.util.FormattedCharSequence fcs : wrapped) {
             components.add(formattedCharSequenceToComponent(fcs));
