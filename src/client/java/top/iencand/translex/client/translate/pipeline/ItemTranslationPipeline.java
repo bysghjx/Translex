@@ -119,7 +119,8 @@ public class ItemTranslationPipeline {
                     String cachedTmpl = fromCacheOrRaw(paraCached);
                     // 段落整段渲染成一个 Component（不拆行），存首行 + 空标记
                     result[start] = paraTmpl.buildParagraphComponent(cachedTmpl);
-                    storedTemplates[start] = cachedTmpl;
+                    // \n -> 空格：避免 handleOutputMode 的 join/split 把整段 \n 当行分隔拆开
+                    storedTemplates[start] = cachedTmpl.replace("\n", " ");
                     for (int j = 1; j < cnt; j++) {
                         result[start + j] = null;  // 空标记，渲染时由段落首行 wrap 填充
                         storedTemplates[start + j] = "";
@@ -278,7 +279,8 @@ public class ItemTranslationPipeline {
                         Component paraComponent = paraTmpl.buildParagraphComponent(translated);
                         cacheManager.putByCacheKey(p.cacheKey(), paraTmpl.toCacheEntry(translated));
                         result[start] = paraComponent;
-                        storedTemplates[start] = translated;
+                        // \n -> 空格：避免 handleOutputMode 的 join/split 把整段 \n 当行分隔拆开
+                        storedTemplates[start] = translated.replace("\n", " ");
                         for (int j = 1; j < cnt; j++) {
                             result[start + j] = null;  // 空标记
                             storedTemplates[start + j] = "";
