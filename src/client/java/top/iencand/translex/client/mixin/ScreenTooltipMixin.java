@@ -58,6 +58,16 @@ public abstract class ScreenTooltipMixin {
         List<String> replacement = TranslexTooltipContext.lookupReplacement(stack, mode, original);
         if (replacement == null || replacement.isEmpty()) return;
 
+        // 诊断：输出原 tooltip 每行内容 + 对应 replacement
+        System.err.println("[Translex] === Tooltip dump (original -> replacement) ===");
+        for (int d = 0; d < original.size(); d++) {
+            String origLine = original.get(d).getString();
+            String replLine = d < replacement.size() ? replacement.get(d) : "<none>";
+            String replPreview = replLine != null && replLine.length() > 80
+                    ? replLine.substring(0, 80) + "..." : replLine;
+            System.err.println("[Translex] line " + d + " | orig='" + origLine + "' | repl='" + replPreview + "'");
+        }
+
         BUILDING.set(true);
         try {
             // 跳过第 0 行（物品名称），只替换后续的说明行（lore）
@@ -108,6 +118,11 @@ public abstract class ScreenTooltipMixin {
                     // 空标记行（段落剩余行已被首行处理）：跳过
                     i++;
                 }
+            }
+            // 诊断：输出替换后的 tooltip 每行内容
+            System.err.println("[Translex] === Tooltip result ===");
+            for (int d = 0; d < original.size(); d++) {
+                System.err.println("[Translex] result line " + d + " = '" + original.get(d).getString() + "'");
             }
             cir.setReturnValue(original);
             TranslexTooltipContext.markScreenHandled();
