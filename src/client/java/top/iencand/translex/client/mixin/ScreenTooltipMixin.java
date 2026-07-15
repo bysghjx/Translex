@@ -74,10 +74,13 @@ public abstract class ScreenTooltipMixin {
             int i = 1;
             while (i < original.size() && i < replacement.size()) {
                 String repl = replacement.get(i);
-                // 段落首行：含 <s 标签 且 后续有空标记行（段落剩余行）
+                // 段落首行：含 <s 标签 且 后续有空标记行（段落剩余行，orig 非空）
+                // 注意：空分隔行（orig='' + repl=''）不是段落空标记，要排除
                 boolean isParaStart = repl != null && !repl.isEmpty() && repl.contains("<s")
                         && i + 1 < replacement.size()
-                        && (replacement.get(i + 1) == null || replacement.get(i + 1).isEmpty());
+                        && (replacement.get(i + 1) == null || replacement.get(i + 1).isEmpty())
+                        && i + 1 < original.size()
+                        && !original.get(i + 1).getString().isEmpty();  // 下一行原 tooltip 非空（排除分隔行）
                 if (isParaStart) {
                     // 段落首行：整段渲染成一个 Component，用 Font.split 按宽度 wrap
                     // 收集后续空标记行（段落剩余行）
