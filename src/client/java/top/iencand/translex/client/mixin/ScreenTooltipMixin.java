@@ -36,6 +36,8 @@ public abstract class ScreenTooltipMixin {
      */
     @Unique
     private static final ThreadLocal<Boolean> BUILDING = ThreadLocal.withInitial(() -> false);
+    @Unique private static volatile long lastDumpMs = 0L;
+    @Unique private static final long DUMP_THROTTLE_MS = 2000L;
 
     @Inject(
             method = "getTooltipFromItem(Lnet/minecraft/client/Minecraft;Lnet/minecraft/world/item/ItemStack;)Ljava/util/List;",
@@ -58,7 +60,11 @@ public abstract class ScreenTooltipMixin {
         List<String> replacement = TranslexTooltipContext.lookupReplacement(stack, mode, original);
         if (replacement == null || replacement.isEmpty()) return;
 
-        // 诊断：输出原 tooltip 每行内容 + 对应 replacement
+        // 诊断：输出原 tooltip 每行内容 + 对应 replacement（节流 2 秒）
+        long now = System.currentTimeMillis();
+        boolean doDump = now - lastDumpMs >= DUMP_THROTTLE_MS;
+        if (doDump) lastDumpMs = now;
+        if (doDump) {
         System.err.println("[Translex] === Tooltip dump (original -> replacement) ===");
         for (int d = 0; d < original.size(); d++) {
             String origLine = original.get(d).getString();
@@ -66,6 +72,7 @@ public abstract class ScreenTooltipMixin {
             String replPreview = replLine != null && replLine.length() > 80
                     ? replLine.substring(0, 80) + "..." : replLine;
             System.err.println("[Translex] line " + d + " | orig='" + origLine + "' | repl='" + replPreview + "'");
+        }
         }
 
         BUILDING.set(true);
@@ -108,9 +115,11 @@ public abstract class ScreenTooltipMixin {
                         }
                     } else {
                         // 行数不匹配：保留原文（不替换，避免整段重复渲染导致"一堆。"）
+                        if (doDump) {
                         System.err.println("[Translex] Paragraph wrap mismatch at line " + i
                                 + ", target " + paraLineCount + " lines, wrapped="
                                 + (wrapped == null ? "null" : wrapped.size()) + ", fallback to original");
+                        }
                     }
                     i = paraEnd;
                 } else if (repl != null && !repl.isEmpty()) {
@@ -122,10 +131,12 @@ public abstract class ScreenTooltipMixin {
                     i++;
                 }
             }
-            // 诊断：输出替换后的 tooltip 每行内容
+            // 诊断：输出替换后的 tooltip 每行内容（节流）
+            if (doDump) {
             System.err.println("[Translex] === Tooltip result ===");
             for (int d = 0; d < original.size(); d++) {
                 System.err.println("[Translex] result line " + d + " = '" + original.get(d).getString() + "'");
+            }
             }
             cir.setReturnValue(original);
             TranslexTooltipContext.markScreenHandled();
@@ -163,11 +174,13 @@ public abstract class ScreenTooltipMixin {
         }
         if (bestWidth < 0) return null;
         List<net.minecraft.util.FormattedCharSequence> wrapped = font.split(text, bestWidth);
-        // 诊断日志
+        // 诊断日志（节流）
+        if (System.currentTimeMillis() - lastDumpMs < DUMP_THROTTLE_MS) {
         String textStr = text.getString();
         System.err.println("[Translex] wrapDiag: target=" + targetLines + " textLen=" + textStr.length()
                 + " bestWidth=" + bestWidth + " lines=" + wrapped.size()
                 + " text='" + (textStr.length() > 60 ? textStr.substring(0, 60) + "..." : textStr) + "'");
+        }
         List<Component> components = new java.util.ArrayList<>(wrapped.size());
         for (net.minecraft.util.FormattedCharSequence fcs : wrapped) {
             components.add(formattedCharSequenceToComponent(fcs));
