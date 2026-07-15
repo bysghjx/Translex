@@ -92,7 +92,10 @@ public abstract class ScreenTooltipMixin {
                     // 段落首行：整段渲染成一个 Component，用 Font.split 按宽度 wrap
                     // 收集后续空标记行（段落剩余行）
                     int paraEnd = i + 1;
-                    while (paraEnd < replacement.size() && (replacement.get(paraEnd) == null || replacement.get(paraEnd).isEmpty())) {
+                    while (paraEnd < replacement.size()
+                            && (replacement.get(paraEnd) == null || replacement.get(paraEnd).isEmpty())
+                            && paraEnd < original.size()
+                            && !original.get(paraEnd).getString().isEmpty()) {  // 排除空分隔行
                         paraEnd++;
                     }
                     int paraLineCount = paraEnd - i;  // 段落占的原行数
