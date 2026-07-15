@@ -80,7 +80,10 @@ public final class ParagraphGrouper {
         if (raw == null || raw.isBlank()) return false;
         if (raw.indexOf(':') >= 0 || raw.indexOf('：') >= 0) return false;   // stat 行
         if (!HAS_LETTER.matcher(raw).find()) return false;                   // 无英文
-        if (BULLET_OR_HEADER.matcher(raw).find()) return false;              // 符号/标题
+        if (BULLET_OR_HEADER.matcher(raw).find()) return false;              // 符号/大写标题
+        // 短行（能力名标题，如 Wooly Coat/Tusk Luck/Corpse Crusher）：独立，不合并到段落
+        // 避免技能名和描述挤一行（段落 \n->空格 后 wrap 不保证技能名单独一行）
+        if (raw.length() < 15 && !TERMINAL_PUNCT.matcher(raw).find()) return false;
         return true;
     }
 
