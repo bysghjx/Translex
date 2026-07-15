@@ -153,8 +153,8 @@ public class LineTemplate {
         }
         // 去标签 + \n->空格（合并成连续文本，后续由 Font.split 按宽度换行）
         filled = filled.replaceAll("</?s\\d+>", "").replace("\n", " ").replaceAll("\\s{2,}", " ").trim();
-        // 用段落主样式（第一个有颜色的样式）统一上色
-        return Component.literal(filled).setStyle(extractFirstColor());
+        // 用段落主体样式（跳过标题色，取描述正文色）统一上色
+        return Component.literal(filled).setStyle(extractBodyColor());
     }
 
     /**
@@ -297,6 +297,20 @@ public class LineTemplate {
             }
         }
         return net.minecraft.network.chat.Style.EMPTY;
+    }
+
+    /** 段落主体样式：跳过第一个样式段（通常是能力名标题色，如金色），
+     *  取第二个有色样式（描述正文色，如白色/灰色）。 */
+    private Style extractBodyColor() {
+        var sorted = new java.util.TreeMap<>(styles.styleMap());
+        boolean skip = true;
+        for (var entry : sorted.entrySet()) {
+            if (skip) { skip = false; continue; }  // 跳过第一个（标题色）
+            if (entry.getValue().getColor() != null) {
+                return net.minecraft.network.chat.Style.EMPTY.withColor(entry.getValue().getColor());
+            }
+        }
+        return extractFirstColor();  // 回退
     }
 
     /** 检查原始文本是否包含混淆标志（Hypixel 特殊升级标记）。 */
