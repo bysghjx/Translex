@@ -24,3 +24,7 @@ translex_color_issue.json
 Translex-*.jar
 Translex-*/
 libs/
+
+# Temp plan/handoff (local only)
+PLAN.md
+doc/HANDOFF.md
