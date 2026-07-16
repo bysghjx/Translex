@@ -27,9 +27,9 @@ public class ModConfig {
     /** AI 供应商适配器 id（见 AiProviders）：openai / anthropic。决定请求/响应格式。 */
     public String provider = "openai";
 
-    /** 样式协议：sN（现有 <sN> 标签，位置 ID）| TSP（[[ID||TEXT]]，颜色 dedup）。
-     *  两套并存，默认 sN 保兼容，可切 TSP 实测对比，后期移除 sN。 */
-    public String styleProtocol = "sN";
+    /** 样式协议：sN（legacy <sN> 标签，位置 ID）| TSP（[[ID||TEXT]]，颜色 dedup）。
+     *  两套并存，默认 TSP（实测颜色 100% + 省 token 18.6%），可切 sN 回退。 */
+    public String styleProtocol = "TSP";
 
     /** 最大输出 token。Anthropic 必填；OpenAI 兼容端点忽略。 */
     public int maxTokens = 4096;
@@ -387,7 +387,7 @@ public class ModConfig {
 
         sb.append("# AI provider adapter: \"openai\" (OpenAI-compatible) or \"anthropic\" (Claude native)\n");
         sb.append("provider = \"").append(escapeToml(instance.provider)).append("\"\n");
-        sb.append("# Style protocol: \"sN\" (legacy <sN> position-ID) or \"TSP\" ([[ID||TEXT]] color-dedup). Default sN.\n");
+        sb.append("# Style protocol: \"sN\" (legacy <sN> position-ID) or \"TSP\" ([[ID||TEXT]] color-dedup). Default TSP.\n");
         sb.append("styleProtocol = \"").append(escapeToml(instance.styleProtocol)).append("\"\n");
         sb.append("# Max output tokens (required by Anthropic; ignored by OpenAI-compatible endpoints)\n");
         sb.append("maxTokens = ").append(instance.maxTokens).append("\n");

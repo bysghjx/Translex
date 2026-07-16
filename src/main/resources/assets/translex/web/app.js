@@ -167,7 +167,7 @@ const app = createApp({
                 presets:[], activePreset:'',
                 targetLanguage:'Simplified Chinese (简体中文)', targetLanguageMode:'preset',
                 userChatPrompt:'', userItemPrompt:'', properNounMode:'keep',
-                translationMode:'auto', buttonStyle:'NORMAL', enableTranslateButton:true, outputMode:'chat', styleProtocol:'sN',
+                translationMode:'auto', buttonStyle:'NORMAL', enableTranslateButton:true, outputMode:'chat', styleProtocol:'TSP',
                 enableCachePersistence:true, enablePeriodicSave:true, periodicSaveInterval:24000, cacheMaxEntries:20000,
                 enableChatCompact:true, compactTimeSeconds:120, compactColorCode:'GRAY', debug:false,
                 temperature:0.3, structuredOutput:false,
