@@ -13,6 +13,8 @@ import top.iencand.translex.client.translate.cache.TranslationCacheManager;
 import top.iencand.translex.client.translate.model.ItemPresetLibrary;
 import top.iencand.translex.client.translate.model.LineTemplate;
 import top.iencand.translex.client.translate.model.StyleCodec;
+import top.iencand.translex.client.translate.model.TranslationCacheEntry;
+import top.iencand.translex.client.translate.model.TranslationFormat;
 import top.iencand.translex.client.translate.render.ChatRenderer;
 import top.iencand.translex.client.util.TooltipKeyUtil;
 
@@ -51,12 +53,19 @@ public class ItemTranslationPipeline {
         PipelineConfig config = new PipelineConfig(
                 "TL_ITEM",
                 1500,
-                () -> TranslationPrompts.itemSystemPrompt(ModConfig.get().targetLanguage, ModConfig.get().properNounMode),
+                () -> "TSP".equalsIgnoreCase(ModConfig.get().styleProtocol)
+                        ? TranslationPrompts.itemSystemPromptTsp(ModConfig.get().targetLanguage, ModConfig.get().properNounMode)
+                        : TranslationPrompts.itemSystemPrompt(ModConfig.get().targetLanguage, ModConfig.get().properNounMode),
                 () -> ModConfig.get().userItemPrompt,
                 "Translex-Dispatcher-Item"
         );
         this.dispatcher = new BatchDispatcher(config, sharedRequester);
         presetLibrary.load();
+    }
+
+    /** 当前 styleProtocol 对应的 TranslationFormat（无状态，每次按 config 选）。 */
+    private static TranslationFormat currentFormat() {
+        return TranslationFormat.forId(ModConfig.get().styleProtocol);
     }
 
     public void initializePersistence(File file) {
@@ -79,9 +88,11 @@ public class ItemTranslationPipeline {
         String[] storedTemplates = new String[n];
         String displayId = "IL_" + System.currentTimeMillis();
 
-        record LinePending(int index, CompletableFuture<String> future, LineTemplate tmpl, String cacheKey, String glossed) {}
+        record LinePending(int index, CompletableFuture<String> future, String template, Component original,
+                           String cacheKey, String glossed, String formatId, String registryHash) {}
         record ParaPending(int startLine, int lineCount, CompletableFuture<String> future,
-                           LineTemplate paraTmpl, String cacheKey, List<String> glossedLines) {}
+                           String template, Component original, String cacheKey, List<String> glossedLines,
+                           String formatId, String registryHash) {}
         List<LinePending> linePending = new ArrayList<>();
         List<ParaPending> paraPending = new ArrayList<>();
         java.util.Set<Integer> aiIndices = new java.util.LinkedHashSet<>();
@@ -100,60 +111,73 @@ public class ItemTranslationPipeline {
                 int start = g.startIndex();
                 int cnt = g.lineCount();
                 List<Component> paraLines = originalLines.subList(start, g.endIndexExclusive());
-                // 合并成一个 Text（\n 分隔），fromText 自然产生全局唯一样式 ID
+                // 合并成一个 Text（\n 分隔）
                 net.minecraft.network.chat.MutableComponent combined = net.minecraft.network.chat.Component.literal("");
                 for (int j = 0; j < paraLines.size(); j++) {
                     if (j > 0) combined.append(net.minecraft.network.chat.Component.literal("\n"));
                     combined.append(paraLines.get(j));
                 }
-                LineTemplate paraTmpl = LineTemplate.fromText(combined);
-                String paraCacheKey = cacheManager.buildCacheKey(StyleCodec.stripTags(paraTmpl.getTemplate()));
+                TranslationFormat format = currentFormat();
+                TranslationFormat.Encoded encoded = format.encode(combined);
+                String paraCacheKey = cacheManager.buildCacheKey(format.stripFormatTags(encoded.template()));
                 List<String> glossedLines = new ArrayList<>();
                 for (Component pl : paraLines) glossedLines.add(cacheManager.applyGlossary(pl.getString()));
                 if (debug) {
-                    for (int j = 0; j < cnt; j++) originalTemplates[start + j] = paraTmpl.getTemplate();
+                    for (int j = 0; j < cnt; j++) originalTemplates[start + j] = encoded.template();
                 }
                 String paraCached = force ? null : cacheManager.getByCacheKey(paraCacheKey);
                 boolean cacheHit = false;
                 if (paraCached != null) {
-                    String cachedTmpl = fromCacheOrRaw(paraCached);
-                    // 段落整段渲染成一个 Component（不拆行），存首行 + 空标记
-                    result[start] = paraTmpl.buildParagraphComponent(cachedTmpl);
-                    // \n -> 空格：避免 handleOutputMode 的 join/split 把整段 \n 当行分隔拆开
-                    storedTemplates[start] = cachedTmpl.replace("\n", " ");
-                    for (int j = 1; j < cnt; j++) {
-                        result[start + j] = null;  // 空标记，渲染时由段落首行 wrap 填充
-                        storedTemplates[start + j] = "";
+                    TranslationCacheEntry entry = TranslationCacheEntry.parse(paraCached);
+                    if (entry != null) {
+                        TranslationFormat cachedFormat = TranslationFormat.forId(entry.format());
+                        // decode：TSP 校验 registryHash（颜色结构变返回 null -> miss），sN 忽略
+                        Component paraComponent = cachedFormat.decode(entry.template(), combined, true, entry.registryHash());
+                        if (paraComponent != null) {
+                            result[start] = paraComponent;
+                            // \n -> 空格：避免 handleOutputMode 的 join/split 把整段 \n 当行分隔拆开
+                            storedTemplates[start] = new TranslationCacheEntry(entry.format(),
+                                    entry.template().replace("\n", " "), entry.registryHash()).toJson();
+                            for (int j = 1; j < cnt; j++) {
+                                result[start + j] = null;  // 空标记，渲染时由段落首行 wrap 填充
+                                storedTemplates[start + j] = "";
+                            }
+                            cacheHit = true;
+                        }
                     }
-                    cacheHit = true;
                 }
                 if (!cacheHit) {
                     for (int j = 0; j < cnt; j++) {
                         result[start + j] = originalLines.get(start + j);  // 临时原文，future 完成后替换
                         aiIndices.add(start + j);
                     }
-                    paraPending.add(new ParaPending(start, cnt, dispatcher.submit(paraTmpl.getTemplate()),
-                            paraTmpl, paraCacheKey, glossedLines));
+                    paraPending.add(new ParaPending(start, cnt, dispatcher.submit(encoded.template()),
+                            encoded.template(), combined, paraCacheKey, glossedLines,
+                            format.id(), encoded.registryHash()));
                 }
             } else {
-                // ── 单行路径：原逐行逻辑 ──
+                // ── 单行路径 ──
                 int i = g.startIndex();
-                LineTemplate tmpl = LineTemplate.fromText(originalLines.get(i));
-                String lineText = originalLines.get(i).getString();
+                Component lineComp = originalLines.get(i);
+                String lineText = lineComp.getString();
 
-                // Bazaar 价格行不翻译（保留原文）：价格行每次都因数值变化 miss 缓存，
-                // 反复送 AI 既浪费 token 又容易出 {0} 占位符问题
+                // Bazaar 价格行不翻译（保留原文）：价格行每次都因数值变化 miss 缓存
                 if (isSkippedPriceLine(lineText)) {
-                    result[i] = originalLines.get(i);
-                    storedTemplates[i] = tmpl.getTemplate();
-                    if (debug) originalTemplates[i] = tmpl.getTemplate();
+                    result[i] = lineComp;
+                    TranslationFormat priceFmt = currentFormat();
+                    TranslationFormat.Encoded priceEnc = priceFmt.encode(lineComp);
+                    storedTemplates[i] = new TranslationCacheEntry(priceFmt.id(), priceEnc.template(), priceEnc.registryHash()).toJson();
+                    if (debug) originalTemplates[i] = priceEnc.template();
                     continue;
                 }
 
-                String glossed = cacheManager.applyGlossary(lineText);  // 纯文本版（仅用于回退）
+                String glossed = cacheManager.applyGlossary(lineText);  // 纯文本版（回退用）
+                TranslationFormat format = currentFormat();
+                TranslationFormat.Encoded encoded = format.encode(lineComp);
 
-                // 调试：输出每行原始样式信息
-                if (debug) {
+                // 调试：sN 输出样式信息（TSP 无 LineTemplate，跳过）
+                if (debug && "SN".equals(format.id())) {
+                    LineTemplate tmpl = LineTemplate.fromText(lineComp);
                     String type = (i == 0) ? "NAME" : "LORE";
                     LOGGER.info(StyleCodec.dumpExtraction(
                             String.format("%s#%d", type, i),
@@ -161,43 +185,49 @@ public class ItemTranslationPipeline {
                             tmpl.getTemplate()));
                 }
 
-                // 词库替换作用于带样式标签的模板（保留颜色结构），而非纯文本
-                String glossedTmpl = TranslationCacheManager.applyGlossaryToTemplate(tmpl.getTemplate());
-
-                if (!TranslationCacheManager.templateStillHasEnglish(glossedTmpl)) {
-                    // 词库完整处理（模板内不再含英文）-> 直接渲染，颜色完整保留
-                    result[i] = tmpl.buildText(glossedTmpl);
-                    storedTemplates[i] = glossedTmpl;
-                } else {
-                    String ck = cacheManager.buildCacheKey(StyleCodec.stripTags(tmpl.getTemplate()));
-                    // force=true（Ctrl+P 强制重译）时跳过行级缓存，直接请求 AI
-                    String cachedJson = force ? null : cacheManager.getByCacheKey(ck);
-                    if (cachedJson != null) {
-                        // 从缓存 JSON 中提取翻译后的模板
-                        String cachedTmpl = fromCacheOrRaw(cachedJson);
-                        // 验证缓存结果（防止旧版已缓存的损坏数据绕过验证）
-                        String validated = validateTranslation(tmpl.getTemplate(), cachedTmpl, i);
-                        if (validated != null) {
-                            result[i] = tmpl.buildFromCache(cachedJson);
-                            storedTemplates[i] = cachedTmpl;
-                        } else {
-                            // 缓存的翻译已损坏 -> 丢弃缓存，重新请求 AI
-                            LOGGER.warn("⚠ Line {} CACHE REJECTED - stored translation is corrupted, re-requesting AI", i);
-                            cacheManager.removeByCacheKey(ck);
-                            result[i] = tmpl.apply(glossed);
-                            storedTemplates[i] = glossed;
-                            aiIndices.add(i);
-                            linePending.add(new LinePending(i, dispatcher.submit(tmpl.getTemplate()), tmpl, ck, glossed));
-                        }
-                    } else {
-                        result[i] = tmpl.apply(glossed);
-                        storedTemplates[i] = glossed;
-                        aiIndices.add(i);
-                        linePending.add(new LinePending(i, dispatcher.submit(tmpl.getTemplate()), tmpl, ck, glossed));
+                // 词库预翻译：sN 专用（TSP 跳过，总发 AI）
+                if ("SN".equals(format.id())) {
+                    String glossedTmpl = TranslationCacheManager.applyGlossaryToTemplate(encoded.template());
+                    if (!TranslationCacheManager.templateStillHasEnglish(glossedTmpl)) {
+                        // 词库完整处理（模板内不再含英文）-> 直接渲染，颜色完整保留
+                        result[i] = format.decode(glossedTmpl, lineComp, false, null);
+                        storedTemplates[i] = new TranslationCacheEntry("SN", glossedTmpl, null).toJson();
+                        if (debug) originalTemplates[i] = encoded.template();
+                        continue;
                     }
                 }
 
-                if (debug) originalTemplates[i] = tmpl.getTemplate();
+                String ck = cacheManager.buildCacheKey(format.stripFormatTags(encoded.template()));
+                // force=true（Ctrl+P 强制重译）时跳过行级缓存，直接请求 AI
+                String cachedJson = force ? null : cacheManager.getByCacheKey(ck);
+                if (cachedJson != null) {
+                    TranslationCacheEntry entry = TranslationCacheEntry.parse(cachedJson);
+                    if (entry != null) {
+                        TranslationFormat cachedFormat = TranslationFormat.forId(entry.format());
+                        // sN validate 缓存完整性（TSP 信任 + registryHash 校验在 decode 内做）
+                        boolean valid = "TSP".equals(entry.format())
+                                || validateTranslation(encoded.template(), entry.template(), i) != null;
+                        if (valid) {
+                            Component decoded = cachedFormat.decode(entry.template(), lineComp, false, entry.registryHash());
+                            if (decoded != null) {
+                                result[i] = decoded;
+                                storedTemplates[i] = new TranslationCacheEntry(entry.format(), entry.template(), entry.registryHash()).toJson();
+                                if (debug) originalTemplates[i] = encoded.template();
+                                continue;
+                            }
+                        }
+                    }
+                    // 缓存损坏 / TSP registryHash 不匹配 -> 丢弃重译
+                    LOGGER.warn("⚠ Line {} cache rejected, re-requesting AI", i);
+                    cacheManager.removeByCacheKey(ck);
+                }
+                // 发 AI
+                result[i] = lineComp;  // 临时原文，future 完成后替换
+                storedTemplates[i] = glossed;
+                aiIndices.add(i);
+                linePending.add(new LinePending(i, dispatcher.submit(encoded.template()),
+                        encoded.template(), lineComp, ck, glossed, format.id(), encoded.registryHash()));
+                if (debug) originalTemplates[i] = encoded.template();
             }
         }
 
@@ -226,28 +256,35 @@ public class ItemTranslationPipeline {
         // 单行 future
         for (LinePending p : linePending) {
             final int idx = p.index();
-            final LineTemplate tmpl = p.tmpl();
+            final Component original = p.original();
+            final String template = p.template();
             final String glossed = p.glossed();
-            p.future().thenAccept(translatedTemplate -> {
-                if (translatedTemplate != null && translatedTemplate.startsWith("§c")) {
-                    // AI 整体请求失败（§c 错误串）：tooltip 回退英文原文，并向玩家红字提示一次（不刷屏）
+            final String formatId = p.formatId();
+            final String registryHash = p.registryHash();
+            final TranslationFormat fmt = TranslationFormat.forId(formatId);
+            p.future().thenAccept(translated -> {
+                if (translated != null && translated.startsWith("§c")) {
+                    // AI 整体请求失败（§c 错误串）：回退原文，红字提示一次（不刷屏）
                     if (errorReported.compareAndSet(false, true)) {
-                        renderer.renderError(translatedTemplate, displayId);
+                        renderer.renderError(translated, displayId);
                     }
-                    result[idx] = tmpl.apply(glossed);
-                    storedTemplates[idx] = "<s0>" + glossed + "</s0>";
+                    result[idx] = original;
+                    storedTemplates[idx] = new TranslationCacheEntry(formatId, template, registryHash).toJson();
                 } else {
-                    // 验证 AI 输出：检测占位符丢失/标签塌缩 -> 损坏则回退到英文原文
-                    String validated = validateTranslation(tmpl.getTemplate(), translatedTemplate, idx);
+                    // sN validate 占位符/标签完整性（TSP 跳过，信任强 prompt + decode 内 registryHash 校验）
+                    String validated = "TSP".equals(formatId) ? translated
+                            : validateTranslation(template, translated, idx);
                     if (validated != null) {
                         // AI 输出有效 -> 缓存 + 使用
-                        cacheManager.putByCacheKey(p.cacheKey(), tmpl.toCacheEntry(validated));
-                        result[idx] = tmpl.buildText(validated);
-                        storedTemplates[idx] = validated;
+                        cacheManager.putByCacheKey(p.cacheKey(),
+                                new TranslationCacheEntry(formatId, validated, registryHash).toJson());
+                        Component decoded = fmt.decode(validated, original, false, registryHash);
+                        result[idx] = decoded != null ? decoded : original;
+                        storedTemplates[idx] = new TranslationCacheEntry(formatId, validated, registryHash).toJson();
                     } else {
-                        // AI 输出损坏（标签塌缩/占位符丢失）-> 回退到英文原文 + 单色
-                        result[idx] = tmpl.apply(glossed);
-                        storedTemplates[idx] = "<s0>" + glossed + "</s0>";
+                        // AI 输出损坏（标签塌缩/占位符丢失）-> 回退原文
+                        result[idx] = original;
+                        storedTemplates[idx] = new TranslationCacheEntry(formatId, template, registryHash).toJson();
                     }
                 }
                 completed.add(idx);
@@ -259,8 +296,12 @@ public class ItemTranslationPipeline {
         for (ParaPending p : paraPending) {
             final int start = p.startLine();
             final int cnt = p.lineCount();
-            final LineTemplate paraTmpl = p.paraTmpl();
+            final Component original = p.original();
+            final String template = p.template();
             final List<String> glossedLines = p.glossedLines();
+            final String formatId = p.formatId();
+            final String registryHash = p.registryHash();
+            final TranslationFormat fmt = TranslationFormat.forId(formatId);
             p.future().thenAccept(translated -> {
                 if (translated != null && translated.startsWith("§c")) {
                     // 段落请求失败：每行回退原文
@@ -269,18 +310,21 @@ public class ItemTranslationPipeline {
                     }
                     for (int j = 0; j < cnt; j++) {
                         result[start + j] = originalLines.get(start + j);
-                        storedTemplates[start + j] = "<s0>" + glossedLines.get(j) + "</s0>";
+                        storedTemplates[start + j] = new TranslationCacheEntry(formatId, template, registryHash).toJson();
                         completed.add(start + j);
                     }
                 } else {
                     // 段落整段渲染成一个 Component（不拆行，\n->空格），存首行 + 空标记
                     // 渲染层（Mixin）用 Font.split 按宽度重新换行，动态调 wrapWidth 对齐原行数
                     try {
-                        Component paraComponent = paraTmpl.buildParagraphComponent(translated);
-                        cacheManager.putByCacheKey(p.cacheKey(), paraTmpl.toCacheEntry(translated));
+                        Component paraComponent = fmt.decode(translated, original, true, registryHash);
+                        if (paraComponent == null) paraComponent = original;  // registryHash 不匹配回退
+                        cacheManager.putByCacheKey(p.cacheKey(),
+                                new TranslationCacheEntry(formatId, translated, registryHash).toJson());
                         result[start] = paraComponent;
                         // \n -> 空格：避免 handleOutputMode 的 join/split 把整段 \n 当行分隔拆开
-                        storedTemplates[start] = translated.replace("\n", " ");
+                        storedTemplates[start] = new TranslationCacheEntry(formatId,
+                                translated.replace("\n", " "), registryHash).toJson();
                         for (int j = 1; j < cnt; j++) {
                             result[start + j] = null;  // 空标记
                             storedTemplates[start + j] = "";
@@ -291,7 +335,7 @@ public class ItemTranslationPipeline {
                                 start, start + cnt - 1, e.getMessage());
                         for (int j = 0; j < cnt; j++) {
                             result[start + j] = originalLines.get(start + j);
-                            storedTemplates[start + j] = "<s0>" + glossedLines.get(j) + "</s0>";
+                            storedTemplates[start + j] = new TranslationCacheEntry(formatId, template, registryHash).toJson();
                             completed.add(start + j);
                         }
                     }

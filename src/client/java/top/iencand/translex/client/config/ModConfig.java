@@ -27,6 +27,10 @@ public class ModConfig {
     /** AI 供应商适配器 id（见 AiProviders）：openai / anthropic。决定请求/响应格式。 */
     public String provider = "openai";
 
+    /** 样式协议：sN（现有 <sN> 标签，位置 ID）| TSP（[[ID||TEXT]]，颜色 dedup）。
+     *  两套并存，默认 sN 保兼容，可切 TSP 实测对比，后期移除 sN。 */
+    public String styleProtocol = "sN";
+
     /** 最大输出 token。Anthropic 必填；OpenAI 兼容端点忽略。 */
     public int maxTokens = 4096;
 
@@ -239,6 +243,7 @@ public class ModConfig {
             instance.apiUrl = toml.getString("apiUrl", instance.apiUrl);
             instance.modelName = toml.getString("modelName", instance.modelName);
             instance.provider = toml.getString("provider", instance.provider);
+            instance.styleProtocol = toml.getString("styleProtocol", instance.styleProtocol);
             instance.maxTokens = toml.getLong("maxTokens", (long) instance.maxTokens).intValue();
             instance.anthropicVersion = toml.getString("anthropicVersion", instance.anthropicVersion);
             instance.temperature = toml.getDouble("temperature", instance.temperature);
@@ -382,6 +387,8 @@ public class ModConfig {
 
         sb.append("# AI provider adapter: \"openai\" (OpenAI-compatible) or \"anthropic\" (Claude native)\n");
         sb.append("provider = \"").append(escapeToml(instance.provider)).append("\"\n");
+        sb.append("# Style protocol: \"sN\" (legacy <sN> position-ID) or \"TSP\" ([[ID||TEXT]] color-dedup). Default sN.\n");
+        sb.append("styleProtocol = \"").append(escapeToml(instance.styleProtocol)).append("\"\n");
         sb.append("# Max output tokens (required by Anthropic; ignored by OpenAI-compatible endpoints)\n");
         sb.append("maxTokens = ").append(instance.maxTokens).append("\n");
         sb.append("# anthropic-version header value (Anthropic only)\n");

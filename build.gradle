@@ -22,6 +22,17 @@ loom {
     }
 }
 
+// TSP 协议原型（tsp/，纯 Java）纳入 client sourceSet。
+// 测试工具（tsp/tests/，用 java.net.http，CLI 专用）不纳入 mod。
+sourceSets {
+    client {
+        java {
+            srcDir 'tsp'
+            exclude 'tsp/tests/**'
+        }
+    }
+}
+
 fabricApi {
     configureDataGeneration {
         client = true

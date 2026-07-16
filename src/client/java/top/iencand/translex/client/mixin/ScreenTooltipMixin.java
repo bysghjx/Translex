@@ -11,6 +11,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import top.iencand.translex.client.config.ModConfig;
 import top.iencand.translex.client.translate.model.LineTemplate;
+import top.iencand.translex.client.translate.model.TranslationCacheEntry;
+import top.iencand.translex.client.translate.model.TranslationFormat;
 import top.iencand.translex.client.translate.model.TranslexTooltipContext;
 
 import java.util.List;
@@ -84,16 +86,15 @@ public abstract class ScreenTooltipMixin {
             int i = 1;
             while (i < original.size() && i < replacement.size()) {
                 String repl = replacement.get(i);
-                // 段落首行：含 <s 标签 且 后续有空标记行（段落剩余行，orig 非空）
-                // 注意：空分隔行（orig='' + repl=''）不是段落空标记，要排除
-                boolean isParaStart = repl != null && !repl.isEmpty() && repl.contains("<s")
+                // 段落首行：含格式标签（<s 或 [[）且 后续有空标记行（段落剩余行，orig 非空）
+                boolean isParaStart = repl != null && !repl.isEmpty()
+                        && (repl.contains("<s") || repl.contains("[["))
                         && i + 1 < replacement.size()
                         && (replacement.get(i + 1) == null || replacement.get(i + 1).isEmpty())
                         && i + 1 < original.size()
                         && !original.get(i + 1).getString().isEmpty();  // 下一行原 tooltip 非空（排除分隔行）
                 if (isParaStart) {
                     // 段落首行：整段渲染成一个 Component，用 Font.split 按宽度 wrap
-                    // 收集后续空标记行（段落剩余行）
                     int paraEnd = i + 1;
                     while (paraEnd < replacement.size()
                             && (replacement.get(paraEnd) == null || replacement.get(paraEnd).isEmpty())
@@ -102,13 +103,19 @@ public abstract class ScreenTooltipMixin {
                         paraEnd++;
                     }
                     int paraLineCount = paraEnd - i;  // 段落占的原行数
-                    // 限制不超过 original 剩余行数（防止 IndexOutOfBounds）
                     int maxLines = original.size() - i;
                     if (paraLineCount > maxLines) paraLineCount = maxLines;
                     if (paraLineCount <= 0) { i = paraEnd; continue; }
 
-                    // 渲染整段 Component（reapply 多色，\n->空格，Font.split 按宽度 wrap）
-                    Component paraComponent = LineTemplate.fromText(joinComponents(original, i, Math.min(paraEnd, original.size()))).buildParagraphComponent(repl);
+                    // 渲染整段 Component（按缓存 format decode，\n->空格，Font.split wrap）
+                    Component merged = joinComponents(original, i, Math.min(paraEnd, original.size()));
+                    TranslationCacheEntry pEntry = TranslationCacheEntry.parse(repl);
+                    Component paraComponent = merged;  // 默认回退原文
+                    if (pEntry != null) {
+                        TranslationFormat pFmt = TranslationFormat.forId(pEntry.format());
+                        Component decoded = pFmt.decode(pEntry.template(), merged, true, pEntry.registryHash());
+                        if (decoded != null) paraComponent = decoded;  // null = TSP registryHash 不匹配，回退原文
+                    }
 
                     // Font.split wrap，动态调 wrapWidth 直到行数 = paraLineCount
                     net.minecraft.client.gui.Font font = net.minecraft.client.Minecraft.getInstance().font;
@@ -119,13 +126,11 @@ public abstract class ScreenTooltipMixin {
                         for (int j = 0; j < paraLineCount; j++) {
                             original.set(i + j, wrapped.get(j));
                         }
-                        // 诊断：输出标签 ID 对应关系（看 AI 是否挪标签）
+                        // 诊断：输出段落重建信息
                         if (doDump) {
-                            System.err.println("[Translex] paraReapply: line=" + i + " repl='" + (repl.length() > 100 ? repl.substring(0, 100) + "..." : repl) + "'");
-                            var sm = LineTemplate.fromText(joinComponents(original, i, Math.min(paraEnd, original.size()))).extractionResult().styleMap();
-                            for (var e : new java.util.TreeMap<>(sm).entrySet()) {
-                                System.err.println("[Translex]   s" + e.getKey() + " = " + e.getValue().getColor());
-                            }
+                            System.err.println("[Translex] paraReapply: line=" + i
+                                    + " format=" + (pEntry != null ? pEntry.format() : "?")
+                                    + " repl='" + (repl.length() > 100 ? repl.substring(0, 100) + "..." : repl) + "'");
                         }
                     } else {
                         // 行数不匹配：保留原文（不替换，避免整段重复渲染导致"一堆。"）
@@ -137,8 +142,13 @@ public abstract class ScreenTooltipMixin {
                     }
                     i = paraEnd;
                 } else if (repl != null && !repl.isEmpty()) {
-                    // 单行：原逻辑
-                    original.set(i, LineTemplate.fromText(original.get(i)).buildText(repl));
+                    // 单行：按缓存 format decode 重建
+                    TranslationCacheEntry sEntry = TranslationCacheEntry.parse(repl);
+                    if (sEntry != null) {
+                        TranslationFormat sFmt = TranslationFormat.forId(sEntry.format());
+                        Component decoded = sFmt.decode(sEntry.template(), original.get(i), false, sEntry.registryHash());
+                        if (decoded != null) original.set(i, decoded);
+                    }
                     i++;
                 } else {
                     // 空标记行（段落剩余行已被首行处理）：跳过

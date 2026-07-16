@@ -20,6 +20,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import top.iencand.translex.client.config.ModConfig;
 import top.iencand.translex.client.listener.ClientStateManager;
 import top.iencand.translex.client.translate.model.LineTemplate;
+import top.iencand.translex.client.translate.model.TranslationCacheEntry;
+import top.iencand.translex.client.translate.model.TranslationFormat;
 import top.iencand.translex.client.translate.model.TranslexTooltipContext;
 
 import java.util.ArrayList;
@@ -100,12 +102,18 @@ public abstract class DrawContextTooltipMixin {
 
         PROCESSING.set(true);
         try {
-            // Slot 0 = 物品名称（保留原文），slots 1..N = 说明行（1:1 替换）
+            // Slot 0 = 物品名称（保留原文），slots 1..N = 说明行（按缓存 format decode 1:1 替换）
             for (int si = 1; si < slots.size() && si < replacement.size(); si++) {
                 Slot slot = slots.get(si);
-                slot.accessor().setText(
-                        LineTemplate.fromText(slot.originalText()).buildText(replacement.get(si)).getVisualOrderText()
-                );
+                String repl = replacement.get(si);
+                TranslationCacheEntry entry = TranslationCacheEntry.parse(repl);
+                Component result = slot.originalText();  // 默认原文（parse 失败/decode null 回退）
+                if (entry != null) {
+                    TranslationFormat fmt = TranslationFormat.forId(entry.format());
+                    Component decoded = fmt.decode(entry.template(), slot.originalText(), false, entry.registryHash());
+                    if (decoded != null) result = decoded;
+                }
+                slot.accessor().setText(result.getVisualOrderText());
             }
         } catch (Exception e) {
             LOGGER.error("翻译 GuiGraphicsExtractor 工具提示组件时失败", e);

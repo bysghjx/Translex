@@ -98,9 +98,18 @@ public class TranslexCommand {
                     // /translex harvest-all - 抓取当前 GUI 所有物品 tooltip 存本地（TSP 测试数据收集）
                     .then(literal("harvest-all")
                             .executes(this::executeHarvestAll))
+                    // /translex protocol sN|TSP - 切换样式协议（两套并存）
+                    .then(literal("protocol")
+                            .then(argument("mode", StringArgumentType.word())
+                                    .suggests((ctx, builder) -> {
+                                        builder.suggest("sN");
+                                        builder.suggest("TSP");
+                                        return builder.buildFuture();
+                                    })
+                                    .executes(this::executeProtocol)))
             );
         });
-        LOGGER.info("Translex command registered (translate, text, say, reload, compat, button, mode, reset, config, harvest-all).");
+        LOGGER.info("Translex command registered (translate, text, say, reload, compat, button, mode, reset, config, harvest-all, protocol).");
     }
 
     // ===============================================================
@@ -427,6 +436,28 @@ public class TranslexCommand {
         FabricClientCommandSource source = context.getSource();
         source.sendFeedback(Component.literal(
                 I18nHelper.getPrefixed("translex.harvest.use_key_hint")));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    // ===============================================================
+    // 样式协议切换（/translex protocol sN|TSP）
+    // ===============================================================
+
+    /** 切换样式协议：sN（legacy 位置 ID）/ TSP（颜色 dedup）。两套并存，下次翻译生效。 */
+    private int executeProtocol(CommandContext<FabricClientCommandSource> context) {
+        FabricClientCommandSource source = context.getSource();
+        String mode = StringArgumentType.getString(context, "mode");
+        if ("sN".equalsIgnoreCase(mode) || "TSP".equalsIgnoreCase(mode)) {
+            // 统一存 "sN" / "TSP"（与 Web UI 选项一致；forId 用 equalsIgnoreCase 兼容）
+            String proto = "TSP".equalsIgnoreCase(mode) ? "TSP" : "sN";
+            ModConfig.get().styleProtocol = proto;
+            ModConfig.forceSave();
+            source.sendFeedback(Component.literal(
+                    I18nHelper.getPrefixed("translex.info.protocol", proto)));
+        } else {
+            source.sendError(Component.literal(
+                    I18nHelper.getPrefixed("translex.error.invalid_protocol", mode)));
+        }
         return Command.SINGLE_SUCCESS;
     }
 

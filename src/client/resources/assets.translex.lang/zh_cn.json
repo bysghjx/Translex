@@ -96,5 +96,7 @@
   "translex.harvest.success": "§a采集完成§r - 抓取 %s 个物品，新增 %s，跳过 %s（已存在）",
   "translex.harvest.error_no_screen": "§c请先打开一个物品栏§r（背包 / ender chest / auction 等），再执行 harvest-all",
   "translex.harvest.location": "§7数据已保存到: %s",
+  "translex.info.protocol": "§a样式协议已切换为 %s§r（下次翻译生效）",
+  "translex.error.invalid_protocol": "§c无效协议 %s§r，可选: sN, TSP",
   "translex.harvest.use_key_hint": "§e采集请打开物品栏后按 H 键§r（聊天命令会关闭容器，无法采集）"
 }

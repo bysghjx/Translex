@@ -173,6 +173,7 @@ public class WebServer {
         json.addProperty("userChatPrompt",        cfg.userChatPrompt);
         json.addProperty("userItemPrompt",        cfg.userItemPrompt);
         json.addProperty("properNounMode",        cfg.properNounMode);
+        json.addProperty("styleProtocol",         cfg.styleProtocol);
         json.addProperty("translationMode", cfg.translationMode);
         json.addProperty("buttonStyle",           cfg.buttonStyle);
         json.addProperty("enableTranslateButton",  cfg.enableTranslateButton);
@@ -224,6 +225,7 @@ public class WebServer {
             if (input.has("userChatPrompt")) { cfg.userChatPrompt = input.get("userChatPrompt").getAsString(); changed = true; }
             if (input.has("userItemPrompt")) { cfg.userItemPrompt = input.get("userItemPrompt").getAsString(); changed = true; }
             if (input.has("properNounMode")) { cfg.properNounMode = input.get("properNounMode").getAsString(); changed = true; }
+            if (input.has("styleProtocol"))  { cfg.styleProtocol = input.get("styleProtocol").getAsString(); changed = true; }
             if (input.has("translationMode"))    { cfg.translationMode = input.get("translationMode").getAsString(); changed = true; }
             if (input.has("buttonStyle"))   { cfg.buttonStyle = input.get("buttonStyle").getAsString(); changed = true; }
             if (input.has("enableTranslateButton")) { cfg.enableTranslateButton = input.get("enableTranslateButton").getAsBoolean(); changed = true; }

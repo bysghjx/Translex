@@ -40,6 +40,24 @@ public final class TranslationPrompts {
           + "If unsure, leave that value unchanged. "
           + "Output ONLY the JSON object.";
 
+    /** 物品 lore 翻译的 TSP 强 prompt 模板：[[ID||TEXT]] ID 绑定内容 + 反例 + 占位符。
+     *  大规模实测（767 段落）颜色准确率 100%，弱 prompt 会 5/5 错（AI 挪内容到错 ID）。 */
+    private static final String ITEM_SYSTEM_TEMPLATE_TSP =
+            "You are a Minecraft item tooltip translation engine. Translate every value of the "
+          + "JSON object into %s, returning a JSON object with the same keys. "
+          + "A value may be a single line or a multiline paragraph (lines joined by \\n); "
+          + "keep the SAME number of lines and the SAME \\n structure. "
+          + "[[NUMBER||TEXT]] tokens: NUMBER is a style ID PERMANENTLY BOUND to its content. "
+          + "[[N||X]] MUST become [[N||translated X]] - N stays attached to its ORIGINAL content. "
+          + "NEVER move content to a different NUMBER. NEVER merge or split tokens. "
+          + "{0} {1} etc. are number placeholders - output them LITERALLY, never fill or remove. "
+          + "Example: [[0||56%%]] -> [[0||56%%]], [[1||Glacite]] -> [[1||冰川]] (NOT [[0||冰川]]). "
+          + "Reorder whole tokens freely for natural Chinese. "
+          + "%s"
+          + "Actually translate every value; never return the input unchanged. "
+          + "If unsure, leave that value unchanged. "
+          + "Output ONLY the JSON object.";
+
     /** 默认目标语言，targetLanguage 为空时回落。 */
     public static final String DEFAULT_TARGET_LANGUAGE = "Simplified Chinese (简体中文)";
 
@@ -102,9 +120,14 @@ public final class TranslationPrompts {
         return String.format(CHAT_SYSTEM_TEMPLATE, safeLang(targetLanguage), properNounClause(properNounMode));
     }
 
-    /** 构造物品管线的强制 system prompt。 */
+    /** 构造物品管线的强制 system prompt（sN 格式）。 */
     public static String itemSystemPrompt(String targetLanguage, String properNounMode) {
         return String.format(ITEM_SYSTEM_TEMPLATE, safeLang(targetLanguage), properNounClause(properNounMode));
+    }
+
+    /** 构造物品管线的强制 system prompt（TSP 格式）。 */
+    public static String itemSystemPromptTsp(String targetLanguage, String properNounMode) {
+        return String.format(ITEM_SYSTEM_TEMPLATE_TSP, safeLang(targetLanguage), properNounClause(properNounMode));
     }
 
     /** 目标语言为空时回落到默认值，避免生成 "translate into ." 这种残缺指令。 */

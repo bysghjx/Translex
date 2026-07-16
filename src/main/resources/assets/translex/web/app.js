@@ -56,6 +56,7 @@ const I18N_DICT = {
         welcomeDismiss: '知道了',
         buttonStyle: '按钮样式', enableTranslateButton: '显示翻译按钮', enableTranslateButtonDesc: '在聊天消息旁显示 [翻译] 按钮，关闭后按钮不再出现',
         outputMode: '翻译输出模式', outputModeChat: 'chat — 直接替换聊天消息', outputModeTemporary: 'temporary — 临时 Tooltip 显示', outputModePermanent: 'permanent — 永久写入物品缓存',
+        styleProtocol: '样式协议', styleProtocolSn: 'sN - 旧版 <sN> 标签（位置 ID，稳定）', styleProtocolTsp: 'TSP - [[ID||TEXT]]（颜色 dedup，省 token，新）',
         enableCachePersistence: '缓存持久化', enableCachePersistenceDesc: '将翻译缓存写入磁盘，重启后保留',
         enablePeriodicSave: '定时自动保存', enablePeriodicSaveDesc: '每隔一定 tick 自动将缓存刷写到磁盘',
         periodicSaveInterval: '保存间隔 (ticks)', periodicSaveIntervalDesc: '24000 ticks ≈ 20 分钟。范围: 1200~240000',
@@ -122,6 +123,7 @@ const I18N_DICT = {
         welcomeDismiss: 'Got it',
         buttonStyle: 'Button Style', enableTranslateButton: 'Show Translate Button', enableTranslateButtonDesc: 'Show [Translate] button next to chat messages. Turn off to hide the button.',
         outputMode: 'Translation Output Mode', outputModeChat: 'chat — Replace chat message inline', outputModeTemporary: 'temporary — Show as temporary tooltip', outputModePermanent: 'permanent — Save permanently to item cache',
+        styleProtocol: 'Style Protocol', styleProtocolSn: 'sN - Legacy <sN> tags (position ID, stable)', styleProtocolTsp: 'TSP - [[ID||TEXT]] (color dedup, saves tokens, new)',
         enableCachePersistence: 'Cache Persistence', enableCachePersistenceDesc: 'Write translation cache to disk, survives restarts',
         enablePeriodicSave: 'Periodic Auto-Save', enablePeriodicSaveDesc: 'Flush cache to disk at regular intervals',
         periodicSaveInterval: 'Save Interval (ticks)', periodicSaveIntervalDesc: '24000 ticks ≈ 20 min. Range: 1200–240000',
@@ -165,7 +167,7 @@ const app = createApp({
                 presets:[], activePreset:'',
                 targetLanguage:'Simplified Chinese (简体中文)', targetLanguageMode:'preset',
                 userChatPrompt:'', userItemPrompt:'', properNounMode:'keep',
-                translationMode:'auto', buttonStyle:'NORMAL', enableTranslateButton:true, outputMode:'chat',
+                translationMode:'auto', buttonStyle:'NORMAL', enableTranslateButton:true, outputMode:'chat', styleProtocol:'sN',
                 enableCachePersistence:true, enablePeriodicSave:true, periodicSaveInterval:24000, cacheMaxEntries:20000,
                 enableChatCompact:true, compactTimeSeconds:120, compactColorCode:'GRAY', debug:false,
                 temperature:0.3, structuredOutput:false,
@@ -219,6 +221,10 @@ const app = createApp({
             {value:'chat', label:this.lang.outputModeChat},
             {value:'temporary', label:this.lang.outputModeTemporary},
             {value:'permanent', label:this.lang.outputModePermanent},
+        ]; },
+        styleProtocolOptions() { return [
+            {value:'sN', label:this.lang.styleProtocolSn},
+            {value:'TSP', label:this.lang.styleProtocolTsp},
         ]; },
         compactColorOptions() { return ['GRAY','DARK_GRAY','GREEN','DARK_GREEN','AQUA','YELLOW','GOLD','RED'].map(c=>({value:c,label:c})); },
         debugStatusCards() { return [
@@ -310,7 +316,7 @@ const app = createApp({
                 apiKey:c.apiKey, apiUrl:c.apiUrl, model:c.model, provider:c.provider, maxTokens:c.maxTokens, anthropicVersion:c.anthropicVersion,
                 presets:c.presets, activePreset:c.activePreset,
                 targetLanguage:c.targetLanguage, userChatPrompt:c.userChatPrompt, userItemPrompt:c.userItemPrompt, properNounMode:c.properNounMode,
-                translationMode:c.translationMode, buttonStyle:c.buttonStyle, enableTranslateButton:c.enableTranslateButton, outputMode:c.outputMode,
+                translationMode:c.translationMode, buttonStyle:c.buttonStyle, enableTranslateButton:c.enableTranslateButton, outputMode:c.outputMode, styleProtocol:c.styleProtocol,
                 enableCachePersistence:c.enableCachePersistence, enablePeriodicSave:c.enablePeriodicSave, periodicSaveInterval:c.periodicSaveInterval, cacheMaxEntries:c.cacheMaxEntries,
                 enableChatCompact:c.enableChatCompact, compactTimeSeconds:c.compactTimeSeconds, compactColorCode:c.compactColorCode, debug:c.debug,
                 temperature:c.temperature, structuredOutput:c.structuredOutput,
@@ -331,7 +337,7 @@ const app = createApp({
                 c.targetLanguageMode=d.targetLanguageMode||'preset';
                 c.userChatPrompt=d.userChatPrompt||''; c.userItemPrompt=d.userItemPrompt||''; c.properNounMode=d.properNounMode||'keep';
                 c.translationMode=d.translationMode||'auto'; c.buttonStyle=d.buttonStyle||'NORMAL';
-                c.enableTranslateButton=d.enableTranslateButton!==false; c.outputMode=d.outputMode||'chat';
+                c.enableTranslateButton=d.enableTranslateButton!==false; c.outputMode=d.outputMode||'chat'; c.styleProtocol=d.styleProtocol||'sN';
                 c.enableCachePersistence=d.enableCachePersistence!==false; c.enablePeriodicSave=d.enablePeriodicSave!==false;
                 c.periodicSaveInterval=d.periodicSaveInterval||24000; c.cacheMaxEntries=d.cacheMaxEntries||20000;
                 c.enableChatCompact=d.enableChatCompact!==false; c.compactTimeSeconds=d.compactTimeSeconds||120;
