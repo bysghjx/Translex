@@ -39,6 +39,8 @@ public abstract class ScreenTooltipMixin {
     @Unique private static volatile long lastDumpMs = 0L;
     @Unique private static final long DUMP_THROTTLE_MS = 2000L;
 
+    // 采集模式标志见 HarvestFlag（Mixin 不允许 public static 方法，故放独立工具类）
+
     @Inject(
             method = "getTooltipFromItem(Lnet/minecraft/client/Minecraft;Lnet/minecraft/world/item/ItemStack;)Ljava/util/List;",
             at = @At("RETURN"),
@@ -50,6 +52,7 @@ public abstract class ScreenTooltipMixin {
             CallbackInfoReturnable<List<Component>> cir
     ) {
         if (BUILDING.get()) return;
+        if (top.iencand.translex.client.util.HarvestFlag.isHarvesting()) return;  // 采集模式：保留原文 tooltip
         if (stack == null || stack.isEmpty()) return;
 
         // chat 模式不替换工具提示

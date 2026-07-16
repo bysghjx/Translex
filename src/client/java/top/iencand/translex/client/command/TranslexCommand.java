@@ -22,6 +22,7 @@ import top.iencand.translex.client.config.ButtonStyleManager;
 import top.iencand.translex.client.config.ModConfig;
 import top.iencand.translex.client.listener.MessageLookup;
 import top.iencand.translex.client.util.I18nHelper;
+import top.iencand.translex.client.util.LoreHarvester;
 import top.iencand.translex.client.web.WebServer;
 
 import java.net.URI;
@@ -94,9 +95,12 @@ public class TranslexCommand {
                     // /translex config
                     .then(literal("config")
                             .executes(this::executeConfig))
+                    // /translex harvest-all - 抓取当前 GUI 所有物品 tooltip 存本地（TSP 测试数据收集）
+                    .then(literal("harvest-all")
+                            .executes(this::executeHarvestAll))
             );
         });
-        LOGGER.info("Translex command registered (translate, text, say, reload, compat, button, mode, reset, config).");
+        LOGGER.info("Translex command registered (translate, text, say, reload, compat, button, mode, reset, config, harvest-all).");
     }
 
     // ===============================================================
@@ -404,6 +408,25 @@ public class TranslexCommand {
                                 I18nHelper.translate("translex.info.config_open_hover")))));
         source.sendFeedback(Component.literal(
                 I18nHelper.getPrefixed("translex.info.config_opened")).append(link));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    // ===============================================================
+    // 数据采集（/translex harvest-all）
+    // ===============================================================
+
+    /**
+     * 采集当前打开 GUI 所有物品 tooltip，序列化存本地，用于 TSP 大规模测试。
+     *
+     * <p>注意：命令本身无法直接采集——在 GUI 内按 T 打开聊天会关闭容器 GUI，
+     * 执行时 {@code Minecraft.screen} 已是 {@code ChatScreen}，抓不到物品。
+     * 因此本命令仅作为提示入口，实际采集请用 {@code HARVEST_KEY}（默认 H 键），
+     * 在容器 GUI 内直接按下，screen 保持容器。
+     */
+    private int executeHarvestAll(CommandContext<FabricClientCommandSource> context) {
+        FabricClientCommandSource source = context.getSource();
+        source.sendFeedback(Component.literal(
+                I18nHelper.getPrefixed("translex.harvest.use_key_hint")));
         return Command.SINGLE_SUCCESS;
     }
 

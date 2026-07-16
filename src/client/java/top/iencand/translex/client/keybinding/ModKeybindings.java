@@ -43,6 +43,17 @@ public class ModKeybindings {
             )
     );
 
+    /** 采集当前 GUI 所有物品 tooltip 存本地（TSP 测试数据收集，默认 H 键）。
+     *  必须用键位而非命令：容器 GUI 里按 T 打开聊天会关闭容器，命令拿不到 screen。 */
+    public static final KeyMapping HARVEST_KEY = KeyMappingHelper.registerKeyMapping(
+            new KeyMapping(
+                    "key.translex.harvest",
+                    InputConstants.Type.KEYSYM,
+                    GLFW.GLFW_KEY_H,
+                    GENERAL_CATEGORY
+            )
+    );
+
     /** 注册所有按键绑定（在客户端初始化时调用） */
     public static void register() {
         ConsoleBroadcaster.broadcast("DEBUG", "按键绑定已注册");

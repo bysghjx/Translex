@@ -1,0 +1,123 @@
+=== TSP Lore AI Test (Full TSP + strong prompt) ===
+Sample: 50 items, batch: 10
+
+Sampled 50 items (pet-prioritized)
+
+Encoded 767 paragraphs, 1799 tokens total
+
+  [debug batch 1] payload.len=872 responses=10/10
+  [debug raw] {
+  "0": "[[0||挖掘经验加成]]",
+  "1": "[[0||使用后消失]]\n\n[[1||宠物物品 ]][[2||能以多种强力方式]]\n[[2||提升宠物！每只宠物只能携带]]",
+  "2": "[[0||一个 ]][[1||宠物物品]][[0||，但你可以随时]]\n[[0||进行 ]][[2||替换]]！\n[[3||宠物必须处于可见状态才能应用该物品！]]\n",
+  "3": "[[0||给予 ]][[1||+40% ]][[0||挖掘宠物经验。]]\n\n[[2||右键点击已召唤的宠物即可]]\n[[2||给予该物品！]]",
+  "4": "\n[[0||稀有宠物物品]]",
+  "5": "[[0||拍卖行最低一口价： ]][[1||49,998 硬币]][[2|| (]][[1||{0}]][[2||)]]",
+  "6": "[[0||skyblo
+  batch  1: 10 paragraphs, 4159ms, tokens 21/21 (100%), color ok 1 wrong 0, perfect 10
+  [debug batch 2] payload.len=806 responses=10/10
+  [debug raw] {
+  "0": "[[0||右键点击你召唤的宠物以]]\n[[0||应用此皮肤！]]",
+  "1": "[[0||史诗级装饰]]",
+  "2": "[[0||拍卖行最低一口价：]][[1||197,999 硬币]][[2||（]][[1||{0}]][[2||）]]",
+  "3": "[[0||skyblock:PET_SKIN_ENDERMAN_SLAYER]]",
+  "4": "[[0||幸运三叶草]]",
+  "5": "[[0||使用后消失]]\n\n[[1||宠物物品]]\n[[2||能以多种强力方式提升宠物！一只宠物只能携带]]",
+  "6": "[[0||一个]][[1||宠物物品]][[0||，但你可以随时]][[2||替换]][[0||它]]\n[[0||！]]\n[[3||宠物必须可见才能应用该物品！]]\n",
+  "7": "[[0||赋予]][[1||
+  batch  2: 10 paragraphs, 3334ms, tokens 22/22 (100%), color ok 2 wrong 0, perfect 10
+  batch  3: 10 paragraphs, 3215ms, tokens 22/22 (100%), color ok 1 wrong 0, perfect 10
+  batch  4: 10 paragraphs, 3319ms, tokens 25/25 (100%), color ok 3 wrong 0, perfect 10
+  batch  5: 10 paragraphs, 2227ms, tokens 19/19 (100%), color ok 7 wrong 0, perfect 10
+  batch  6: 10 paragraphs, 4402ms, tokens 28/29 (97%), color ok 4 wrong 0, perfect 9
+  batch  7: 10 paragraphs, 3333ms, tokens 24/24 (100%), color ok 3 wrong 0, perfect 10
+  batch  8: 10 paragraphs, 2938ms, tokens 20/20 (100%), color ok 5 wrong 0, perfect 10
+  batch  9: 10 paragraphs, 4028ms, tokens 26/26 (100%), color ok 4 wrong 0, perfect 10
+  batch 10: 10 paragraphs, 2678ms, tokens 22/22 (100%), color ok 6 wrong 0, perfect 10
+  batch 11: 10 paragraphs, 3892ms, tokens 26/26 (100%), color ok 4 wrong 0, perfect 10
+  batch 12: 10 paragraphs, 3564ms, tokens 26/26 (100%), color ok 3 wrong 0, perfect 10
+  batch 13: 10 paragraphs, 3854ms, tokens 24/24 (100%), color ok 2 wrong 0, perfect 10
+  batch 14: 10 paragraphs, 2563ms, tokens 21/21 (100%), color ok 6 wrong 0, perfect 10
+  batch 15: 10 paragraphs, 4900ms, tokens 31/33 (94%), color ok 5 wrong 0, perfect 9
+  batch 16: 10 paragraphs, 2364ms, tokens 19/19 (100%), color ok 5 wrong 0, perfect 10
+  batch 17: 10 paragraphs, 5213ms, tokens 33/33 (100%), color ok 5 wrong 0, perfect 10
+  batch 18: 10 paragraphs, 2999ms, tokens 21/21 (100%), color ok 5 wrong 0, perfect 10
+  batch 19: 10 paragraphs, 3919ms, tokens 27/27 (100%), color ok 4 wrong 0, perfect 10
+  batch 20: 10 paragraphs, 2644ms, tokens 21/21 (100%), color ok 4 wrong 0, perfect 10
+  batch 21: 10 paragraphs, 2679ms, tokens 21/21 (100%), color ok 6 wrong 0, perfect 10
+  batch 22: 10 paragraphs, 3328ms, tokens 25/25 (100%), color ok 5 wrong 0, perfect 10
+  batch 23: 10 paragraphs, 2655ms, tokens 22/22 (100%), color ok 3 wrong 0, perfect 10
+  batch 24: 10 paragraphs, 2593ms, tokens 20/20 (100%), color ok 4 wrong 0, perfect 10
+  batch 25: 10 paragraphs, 3375ms, tokens 22/22 (100%), color ok 2 wrong 0, perfect 10
+  batch 26: 10 paragraphs, 2643ms, tokens 22/22 (100%), color ok 6 wrong 0, perfect 10
+  batch 27: 10 paragraphs, 3849ms, tokens 24/24 (100%), color ok 3 wrong 0, perfect 10
+  batch 28: 10 paragraphs, 3051ms, tokens 25/25 (100%), color ok 4 wrong 0, perfect 10
+  batch 29: 10 paragraphs, 2797ms, tokens 21/21 (100%), color ok 5 wrong 0, perfect 10
+  batch 30: 10 paragraphs, 3347ms, tokens 27/28 (96%), color ok 4 wrong 0, perfect 9
+  batch 31: 10 paragraphs, 2103ms, tokens 19/19 (100%), color ok 7 wrong 0, perfect 10
+  batch 32: 10 paragraphs, 4270ms, tokens 27/27 (100%), color ok 7 wrong 0, perfect 10
+  batch 33: 10 paragraphs, 2890ms, tokens 23/24 (96%), color ok 2 wrong 0, perfect 9
+  batch 34: 10 paragraphs, 2580ms, tokens 21/21 (100%), color ok 5 wrong 0, perfect 10
+  batch 35: 10 paragraphs, 3018ms, tokens 21/21 (100%), color ok 3 wrong 0, perfect 10
+  batch 36: 10 paragraphs, 2937ms, tokens 22/22 (100%), color ok 7 wrong 0, perfect 10
+  batch 37: 10 paragraphs, 4364ms, tokens 30/30 (100%), color ok 5 wrong 0, perfect 10
+  batch 38: 10 paragraphs, 2522ms, tokens 19/19 (100%), color ok 3 wrong 0, perfect 10
+  batch 39: 10 paragraphs, 3665ms, tokens 19/19 (100%), color ok 4 wrong 0, perfect 10
+  batch 40: 10 paragraphs, 2883ms, tokens 20/20 (100%), color ok 5 wrong 0, perfect 10
+  batch 41: 10 paragraphs, 2443ms, tokens 17/17 (100%), color ok 0 wrong 0, perfect 10
+  batch 42: 10 paragraphs, 3259ms, tokens 32/32 (100%), color ok 5 wrong 0, perfect 10
+  batch 43: 10 paragraphs, 3596ms, tokens 30/30 (100%), color ok 7 wrong 0, perfect 10
+  batch 44: 10 paragraphs, 3618ms, tokens 23/23 (100%), color ok 2 wrong 0, perfect 10
+  batch 45: 10 paragraphs, 2438ms, tokens 18/18 (100%), color ok 3 wrong 0, perfect 10
+  batch 46: 10 paragraphs, 2573ms, tokens 17/17 (100%), color ok 3 wrong 0, perfect 10
+  batch 47: 10 paragraphs, 2121ms, tokens 19/19 (100%), color ok 5 wrong 0, perfect 10
+  batch 48: 10 paragraphs, 2557ms, tokens 21/21 (100%), color ok 7 wrong 0, perfect 10
+  batch 49: 10 paragraphs, 2568ms, tokens 15/15 (100%), color ok 2 wrong 0, perfect 10
+  batch 50: 10 paragraphs, 2579ms, tokens 22/22 (100%), color ok 6 wrong 0, perfect 10
+  batch 51: 10 paragraphs, 1993ms, tokens 18/18 (100%), color ok 5 wrong 0, perfect 10
+  batch 52: 10 paragraphs, 3054ms, tokens 24/24 (100%), color ok 1 wrong 0, perfect 10
+  batch 53: 10 paragraphs, 2334ms, tokens 20/20 (100%), color ok 3 wrong 0, perfect 10
+  batch 54: 10 paragraphs, 2195ms, tokens 23/23 (100%), color ok 7 wrong 0, perfect 10
+  batch 55: 10 paragraphs, 4170ms, tokens 34/34 (100%), color ok 2 wrong 0, perfect 10
+  batch 56: 10 paragraphs, 2477ms, tokens 20/20 (100%), color ok 4 wrong 0, perfect 10
+  batch 57: 10 paragraphs, 5819ms, tokens 36/36 (100%), color ok 5 wrong 0, perfect 10
+  batch 58: 10 paragraphs, 3159ms, tokens 24/24 (100%), color ok 3 wrong 0, perfect 10
+  batch 59: 10 paragraphs, 2316ms, tokens 25/25 (100%), color ok 7 wrong 0, perfect 10
+  batch 60: 10 paragraphs, 3822ms, tokens 27/27 (100%), color ok 3 wrong 0, perfect 10
+  batch 61: 10 paragraphs, 3063ms, tokens 26/26 (100%), color ok 4 wrong 0, perfect 10
+  batch 62: 10 paragraphs, 2582ms, tokens 30/30 (100%), color ok 6 wrong 0, perfect 10
+  batch 63: 10 paragraphs, 6137ms, tokens 32/33 (97%), color ok 1 wrong 0, perfect 9
+  batch 64: 10 paragraphs, 2838ms, tokens 21/21 (100%), color ok 4 wrong 0, perfect 10
+  batch 65: 10 paragraphs, 2709ms, tokens 18/18 (100%), color ok 0 wrong 0, perfect 10
+  batch 66: 10 paragraphs, 2775ms, tokens 34/34 (100%), color ok 8 wrong 0, perfect 10
+  batch 67: 10 paragraphs, 4685ms, tokens 30/30 (100%), color ok 1 wrong 0, perfect 10
+  batch 68: 10 paragraphs, 3103ms, tokens 22/22 (100%), color ok 7 wrong 0, perfect 10
+  batch 69: 10 paragraphs, 3504ms, tokens 23/23 (100%), color ok 3 wrong 0, perfect 10
+  batch 70: 10 paragraphs, 2552ms, tokens 19/19 (100%), color ok 2 wrong 0, perfect 10
+  batch 71: 10 paragraphs, 2843ms, tokens 36/36 (100%), color ok 9 wrong 0, perfect 10
+  batch 72: 10 paragraphs, 5037ms, tokens 22/22 (100%), color ok 3 wrong 0, perfect 10
+  batch 73: 10 paragraphs, 2361ms, tokens 20/20 (100%), color ok 4 wrong 0, perfect 10
+  batch 74: 10 paragraphs, 1818ms, tokens 15/15 (100%), color ok 3 wrong 0, perfect 10
+  batch 75: 10 paragraphs, 3026ms, tokens 20/20 (100%), color ok 5 wrong 0, perfect 10
+  batch 76: 10 paragraphs, 2853ms, tokens 19/19 (100%), color ok 1 wrong 0, perfect 10
+  batch 77: 7 paragraphs, 2270ms, tokens 13/13 (100%), color ok 5 wrong 0, perfect 7
+
+══════════════════════════════════════
+  TSP Lore AI Test Summary
+══════════════════════════════════════
+  API batches:           77
+  Paragraphs tested:     767
+  Perfect paragraphs:    762 (99.35%)
+  Tokens sent:           1799
+  Tokens preserved:      1793 (99.67%)
+  Color correct:         315
+  Color wrong:           0
+  Color accuracy:        100.00%
+
+  --- Token 消耗 & Prompt 长度 ---
+  System prompt chars:   581
+  Total payload chars:   53833 (avg 699/batch)
+  Prompt tokens (API):   37907
+  Completion tokens:     26220
+  Total tokens (API):    64127
+  Avg tokens/batch:      832

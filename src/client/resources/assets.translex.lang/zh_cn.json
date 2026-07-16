@@ -1,6 +1,7 @@
 {
   "key.translex.remove_block": "移除方块",
   "key.translex.translate_lore": "翻译物品 Lore",
+  "key.translex.harvest": "采集 Lore 数据",
   "category.translex.general": "Translex Mod",
 
   "translex.prefix.name": "Translex",
@@ -90,5 +91,10 @@
 
   "translex.info.debug_enabled": "调试模式已 §a开启§r — 翻译无需 API Key，返回原文加 [DEBUG] 标记",
   "translex.info.debug_disabled": "调试模式已 §c关闭§r — 恢复正常的 API 翻译流程",
-  "translex.info.debug_hint": "翻译结果将在原文前添加 §e[DEBUG]§r 前缀，方便识别为模拟翻译"
+  "translex.info.debug_hint": "翻译结果将在原文前添加 §e[DEBUG]§r 前缀，方便识别为模拟翻译",
+
+  "translex.harvest.success": "§a采集完成§r - 抓取 %s 个物品，新增 %s，跳过 %s（已存在）",
+  "translex.harvest.error_no_screen": "§c请先打开一个物品栏§r（背包 / ender chest / auction 等），再执行 harvest-all",
+  "translex.harvest.location": "§7数据已保存到: %s",
+  "translex.harvest.use_key_hint": "§e采集请打开物品栏后按 H 键§r（聊天命令会关闭容器，无法采集）"
 }

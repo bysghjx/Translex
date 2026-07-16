@@ -22,6 +22,7 @@ import top.iencand.translex.client.keybinding.ModKeybindings;
 import top.iencand.translex.client.translate.TranslationManager;
 import top.iencand.translex.client.util.I18nHelper;
 import top.iencand.translex.client.util.ItemIdExtractor;
+import top.iencand.translex.client.util.LoreHarvester;
 import top.iencand.translex.client.util.TooltipKeyUtil;
 
 import java.util.List;
@@ -102,6 +103,25 @@ public class ClientStateManager {
     // ---------------------------------------------------------------
 
     private void onGuiKeyPress(Screen screen, KeyEvent input) {
+        // H 键：采集当前 GUI 所有物品 tooltip 存本地（TSP 测试数据收集）。
+        // 用键位而非命令：容器 GUI 里按 T 打开聊天会关闭容器，命令执行时拿不到 screen。
+        if (ModKeybindings.HARVEST_KEY.matches(input)) {
+            LocalPlayer player = Minecraft.getInstance().player;
+            LoreHarvester.HarvestResult result = LoreHarvester.harvestAll();
+            if (player != null) {
+                if (!result.success()) {
+                    player.sendSystemMessage(Component.literal(
+                            I18nHelper.getPrefixed("translex.harvest.error_no_screen")));
+                } else {
+                    player.sendSystemMessage(Component.literal(I18nHelper.getPrefixed(
+                            "translex.harvest.success", result.total(), result.added(), result.skipped())));
+                    player.sendSystemMessage(Component.literal(I18nHelper.getPrefixed(
+                            "translex.harvest.location", LoreHarvester.getHarvestFile().getAbsolutePath())));
+                }
+            }
+            return;
+        }
+
         if (ModKeybindings.TRANSLATE_LORE_KEY.matches(input)) {
             Minecraft mc = Minecraft.getInstance();
             LocalPlayer player = mc.player;
