@@ -52,6 +52,12 @@ public interface TranslationFormat {
      */
     Component decode(String template, Component original, boolean isParagraph, String registryHash);
 
+    /** v1.1: 带 RecoveryStats 的 decode（TSP 记 recovery 事件，sN 忽略）。 */
+    default Component decode(String template, Component original, boolean isParagraph,
+                             String registryHash, tsp.RecoveryStats stats) {
+        return decode(template, original, isParagraph, registryHash);
+    }
+
     /**
      * 去格式标签，保留纯文本 + {@code {0}} 占位符（用于缓存键）。
      * sN 去 {@code <sN>}，TSP 去 {@code [[ID||]]}，结果一致（同原文 -> 同键）。

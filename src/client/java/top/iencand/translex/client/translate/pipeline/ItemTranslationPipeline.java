@@ -49,7 +49,9 @@ public class ItemTranslationPipeline {
     private final ItemPresetLibrary presetLibrary = new ItemPresetLibrary();
     private final BatchDispatcher dispatcher;
 
-    public ItemTranslationPipeline(TranslationRequester sharedRequester) {
+    private final tsp.RecoveryStats recoveryStats;
+
+    public ItemTranslationPipeline(TranslationRequester sharedRequester, tsp.RecoveryStats recoveryStats) {
         PipelineConfig config = new PipelineConfig(
                 "TL_ITEM",
                 1500,
@@ -60,6 +62,7 @@ public class ItemTranslationPipeline {
                 "Translex-Dispatcher-Item"
         );
         this.dispatcher = new BatchDispatcher(config, sharedRequester);
+        this.recoveryStats = recoveryStats;
         presetLibrary.load();
     }
 
@@ -132,7 +135,7 @@ public class ItemTranslationPipeline {
                     if (entry != null) {
                         TranslationFormat cachedFormat = TranslationFormat.forId(entry.format());
                         // decode：TSP 校验 registryHash（颜色结构变返回 null -> miss），sN 忽略
-                        Component paraComponent = cachedFormat.decode(entry.template(), combined, true, entry.registryHash());
+                        Component paraComponent = cachedFormat.decode(entry.template(), combined, true, entry.registryHash(), recoveryStats);
                         if (paraComponent != null) {
                             result[start] = paraComponent;
                             // \n -> 空格：避免 handleOutputMode 的 join/split 把整段 \n 当行分隔拆开
@@ -208,7 +211,7 @@ public class ItemTranslationPipeline {
                         boolean valid = "TSP".equals(entry.format())
                                 || validateTranslation(encoded.template(), entry.template(), i) != null;
                         if (valid) {
-                            Component decoded = cachedFormat.decode(entry.template(), lineComp, false, entry.registryHash());
+                            Component decoded = cachedFormat.decode(entry.template(), lineComp, false, entry.registryHash(), recoveryStats);
                             if (decoded != null) {
                                 result[i] = decoded;
                                 storedTemplates[i] = new TranslationCacheEntry(entry.format(), entry.template(), entry.registryHash()).toJson();
@@ -278,7 +281,7 @@ public class ItemTranslationPipeline {
                         // AI 输出有效 -> 缓存 + 使用
                         cacheManager.putByCacheKey(p.cacheKey(),
                                 new TranslationCacheEntry(formatId, validated, registryHash).toJson());
-                        Component decoded = fmt.decode(validated, original, false, registryHash);
+                        Component decoded = fmt.decode(validated, original, false, registryHash, recoveryStats);
                         result[idx] = decoded != null ? decoded : original;
                         storedTemplates[idx] = new TranslationCacheEntry(formatId, validated, registryHash).toJson();
                     } else {
@@ -317,7 +320,7 @@ public class ItemTranslationPipeline {
                     // 段落整段渲染成一个 Component（不拆行，\n->空格），存首行 + 空标记
                     // 渲染层（Mixin）用 Font.split 按宽度重新换行，动态调 wrapWidth 对齐原行数
                     try {
-                        Component paraComponent = fmt.decode(translated, original, true, registryHash);
+                        Component paraComponent = fmt.decode(translated, original, true, registryHash, recoveryStats);
                         if (paraComponent == null) paraComponent = original;  // registryHash 不匹配回退
                         cacheManager.putByCacheKey(p.cacheKey(),
                                 new TranslationCacheEntry(formatId, translated, registryHash).toJson());

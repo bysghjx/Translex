@@ -26,8 +26,9 @@ import java.util.List;
 public class TranslationManager {
 
     private final TranslationRequester sharedRequester = new TranslationRequester();
+    private final tsp.RecoveryStats recoveryStats = tsp.RecoveryStats.getInstance();
     private final ChatTranslationPipeline chatPipeline = new ChatTranslationPipeline(sharedRequester);
-    private final ItemTranslationPipeline itemPipeline = new ItemTranslationPipeline(sharedRequester);
+    private final ItemTranslationPipeline itemPipeline = new ItemTranslationPipeline(sharedRequester, recoveryStats);
 
     public TranslationManager() {
     }
@@ -66,6 +67,7 @@ public class TranslationManager {
 
     public ItemPresetLibrary getPresetLibrary() { return itemPipeline.getPresetLibrary(); }
     public TranslationCacheManager getCacheManager() { return itemPipeline.getCacheManager(); }
+    public tsp.RecoveryStats getRecoveryStats() { return recoveryStats; }
 
     public void shutdown() {
         chatPipeline.shutdown();

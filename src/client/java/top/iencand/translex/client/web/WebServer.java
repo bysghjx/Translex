@@ -94,6 +94,7 @@ public class WebServer {
             server.createContext("/api/config",        this::handleGetConfig);
             server.createContext("/api/config/save",   this::handleSaveConfig);
             server.createContext("/api/metrics",       this::handleGetMetrics);
+            server.createContext("/api/recovery-stats", this::handleRecoveryStats);
             server.createContext("/api/traces",        this::handleGetTraces);
             server.createContext("/api/debug/console", this::handleSseConsole);
             // 兜底 — 静态文件服务
@@ -313,6 +314,22 @@ public class WebServer {
     }
 
     /** GET /api/status — 首屏汇总（Dashboard 初始化用，减少首屏请求数）。 */
+    /** GET /api/recovery-stats - TSP v1.1 Recovery 统计 */
+    private void handleRecoveryStats(HttpExchange ex) throws IOException {
+        if (!checkToken(ex)) { sendForbidden(ex); return; }
+        tsp.RecoveryStats stats = tsp.RecoveryStats.getInstance();
+        JsonObject json = new JsonObject();
+        json.addProperty("parseCount", stats.parseCount());
+        json.addProperty("perfectParses", stats.perfectParses());
+        json.addProperty("recoveredParses", stats.recoveredParses());
+        json.addProperty("failedParses", stats.failedParses());
+        json.addProperty("tokenRepaired", stats.tokenRepaired());
+        json.addProperty("tokenAmbiguous", stats.tokenAmbiguous());
+        json.addProperty("tokenInvalid", stats.tokenInvalid());
+        json.addProperty("healthScore", stats.healthScore());
+        sendJson(ex, 200, json);
+    }
+
     private void handleGetStatus(HttpExchange ex) throws IOException {
         if (!checkToken(ex)) { sendForbidden(ex); return; }
         ModConfig cfg = ModConfig.get();

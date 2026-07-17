@@ -58,6 +58,11 @@ public final class TspFormat implements TranslationFormat {
 
     @Override
     public Component decode(String template, Component original, boolean isParagraph, String registryHash) {
+        return decode(template, original, isParagraph, registryHash, null);
+    }
+
+    @Override
+    public Component decode(String template, Component original, boolean isParagraph, String registryHash, RecoveryStats stats) {
         // 从 original 重建 registry（deterministic，跟 encode 时一致）
         List<StyledSegment> origSegs = new ArrayList<>();
         List<String> vals = new ArrayList<>();
@@ -87,6 +92,11 @@ public final class TspFormat implements TranslationFormat {
         TspDecoder decoder = new TspDecoder(registry, idHashSet, hashToIds);
         List<StyledSegment> decoded = decoder.decode(parser.parse(template));
 
+        // v1.1 Metrics: 记 recovery 事件到 RecoveryStats
+        if (stats != null) {
+            stats.recordTspDecode(decoder.getRepairedCount(), decoder.getAmbiguousCount(),
+                    decoder.getInvalidCount(), decoder.getLevel3Count() > 0);
+        }
         // Level 3: ambiguous + invalid > 0（多匹配不猜 / HASH 不合法）-> 整段回退原文
         if (decoder.getLevel3Count() > 0) {
             LOGGER.info("TSP fallback: ambiguous={} invalid={}", decoder.getAmbiguousCount(), decoder.getInvalidCount());

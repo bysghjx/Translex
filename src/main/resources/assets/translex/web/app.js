@@ -178,6 +178,7 @@ const app = createApp({
             selectedPreset: '', newPresetName: '',
             showApiKey: false,
             metrics: { localHits:0, aiRequests:0, totalEstimatedTokens:0, totalSavedTokens:0, totalActualTokens:0, hasActualTokenData:false, latencyHistory:[] },
+            recoveryStats: {},
             metricsLoading: false,
             traces: [], consoleLines: [], consoleLevelFilter: 'all',
             donutChart: null, lineChart: null, costChart: null,
@@ -403,6 +404,13 @@ const app = createApp({
             this.showToast(this.lang.presetDelete, 'success');
         },
         /* ── 指标 / 图表 ── */
+        async fetchRecoveryStats() {
+            try {
+                const res = await fetch(this.apiUrl("/api/recovery-stats"));
+                if (!res.ok) throw new Error("HTTP "+res.status);
+                this.recoveryStats = await res.json();
+            } catch(e) {}
+        },
         async fetchMetrics() {
             this.metricsLoading = true;
             try {
@@ -536,12 +544,13 @@ const app = createApp({
         this.handleHashNavigation();
         window.addEventListener('hashchange', () => this.handleHashNavigation());
         this.$nextTick(() => { this.initCharts(); });
-        Promise.all([this.fetchConfig(), this.fetchMetrics(), this.fetchTraces()]).then(() => {
+        Promise.all([this.fetchConfig(), this.fetchMetrics(), this.fetchTraces(), this.fetchRecoveryStats()]).then(() => {
             // 首次加载后若 apiKey 是占位符且 #welcome，显示欢迎
             if (location.hash === '#welcome' && this.isApiKeyPlaceholder) this.showWelcome = true;
         });
         this.connectSSE();
         this.metricsTimer = setInterval(() => this.fetchMetrics(), 5000);
+        this.recoveryTimer = setInterval(() => this.fetchRecoveryStats(), 5000);
         this.tracesTimer = setInterval(() => this.fetchTraces(), 3000);
     },
     beforeUnmount() {

@@ -43,6 +43,11 @@ public final class RecoveryStats {
     private long recoveredTotal = 0;
     private long unrecoverableTotal = 0;
 
+    // ---- TSP v1.1 checksum recovery 统计 ----
+    private long tokenRepaired = 0;    // Level 2 确定性修复（HASH 唯一匹配改 ID）
+    private long tokenAmbiguous = 0;   // Level 3 ambiguous（多匹配不猜）
+    private long tokenInvalid = 0;     // Level 3 invalid（HASH 不合法）
+
     // ---- unrecoverable sample cache (for backup / analysis) ----
     private final List<ParseError> unrecoverableSamples;
     private final int maxSamples;
@@ -58,6 +63,14 @@ public final class RecoveryStats {
     public RecoveryStats(int maxSamples) { this("", maxSamples); }
 
     /** Collector with label + custom sample cap. */
+    private static volatile RecoveryStats INSTANCE;
+
+    /** WebServer / Web UI 访问的全局实例。 */
+    public static RecoveryStats getInstance() {
+        if (INSTANCE == null) INSTANCE = new RecoveryStats("TSP");
+        return INSTANCE;
+    }
+
     public RecoveryStats(String label, int maxSamples) {
         this.label = label;
         this.maxSamples = maxSamples;
@@ -91,6 +104,26 @@ public final class RecoveryStats {
         }
     }
 
+    /**
+     * 记录 TSP v1.1 decode 的 recovery 结果（Level 0/2/3）。
+     * - fallback=true -> failedParses（段落回退原文）
+     * - repaired>0 且无 fallback -> recoveredParses（Level 2 修复成功）
+     * - 否则 -> perfectParses（Level 0 正常）
+     */
+    public synchronized void recordTspDecode(int repaired, int ambiguous, int invalid, boolean fallback) {
+        parseCount++;
+        if (fallback) {
+            failedParses++;
+        } else if (repaired > 0) {
+            recoveredParses++;
+        } else {
+            perfectParses++;
+        }
+        tokenRepaired += repaired;
+        tokenAmbiguous += ambiguous;
+        tokenInvalid += invalid;
+    }
+
     // ---- label ----
     public String label() { return label; }
 
@@ -99,6 +132,11 @@ public final class RecoveryStats {
     public synchronized long perfectParses() { return perfectParses; }
     public synchronized long recoveredParses() { return recoveredParses; }
     public synchronized long failedParses() { return failedParses; }
+
+    // ---- TSP v1.1 checksum recovery getters ----
+    public synchronized long tokenRepaired() { return tokenRepaired; }
+    public synchronized long tokenAmbiguous() { return tokenAmbiguous; }
+    public synchronized long tokenInvalid() { return tokenInvalid; }
 
     // ---- per-token cumulative getters ----
     public synchronized long recoveredTotal() { return recoveredTotal; }

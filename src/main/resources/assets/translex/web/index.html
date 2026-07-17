@@ -272,6 +272,19 @@
                     <div class="text-sm font-semibold truncate" :title="s.title||''" :style="{ color: s.color ? 'var(--'+s.color+')' : 'var(--text-primary)' }">{{ s.value }}</div>
                 </div>
             </div>
+            <!-- TSP v1.1 Recovery Stats -->
+            <div v-if="recoveryStats.parseCount > 0" class="card-panel p-4">
+                <div class="text-sm font-semibold mb-2">TSP v1.1 Recovery</div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+                    <div><div class="text-xs" style="color:var(--text-muted)">Paragraphs</div><div class="font-semibold">{{ recoveryStats.parseCount }}</div></div>
+                    <div><div class="text-xs" style="color:var(--text-muted)">Normal</div><div class="font-semibold" style="color:var(--success)">{{ recoveryStats.perfectParses }}</div></div>
+                    <div><div class="text-xs" style="color:var(--text-muted)">Repaired (L2)</div><div class="font-semibold" style="color:var(--accent)">{{ recoveryStats.tokenRepaired }}</div></div>
+                    <div><div class="text-xs" style="color:var(--text-muted)">Fallback (L3)</div><div class="font-semibold" style="color:var(--danger)">{{ recoveryStats.failedParses }}</div></div>
+                    <div><div class="text-xs" style="color:var(--text-muted)">Ambiguous</div><div class="font-semibold">{{ recoveryStats.tokenAmbiguous }}</div></div>
+                    <div><div class="text-xs" style="color:var(--text-muted)">Invalid</div><div class="font-semibold">{{ recoveryStats.tokenInvalid }}</div></div>
+                    <div><div class="text-xs" style="color:var(--text-muted)">Health</div><div class="font-semibold">{{ recoveryStats.healthScore ? recoveryStats.healthScore.toFixed(2) + '%' : '-' }}</div></div>
+                </div>
+            </div>
             <console-panel :lines="filteredConsoleLines" v-model:level-filter="consoleLevelFilter"
                            :empty-text="consoleLevelFilter==='all' ? lang.consolePlaceholder : lang.debugNoMatch"
                            :live-label="lang.liveConsole" @clear="clearConsole"></console-panel>
