@@ -28,3 +28,5 @@ libs/
 # Temp plan/handoff (local only)
 PLAN.md
 doc/HANDOFF.md
+# TSP test output
+tsp/checksum_out.txt
