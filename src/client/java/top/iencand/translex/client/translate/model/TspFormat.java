@@ -3,9 +3,15 @@ package top.iencand.translex.client.translate.model;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.TextColor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tsp.*;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -23,6 +29,7 @@ import java.util.regex.Pattern;
  * toTspStyle/toMcStyle + fingerprint。</p>
  */
 public final class TspFormat implements TranslationFormat {
+    private static final Logger LOGGER = LoggerFactory.getLogger("Translex/TspFormat");
 
     /** 数字段正则（与 LineTemplate.NUMBER 一致），用于 {0} 占位符保护。 */
     private static final Pattern NUMBER = Pattern.compile(
@@ -44,7 +51,7 @@ public final class TspFormat implements TranslationFormat {
         List<String> vals = new ArrayList<>();
         TspRegistry registry = new TspRegistry();
         extractSegments(component, segs, vals, registry);
-        TspEncoder encoder = new TspEncoder(registry);  // Full TSP（无 auto-default）
+        TspEncoder encoder = new TspEncoder(registry, true);  // v1.1: Full TSP + checksum
         String tsp = encoder.encode(segs);
         return new Encoded(tsp, registry.fingerprint());
     }
@@ -63,10 +70,31 @@ public final class TspFormat implements TranslationFormat {
             return null;
         }
 
-        // TSP decode
+        // v1.1: 建 idHashSet + hashToIds（从 origSegs，跟 encode 一致）
+        Set<String> idHashSet = new HashSet<>();
+        Map<String, List<Integer>> hashToIds = new HashMap<>();
+        for (StyledSegment seg : origSegs) {
+            if (!seg.isPlain()) {
+                int id = registry.register(seg.style());  // 幂等，返回已有 ID
+                String hash = TspEncoder.sha4(seg.text());
+                idHashSet.add(id + ":" + hash);
+                hashToIds.computeIfAbsent(hash, k -> new ArrayList<>()).add(id);
+            }
+        }
+
+        // TSP decode + Level 1/2/3 校验（checksum 检测 + 确定性修复 + ambiguous 回退）
         TspParser parser = new TspParser(TspRecovery.Level.V1);
-        TspDecoder decoder = new TspDecoder(registry);
+        TspDecoder decoder = new TspDecoder(registry, idHashSet, hashToIds);
         List<StyledSegment> decoded = decoder.decode(parser.parse(template));
+
+        // Level 3: ambiguous + invalid > 0（多匹配不猜 / HASH 不合法）-> 整段回退原文
+        if (decoder.getLevel3Count() > 0) {
+            LOGGER.info("TSP fallback: ambiguous={} invalid={}", decoder.getAmbiguousCount(), decoder.getInvalidCount());
+            return null;
+        }
+        if (decoder.getRepairedCount() > 0) {
+            LOGGER.info("TSP repaired: {} token(s) (Level 2)", decoder.getRepairedCount());
+        }
 
         // fillNumbers：{0} -> vals[0]（数字从 original 提取，跟 encode 一致）
         List<StyledSegment> filled = new ArrayList<>();

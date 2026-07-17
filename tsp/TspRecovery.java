@@ -100,9 +100,17 @@ public final class TspRecovery {
                 String cleaned = recoverWhitespace(rawBetweenBrackets);
                 if (cleaned == null) yield null;
                 int pipe = cleaned.indexOf("||");
-                int id = Integer.parseInt(cleaned.substring(0, pipe));
+                String idPart = cleaned.substring(0, pipe);
                 String text = cleaned.substring(pipe + 2);
-                yield new TspToken(id, text);
+                // v1.1: idPart 可能含 :HASH，拆出保留 checksum
+                String checksum = null;
+                int colon = idPart.indexOf(':');
+                if (colon >= 0) {
+                    checksum = idPart.substring(colon + 1);
+                    idPart = idPart.substring(0, colon);
+                }
+                int id = Integer.parseInt(idPart);
+                yield new TspToken(id, text, checksum);
             }
         };
     }

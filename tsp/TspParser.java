@@ -160,6 +160,16 @@ public final class TspParser {
         String idStr = rawContent.substring(0, sepIdx);
         String text = rawContent.substring(sepIdx + 2);
 
+        // v1.1: ID 可能含 :HASH（[[ID:HASH||TEXT]]）。拆出 checksum。
+        String checksum = null;
+        int colon = idStr.indexOf(':');
+        if (colon >= 0) {
+            checksum = idStr.substring(colon + 1);
+            idStr = idStr.substring(0, colon);
+            // checksum 必须是 hex（4-6 位）；非法 -> strict 拒绝，V1 recovery 处理
+            if (checksum.isEmpty() || !checksum.matches("[0-9a-fA-F]{1,8}")) return null;
+        }
+
         // ID must be purely numeric, no whitespace
         if (idStr.isEmpty() || !idStr.chars().allMatch(Character::isDigit)) {
             return null;
@@ -179,7 +189,7 @@ public final class TspParser {
         // V1 recovery handles it. Keeps encoder round-trip safe (V0 default).
         if (text.contains("[[")) return null;  // nesting
 
-        return new TspToken(id, text);
+        return new TspToken(id, text, checksum);
     }
 
     /**

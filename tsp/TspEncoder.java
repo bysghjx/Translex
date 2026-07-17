@@ -1,5 +1,7 @@
 package tsp;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -10,7 +12,7 @@ import java.util.Map;
  * <p>Rules (from spec §5):
  * <ul>
  *   <li>Plain-text segments pass through unchanged.</li>
- *   <li>Styled segments become {@code [[ID||TEXT]]} tokens — <em>except</em> the
+ *   <li>Styled segments become {@code [[ID||TEXT]]} tokens - <em>except</em> the
  *       default body style which is emitted as plain text to reduce token noise.</li>
  *   <li>Uses a local {@link TspRegistry} to allocate IDs on demand.</li>
  *   <li>Deterministic: same input always produces the same output.</li>
@@ -19,77 +21,65 @@ import java.util.Map;
  * <h3>Default style</h3>
  * The most frequent style in the input is treated as the "body" style
  * and is NOT wrapped in tokens. Only semantic highlights (values, names,
- * special terms) get tokens — exactly the colors that matter for translation.
+ * special terms) get tokens - exactly the colors that matter for translation.
  * This also matches what LLMs naturally do: they drop baseline tokens.
+ *
+ * <h3>v1.1 checksum</h3>
+ * With {@code withChecksum=true}, tokens carry a content hash: {@code [[ID:HASH||TEXT]]}.
+ * Decoder verifies (ID, HASH) to detect AI moving content across color-IDs, and can
+ * auto-repair ID via HASH lookup (Level 1/2 recovery).
  */
 public final class TspEncoder {
 
     private final TspRegistry registry;
     private final Style defaultStyle; // null = every style gets a token
+    private final boolean withChecksum;  // v1.1: 生成 [[ID:HASH||TEXT]]
 
-    /** No default style — every styled segment becomes a token. */
-    public TspEncoder(TspRegistry registry) {
-        this.registry = registry;
-        this.defaultStyle = null;
-    }
+    /** No default style, no checksum (v1.0). */
+    public TspEncoder(TspRegistry registry) { this(registry, null, false); }
 
-    /** Explicit default style — segments with this style are emitted as plain text. */
-    public TspEncoder(TspRegistry registry, Style defaultStyle) {
+    /** Explicit default style, no checksum. */
+    public TspEncoder(TspRegistry registry, Style defaultStyle) { this(registry, defaultStyle, false); }
+
+    /** No default style, optional checksum (v1.1). */
+    public TspEncoder(TspRegistry registry, boolean withChecksum) { this(registry, null, withChecksum); }
+
+    /** Full constructor: default style + checksum mode. */
+    public TspEncoder(TspRegistry registry, Style defaultStyle, boolean withChecksum) {
         this.registry = registry;
         this.defaultStyle = defaultStyle;
+        this.withChecksum = withChecksum;
     }
 
-    /**
-     * Auto-detect the most frequent style from the segments and treat it as the default.
-     * This is the recommended constructor for Hypixel tooltips where gray body text
-     * dominates and should not be tokenized.
-     */
+    /** Auto-detect default style (no checksum). */
     public static TspEncoder withAutoDefault(TspRegistry registry, List<StyledSegment> segments) {
-        return new TspEncoder(registry, detectDefaultStyle(segments));
+        return new TspEncoder(registry, detectDefaultStyle(segments), false);
     }
 
-    /**
-     * Encode a list of styled segments into the TSP wire format.
-     *
-     * @param segments ordered list of text segments with optional styles
-     * @return the TSP-encoded string
-     */
     public String encode(List<StyledSegment> segments) {
         StringBuilder out = new StringBuilder();
         StringBuilder plainBuffer = new StringBuilder();
-
         for (StyledSegment seg : segments) {
             if (seg.isPlain() || isDefault(seg.style())) {
-                // Plain text or default body style → emit verbatim (no token)
                 plainBuffer.append(seg.text());
             } else {
                 flushPlain(plainBuffer, out);
                 int id = registry.register(seg.style());
-                out.append(new TspToken(id, seg.text()).toWire());
+                out.append(new TspToken(id, seg.text(), withChecksum ? sha4(seg.text()) : null).toWire());
             }
         }
         flushPlain(plainBuffer, out);
-
         return out.toString();
     }
 
-    /**
-     * Encode a single styled segment (convenience wrapper).
-     */
     public String encodeOne(StyledSegment segment) {
-        if (segment.isPlain() || isDefault(segment.style())) {
-            return segment.text();
-        }
+        if (segment.isPlain() || isDefault(segment.style())) return segment.text();
         int id = registry.register(segment.style());
-        return new TspToken(id, segment.text()).toWire();
+        return new TspToken(id, segment.text(), withChecksum ? sha4(segment.text()) : null).toWire();
     }
 
-    /** The style that is treated as implicit body text (not tokenized). */
-    public Style defaultStyle() {
-        return defaultStyle;
-    }
-
-    // ---- internal ----
+    public Style defaultStyle() { return defaultStyle; }
+    public boolean withChecksum() { return withChecksum; }
 
     private boolean isDefault(Style style) {
         return defaultStyle != null && defaultStyle.equals(style);
@@ -104,12 +94,6 @@ public final class TspEncoder {
 
     /**
      * Detect the default body style: the one that appears most frequently.
-     * In Hypixel tooltips this is typically gray (#AAAAAA) — the canvas color
-     * for stat labels, description prose, and hints. Semantic colors (green
-     * for values, aqua for special terms, gold for names) appear less often
-     * and should be tokenized.
-     *
-     * @return the most frequent style, or null if empty
      */
     public static Style detectDefaultStyle(List<StyledSegment> segments) {
         Map<Style, Integer> counts = new LinkedHashMap<>();
@@ -122,5 +106,16 @@ public final class TspEncoder {
                 .max(Map.Entry.comparingByValue())
                 .map(Map.Entry::getKey)
                 .orElse(null);
+    }
+
+    /** SHA-256 前 4 hex（v1.1 checksum，16-bit，每段 <20 token 碰撞概率 <1%）。 */
+    public static String sha4(String s) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] d = md.digest(s.getBytes(StandardCharsets.UTF_8));
+            return String.format("%04x", ((d[0] & 0xff) << 8 | (d[1] & 0xff)) & 0xffff);
+        } catch (Exception e) {
+            return "0000";
+        }
     }
 }
