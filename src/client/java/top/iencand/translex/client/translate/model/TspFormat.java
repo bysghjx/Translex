@@ -154,7 +154,9 @@ public final class TspFormat implements TranslationFormat {
         }
     }
 
-    /** Minecraft Style -> TSP Style（Phase 1 只颜色）。 */
+    /** Minecraft Style -> TSP Style（Phase 1 只颜色）。
+     *  <p>26.1.2: {@link net.minecraft.network.chat.Style#getColor()} 对 § 码
+     *  也返回 TextColor（ChatFormatting.BLUE -> TextColor(0x5555FF)），无需额外处理。</p> */
     private static tsp.Style toTspStyle(net.minecraft.network.chat.Style mc) {
         if (mc == null || mc.getColor() == null) return tsp.Style.EMPTY;
         return tsp.Style.of(String.format("#%06X", mc.getColor().getValue()));

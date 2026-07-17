@@ -161,13 +161,17 @@ public final class TspParser {
         String text = rawContent.substring(sepIdx + 2);
 
         // v1.1: ID 可能含 :HASH（[[ID:HASH||TEXT]]）。拆出 checksum。
+        // 非法 HASH 降级为无校验（保留 ID 丢弃 checksum），不阻塞解析。
+        // 否则 AI 返回的 token 会整段变 plain text，导致 [[...]] 原文泄露。
         String checksum = null;
         int colon = idStr.indexOf(':');
         if (colon >= 0) {
             checksum = idStr.substring(colon + 1);
             idStr = idStr.substring(0, colon);
-            // checksum 必须是 hex（4-6 位）；非法 -> strict 拒绝，V1 recovery 处理
-            if (checksum.isEmpty() || !checksum.matches("[0-9a-fA-F]{1,8}")) return null;
+            if (!checksum.isEmpty() && !checksum.matches("[0-9a-fA-F]{1,8}")) {
+                checksum = null;  // 非法 HASH -> 降级为无校验，不 reject
+            }
+            if (checksum != null && checksum.isEmpty()) checksum = null;
         }
 
         // ID must be purely numeric, no whitespace
