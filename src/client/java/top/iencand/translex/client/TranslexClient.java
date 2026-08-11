@@ -90,7 +90,7 @@ public class TranslexClient implements ClientModInitializer {
         new TranslexCommand(translationManager, messageLookup).register();
 
         // 6. 注册全局事件与按键绑定
-        ModKeybindings.register();
+        ModKeybindings.register(config.debug);
 
         clientStateManager = new ClientStateManager(translationManager);
         clientStateManager.registerEvents();

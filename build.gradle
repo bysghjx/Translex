@@ -101,6 +101,54 @@ jar {
     from("LICENSE") {
         rename { "${it}_${project.archivesBaseName}" }
     }
+
+    // 测试与 demo 保留在 client 编译产物中，供 runAllModelTests 使用，
+    // 但不进入正式发布 jar，避免把测试工具和示例类带给玩家。
+    exclude 'tsp/tests/**'
+    exclude '**/*Test.class'
+    exclude '**/*Test$*.class'
+    exclude '**/*Demo.class'
+    exclude '**/*Demo$*.class'
+}
+
+// 运行 TermDictionary 测试（不启动 Minecraft client）
+task runTermTest(type: JavaExec) {
+    classpath = sourceSets.client.runtimeClasspath
+    mainClass = 'top.iencand.translex.client.translate.model.TermDictionaryTest'
+    standardInput = System.in
+}
+
+// 运行物品翻译管线回归测试（Validator + Collector，纯 JVM，不起 Minecraft）
+task runItemTests(type: JavaExec) {
+    classpath = sourceSets.client.runtimeClasspath
+    mainClass = 'top.iencand.translex.client.translate.pipeline.ItemPipelineTest'
+    standardInput = System.in
+}
+
+// 运行 StyledText 回归测试
+task runStyledTextTest(type: JavaExec) {
+    classpath = sourceSets.client.runtimeClasspath
+    mainClass = 'top.iencand.translex.client.translate.model.StyledTextTest'
+    standardInput = System.in
+}
+
+// 运行 SN/TSP/HYBRID 往返测试
+task runFormatRoundTripTest(type: JavaExec) {
+    classpath = sourceSets.client.runtimeClasspath
+    mainClass = 'top.iencand.translex.client.translate.model.FormatRoundTripTest'
+    standardInput = System.in
+}
+
+// 运行 TranslationFormatRegistry 注册表测试
+task runFormatRegistryTest(type: JavaExec) {
+    classpath = sourceSets.client.runtimeClasspath
+    mainClass = 'top.iencand.translex.client.translate.model.TranslationFormatRegistryTest'
+    standardInput = System.in
+}
+
+// 运行全部 model 回归测试
+task runAllModelTests {
+    dependsOn runTermTest, runStyledTextTest, runFormatRoundTripTest, runFormatRegistryTest, runItemTests
 }
 
 // configure the maven publication

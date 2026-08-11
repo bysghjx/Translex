@@ -41,6 +41,11 @@ public final class TspTest {
         testConsecutivePlainText();
         testDeterministicEncoding();
         testEncoderWithEmptyStyle();
+        testEscapeRoundTrip();
+        testEscapeBracketInText();
+        testEscapeBackslashInText();
+        testEscapeBothChars();
+        testEscapePlainTextUnaffected();
 
         System.out.println("\n---");
         System.out.println("Passed: " + passed + "  Failed: " + failed);
@@ -233,16 +238,19 @@ public final class TspTest {
         pass();
     }
 
-    /** ✅ Invalid Token: Nesting detected */
+    /** ✅ Nested Token: Flattened by recovery (AI hallucination). */
     private static void testInvalidToken_Nesting() {
-        System.out.print("  Invalid Token (nesting) ... ");
+        System.out.print("  Nested Token (flatten) ... ");
 
         TspParser parser = new TspParser();
         TspParser.ParseResult result = parser.parse("[[0||outer [[1||inner]] text]]");
 
-        assertTrue(result.hasErrors(), "has errors");
-        // Nesting is rejected (spec §7: no nested tokens) - no valid token produced
-        assertTrue(result.tokens().isEmpty(), "nested token rejected, no valid tokens");
+        assertTrue(result.hasErrors(), "has errors (recovery note)");
+        // Nesting recovered via flatten: [[0||outer ]] + [[1||inner]] + [[0|| text]]
+        assertEq(3, result.tokens().size(), "nested flattened: outer-before + inner + outer-after");
+        assertEq("outer ", result.tokens().get(0).text(), "outer-before text");
+        assertEq("inner", result.tokens().get(1).text(), "inner token text");
+        assertEq(" text", result.tokens().get(2).text(), "outer-after text");
 
         pass();
     }
@@ -398,6 +406,105 @@ public final class TspTest {
         assertTrue(encoded.contains("[[0||colored]]"), "styled segment becomes token");
         assertEq(1, registry.size(), "only one style registered");
 
+        pass();
+    }
+
+    /** Round-trip with ] and \ in styled text — escape/unescape must be transparent. */
+    private static void testEscapeRoundTrip() {
+        System.out.print("  Escape Round-Trip ... ");
+
+        List<StyledSegment> input = List.of(
+                StyledSegment.plain("Press "),
+                StyledSegment.styled("[SHIFT for x30]", GOLD),
+                StyledSegment.plain(" to view.")
+        );
+
+        TspRegistry registry = new TspRegistry();
+        TspEncoder encoder = new TspEncoder(registry);
+        String encoded = encoder.encode(input);
+        // encoded should contain escaped brackets: \] for each ]
+        assertTrue(encoded.contains("\\]"), "contains escaped brackets");
+
+        TspDecoder decoder = new TspDecoder(registry);
+        List<StyledSegment> output = decoder.decodeString(encoded);
+
+        assertEq(input.size(), output.size(), "segment count");
+        assertEq(GOLD, output.get(1).style(), "style preserved");
+        assertEq("[SHIFT for x30]", output.get(1).text(), "text round-trips (brackets unescaped)");
+        pass();
+    }
+
+    /** Single ] in text should be escaped/unescaped correctly. */
+    private static void testEscapeBracketInText() {
+        System.out.print("  Escape Bracket in Text ... ");
+        List<StyledSegment> input = List.of(
+                StyledSegment.styled("hello]world", GREEN)
+        );
+
+        TspRegistry registry = new TspRegistry();
+        TspEncoder encoder = new TspEncoder(registry);
+        String encoded = encoder.encode(input);
+        // Wire: [[0||hello\]world]]
+        assertTrue(encoded.contains("\\]"), "bracket is escaped");
+
+        TspDecoder decoder = new TspDecoder(registry);
+        List<StyledSegment> output = decoder.decodeString(encoded);
+        assertEq("hello]world", output.get(0).text(), "bracket unescaped");
+        pass();
+    }
+
+    /** Backslash in text should be escaped/unescaped correctly. */
+    private static void testEscapeBackslashInText() {
+        System.out.print("  Escape Backslash in Text ... ");
+        List<StyledSegment> input = List.of(
+                StyledSegment.styled("path\\to\\file", GRAY)
+        );
+
+        TspRegistry registry = new TspRegistry();
+        TspEncoder encoder = new TspEncoder(registry);
+        String encoded = encoder.encode(input);
+
+        TspDecoder decoder = new TspDecoder(registry);
+        List<StyledSegment> output = decoder.decodeString(encoded);
+        assertEq("path\\to\\file", output.get(0).text(), "backslashes unescaped");
+        pass();
+    }
+
+    /** Text containing both ] and \ — round-trip. */
+    private static void testEscapeBothChars() {
+        System.out.print("  Escape Both Chars ... ");
+        List<StyledSegment> input = List.of(
+                StyledSegment.styled("\\] \\\\ ] [", GREEN)
+        );
+
+        TspRegistry registry = new TspRegistry();
+        TspEncoder encoder = new TspEncoder(registry);
+        String encoded = encoder.encode(input);
+
+        TspDecoder decoder = new TspDecoder(registry);
+        List<StyledSegment> output = decoder.decodeString(encoded);
+        assertEq("\\] \\\\ ] [", output.get(0).text(), "both chars round-trip");
+        pass();
+    }
+
+    /** Plain text (outside tokens) must never be escaped. */
+    private static void testEscapePlainTextUnaffected() {
+        System.out.print("  Escape Plain Text Unaffected ... ");
+        List<StyledSegment> input = List.of(
+                StyledSegment.plain("hello]]world"),
+                StyledSegment.styled("styled]text", GREEN)
+        );
+
+        TspRegistry registry = new TspRegistry();
+        TspEncoder encoder = new TspEncoder(registry);
+        String encoded = encoder.encode(input);
+        // Plain text "hello]]world" must appear verbatim
+        assertTrue(encoded.startsWith("hello]]world"), "plain text ] is NOT escaped");
+
+        TspDecoder decoder = new TspDecoder(registry);
+        List<StyledSegment> output = decoder.decodeString(encoded);
+        assertEq("hello]]world", output.get(0).text(), "plain text round-trips");
+        assertEq("styled]text", output.get(1).text(), "styled text round-trips");
         pass();
     }
 

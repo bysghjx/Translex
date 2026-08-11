@@ -175,6 +175,7 @@ public class WebServer {
         json.addProperty("userItemPrompt",        cfg.userItemPrompt);
         json.addProperty("properNounMode",        cfg.properNounMode);
         json.addProperty("styleProtocol",         cfg.styleProtocol);
+        json.addProperty("tspChecksum",          cfg.tspChecksum);
         json.addProperty("translationMode", cfg.translationMode);
         json.addProperty("buttonStyle",           cfg.buttonStyle);
         json.addProperty("enableTranslateButton",  cfg.enableTranslateButton);
@@ -227,6 +228,7 @@ public class WebServer {
             if (input.has("userItemPrompt")) { cfg.userItemPrompt = input.get("userItemPrompt").getAsString(); changed = true; }
             if (input.has("properNounMode")) { cfg.properNounMode = input.get("properNounMode").getAsString(); changed = true; }
             if (input.has("styleProtocol"))  { cfg.styleProtocol = input.get("styleProtocol").getAsString(); changed = true; }
+            if (input.has("tspChecksum"))   { cfg.tspChecksum = input.get("tspChecksum").getAsBoolean(); changed = true; }
             if (input.has("translationMode"))    { cfg.translationMode = input.get("translationMode").getAsString(); changed = true; }
             if (input.has("buttonStyle"))   { cfg.buttonStyle = input.get("buttonStyle").getAsString(); changed = true; }
             if (input.has("enableTranslateButton")) { cfg.enableTranslateButton = input.get("enableTranslateButton").getAsBoolean(); changed = true; }
@@ -241,7 +243,7 @@ public class WebServer {
             if (input.has("debug"))               { cfg.debug = input.get("debug").getAsBoolean(); changed = true; }
 
             if (changed) {
-                ModConfig.forceSave();
+                ModConfig.saveConfig();
                 ModConfig.reload();
                 // reload() 内部已 broadcast "Config reloaded from disk"，不再重复
                 JsonObject result = new JsonObject();
@@ -326,6 +328,7 @@ public class WebServer {
         json.addProperty("tokenRepaired", stats.tokenRepaired());
         json.addProperty("tokenAmbiguous", stats.tokenAmbiguous());
         json.addProperty("tokenInvalid", stats.tokenInvalid());
+        json.addProperty("tokenMissing", stats.tokenMissing());
         json.addProperty("healthScore", stats.healthScore());
         sendJson(ex, 200, json);
     }
@@ -461,8 +464,11 @@ public class WebServer {
               .append(",\"totalTokens\":").append(t.totalTokens)
               .append(",\"cachedTokens\":").append(t.cachedTokens)
               .append(",\"reasoningTokens\":").append(t.reasoningTokens)
-              .append(",\"hasTokenData\":").append(t.hasTokenData)
-              .append("}");
+              .append(",\"hasTokenData\":").append(t.hasTokenData);
+            if (t.debugLines != null) {
+                sb.append(",\"debugLines\":").append(t.debugLines);
+            }
+            sb.append("}");
         }
         sb.append("]");
         sendString(ex, 200, "application/json", sb.toString());

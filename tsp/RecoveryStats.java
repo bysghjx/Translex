@@ -47,6 +47,7 @@ public final class RecoveryStats {
     private long tokenRepaired = 0;    // Level 2 确定性修复（HASH 唯一匹配改 ID）
     private long tokenAmbiguous = 0;   // Level 3 ambiguous（多匹配不猜）
     private long tokenInvalid = 0;     // Level 3 invalid（HASH 不合法）
+    private long tokenMissing = 0;     // Level 3 missing（AI 丢 token，输入 ID:HASH 未出现在输出）
 
     // ---- unrecoverable sample cache (for backup / analysis) ----
     private final List<ParseError> unrecoverableSamples;
@@ -110,7 +111,8 @@ public final class RecoveryStats {
      * - repaired>0 且无 fallback -> recoveredParses（Level 2 修复成功）
      * - 否则 -> perfectParses（Level 0 正常）
      */
-    public synchronized void recordTspDecode(int repaired, int ambiguous, int invalid, boolean fallback) {
+    public synchronized void recordTspDecode(int repaired, int ambiguous, int invalid,
+                                             int missing, boolean fallback) {
         parseCount++;
         if (fallback) {
             failedParses++;
@@ -122,6 +124,7 @@ public final class RecoveryStats {
         tokenRepaired += repaired;
         tokenAmbiguous += ambiguous;
         tokenInvalid += invalid;
+        tokenMissing += missing;
     }
 
     // ---- label ----
@@ -137,6 +140,7 @@ public final class RecoveryStats {
     public synchronized long tokenRepaired() { return tokenRepaired; }
     public synchronized long tokenAmbiguous() { return tokenAmbiguous; }
     public synchronized long tokenInvalid() { return tokenInvalid; }
+    public synchronized long tokenMissing() { return tokenMissing; }
 
     // ---- per-token cumulative getters ----
     public synchronized long recoveredTotal() { return recoveredTotal; }

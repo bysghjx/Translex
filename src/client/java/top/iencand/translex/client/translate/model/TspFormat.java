@@ -2,7 +2,6 @@ package top.iencand.translex.client.translate.model;
 
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.network.chat.TextColor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tsp.*;
@@ -12,7 +11,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -31,43 +29,96 @@ import java.util.regex.Pattern;
 public final class TspFormat implements TranslationFormat {
     private static final Logger LOGGER = LoggerFactory.getLogger("Translex/TspFormat");
 
-    /** 数字段正则（与 LineTemplate.NUMBER 一致），用于 {0} 占位符保护。 */
-    private static final Pattern NUMBER = Pattern.compile(
-            "[\\d.,+%kmb\\-s()]*\\d[\\d.,+%kmb\\-s()]*", Pattern.CASE_INSENSITIVE);
+    /** 编码策略：FULL（所有非默认色 token）/ HYBRID（只保护高风险内容）。 */
+    private final TspEncoder.Policy policy;
 
-    /** {@code <sN>content</sN>} 标签（与 StyleCodec 一致），用于解析 extract 结果。 */
-    private static final Pattern STYLE_TAG = Pattern.compile(
-            "<s(\\d+)>(.*?)</s\\1>", Pattern.DOTALL);
+    /** 是否启用 [[ID:HASH||TEXT]] 校验（开关：vs [[ID||TEXT]]）。由构造传入，不再直读 ModConfig。 */
+    private final boolean withChecksum;
+
+    /** 默认 Full TSP。Hybrid 用 TspFormat(TspEncoder.Policy.HYBRID)。 */
+    public TspFormat() { this(TspEncoder.Policy.FULL, true); }
+
+    public TspFormat(TspEncoder.Policy policy) { this(policy, true); }
+
+    public TspFormat(TspEncoder.Policy policy, boolean withChecksum) {
+        this.policy = policy;
+        this.withChecksum = withChecksum;
+    }
 
     /** {@code [[ID||TEXT]]} token，用于 stripFormatTags（缓存键）。 */
     private static final Pattern TSP_TAG = Pattern.compile("\\[\\[\\d+\\|\\|(.*?)\\]\\]", Pattern.DOTALL);
 
     @Override
-    public String id() { return "TSP"; }
+    public String id() {
+        return policy == TspEncoder.Policy.HYBRID ? "HYBRID" : "TSP";
+    }
 
     @Override
-    public Encoded encode(Component component) {
-        List<StyledSegment> segs = new ArrayList<>();
-        List<String> vals = new ArrayList<>();
+    public boolean usesTspSyntax() {
+        return true;
+    }
+
+    @Override
+    public Encoded encode(StyledText text) {
+        List<StyledSegment> segs = new ArrayList<>(text.tspSegments());
         TspRegistry registry = new TspRegistry();
-        extractSegments(component, segs, vals, registry);
-        TspEncoder encoder = new TspEncoder(registry, true);  // v1.1: Full TSP + checksum
+        // Hybrid: 合并相邻同色段（减少 token，如附魔段同色合并）
+        if (policy == TspEncoder.Policy.HYBRID) {
+            segs = HybridPolicy.mergeAdjacentSameColor(segs);
+        }
+        // 按策略构建 registry（Hybrid 只 register 保护的段，FULL 全 register）
+        // withChecksum 由构造传入（开关：[[ID:HASH||TEXT]] vs [[ID||TEXT]]）
+        TspEncoder encoder = (policy == TspEncoder.Policy.HYBRID)
+                ? TspEncoder.withHybrid(registry, segs, withChecksum)
+                : new TspEncoder(registry, withChecksum);
         String tsp = encoder.encode(segs);
         return new Encoded(tsp, registry.fingerprint());
     }
 
     @Override
-    public Component decode(String template, Component original, boolean isParagraph, String registryHash) {
+    public Component decode(String template, StyledText original, boolean isParagraph, String registryHash) {
         return decode(template, original, isParagraph, registryHash, null);
     }
 
     @Override
-    public Component decode(String template, Component original, boolean isParagraph, String registryHash, RecoveryStats stats) {
+    public Component decode(String template, StyledText original, boolean isParagraph, String registryHash, RecoveryStats stats) {
         // 从 original 重建 registry（deterministic，跟 encode 时一致）
-        List<StyledSegment> origSegs = new ArrayList<>();
-        List<String> vals = new ArrayList<>();
+        List<StyledSegment> origSegs = new ArrayList<>(original.tspSegments());
         TspRegistry registry = new TspRegistry();
-        extractSegments(original, origSegs, vals, registry);
+        // Hybrid: 合并相邻同色段（必须跟 encode 一致，否则 registry ID 错）
+        if (policy == TspEncoder.Policy.HYBRID) {
+            origSegs = HybridPolicy.mergeAdjacentSameColor(origSegs);
+        }
+
+        // 按策略构建 registry + 默认色（必须跟 encode 一致，否则 ID 映射错）
+        tsp.Style defaultStyle = (policy == TspEncoder.Policy.HYBRID)
+                ? HybridPolicy.detectHybridDefault(origSegs) : null;
+        HybridPolicy hybrid = (policy == TspEncoder.Policy.HYBRID)
+                ? new HybridPolicy(defaultStyle) : null;
+
+        // registryHash 校验：颜色结构变（Hypixel 改 lore / 染色变体）-> 返回 null 触发 cache miss
+        // 注意：registry 在下面 register 保护的段后才完整，hash 校验要放到 register 之后
+        // （但 hash 校验失败应尽早，所以这里先 register 再校验，顺序跟 encode 对齐）
+        // v1.1: 建 idHashSet + hashToIds（只对保护的段）。tspChecksum=false 时不建（无 HASH 校验）
+        Set<String> idHashSet = withChecksum ? new HashSet<>() : null;
+        Map<String, List<Integer>> hashToIds = withChecksum ? new HashMap<>() : null;
+        for (StyledSegment seg : origSegs) {
+            boolean protect;
+            if (hybrid != null) {
+                protect = hybrid.shouldProtect(seg);
+            } else {
+                protect = !seg.isPlain();
+            }
+            if (protect) {
+                int id = registry.register(seg.style());  // 幂等，返回已有 ID
+                if (withChecksum) {
+                    String hash = TspEncoder.sha4(seg.text());
+                    String pair = id + ":" + hash;
+                    idHashSet.add(pair);
+                    hashToIds.computeIfAbsent(hash, k -> new ArrayList<>()).add(id);
+                }
+            }
+        }
 
         // registryHash 校验：颜色结构变（Hypixel 改 lore / 染色变体）-> 返回 null 触发 cache miss
         if (registryHash != null && !registryHash.isEmpty()
@@ -75,19 +126,7 @@ public final class TspFormat implements TranslationFormat {
             return null;
         }
 
-        // v1.1: 建 idHashSet + hashToIds（从 origSegs，跟 encode 一致）
-        Set<String> idHashSet = new HashSet<>();
-        Map<String, List<Integer>> hashToIds = new HashMap<>();
-        for (StyledSegment seg : origSegs) {
-            if (!seg.isPlain()) {
-                int id = registry.register(seg.style());  // 幂等，返回已有 ID
-                String hash = TspEncoder.sha4(seg.text());
-                idHashSet.add(id + ":" + hash);
-                hashToIds.computeIfAbsent(hash, k -> new ArrayList<>()).add(id);
-            }
-        }
-
-        // TSP decode + Level 1/2/3 校验（checksum 检测 + 确定性修复 + ambiguous 回退）
+        // TSP decode + Level 1/2/3 校验（checksum 检测 + 确定性修复 + missing 检测）
         TspParser parser = new TspParser(TspRecovery.Level.V1);
         TspDecoder decoder = new TspDecoder(registry, idHashSet, hashToIds);
         List<StyledSegment> decoded = decoder.decode(parser.parse(template));
@@ -95,24 +134,37 @@ public final class TspFormat implements TranslationFormat {
         // v1.1 Metrics: 记 recovery 事件到 RecoveryStats
         if (stats != null) {
             stats.recordTspDecode(decoder.getRepairedCount(), decoder.getAmbiguousCount(),
-                    decoder.getInvalidCount(), decoder.getLevel3Count() > 0);
+                    decoder.getInvalidCount(), decoder.getMissingCount(),
+                    decoder.getAmbiguousCount() + decoder.getInvalidCount() > 0);
         }
-        // Level 3: ambiguous + invalid > 0（多匹配不猜 / HASH 不合法）-> 整段回退原文
-        if (decoder.getLevel3Count() > 0) {
-            LOGGER.info("TSP fallback: ambiguous={} invalid={}", decoder.getAmbiguousCount(), decoder.getInvalidCount());
-            return null;
+
+        // Level 3: ambiguous/invalid HASH → smart fallback (strip tokens, show translation + original)
+        if (decoder.getAmbiguousCount() + decoder.getInvalidCount() > 0) {
+            LOGGER.info("TSP fallback: ambiguous={} invalid={} missing={}",
+                    decoder.getAmbiguousCount(), decoder.getInvalidCount(), decoder.getMissingCount());
+            tsp.Style bodyStyle = TspEncoder.detectDefaultStyle(origSegs);
+            if (bodyStyle == null || bodyStyle.isEmpty()) bodyStyle = tsp.Style.EMPTY;
+            return smartFallback(template, original, isParagraph, bodyStyle);
+        }
+        if (decoder.getMissingCount() > 0) {
+            LOGGER.debug("TSP missing: {} token(s) dropped by AI", decoder.getMissingCount());
         }
         if (decoder.getRepairedCount() > 0) {
             LOGGER.info("TSP repaired: {} token(s) (Level 2)", decoder.getRepairedCount());
         }
 
         // fillNumbers：{0} -> vals[0]（数字从 original 提取，跟 encode 一致）
+        // Hybrid: plain 段（默认色裸文本）染上 defaultStyle，避免渲染成白色
         List<StyledSegment> filled = new ArrayList<>();
         for (StyledSegment seg : decoded) {
-            filled.add(new StyledSegment(fillNumbers(seg.text(), vals), seg.style()));
+            tsp.Style style = seg.style();
+            if (style.isEmpty() && defaultStyle != null && !defaultStyle.isEmpty()) {
+                style = defaultStyle;  // Hybrid 裸文本段染默认色
+            }
+            filled.add(new StyledSegment(seg.text(), style));
         }
 
-        return toComponent(filled, isParagraph);
+        return original.renderTsp(filled, isParagraph);
     }
 
     @Override
@@ -121,75 +173,57 @@ public final class TspFormat implements TranslationFormat {
     }
 
     /**
-     * Component -> List<StyledSegment> + 数字 vals + 注册 registry。
-     * 复用 StyleCodec.extract 提取 {@code <sN>} 标签 + styleMap，再转 StyledSegment。
-     * encode/decode 共用，保证 registry 重建一致。
+     * Strip ALL TSP tokens from the AI output, recovering human-readable text.
+     * Uses the parser (with nested flatten recovery) so nested/malformed tokens
+     * also get their text content extracted where possible.
      */
-    private static void extractSegments(Component component, List<StyledSegment> segs,
-                                         List<String> vals, TspRegistry registry) {
-        StyleCodec.ExtractionResult r = StyleCodec.extract(component);
-        String marked = r.markedText();
-        Matcher m = STYLE_TAG.matcher(marked);
-        int lastEnd = 0;
-        while (m.find()) {
-            if (m.start() > lastEnd) {
-                // 标签外裸文本 -> plain
-                segs.add(StyledSegment.plain(marked.substring(lastEnd, m.start())));
+    private static String stripAllTspTokens(String template) {
+        TspParser parser = new TspParser(TspRecovery.Level.V1);
+        TspParser.ParseResult r = parser.parse(template);
+        StringBuilder sb = new StringBuilder();
+        for (TspElement e : r.elements()) {
+            if (e instanceof TspToken t) {
+                sb.append(t.text());
+            } else if (e instanceof TspText t) {
+                // Strip any remaining [[...]] markers from unrecovered spans
+                sb.append(t.text().replaceAll("\\[\\[[^\\]]*\\|\\|", "")
+                        .replace("]]", "").replace("[[", ""));
             }
-            int id = Integer.parseInt(m.group(1));
-            String content = m.group(2);
-            tsp.Style tspStyle = toTspStyle(r.styleMap().get(id));
-            // 数字保护：纯数字段 -> {N} 占位符（防 AI 改数值）
-            if (NUMBER.matcher(content).matches()) {
-                segs.add(new StyledSegment("{" + vals.size() + "}", tspStyle));
-                vals.add(content);
-            } else {
-                segs.add(new StyledSegment(content, tspStyle));
-            }
-            registry.register(tspStyle);  // 注册（dedup 同色，ID 按首次出现）
-            lastEnd = m.end();
         }
-        if (lastEnd < marked.length()) {
-            segs.add(StyledSegment.plain(marked.substring(lastEnd)));
-        }
+        return sb.toString().trim();
     }
 
-    /** Minecraft Style -> TSP Style（Phase 1 只颜色）。
-     *  <p>26.1.2: {@link net.minecraft.network.chat.Style#getColor()} 对 § 码
-     *  也返回 TextColor（ChatFormatting.BLUE -> TextColor(0x5555FF)），无需额外处理。</p> */
-    private static tsp.Style toTspStyle(net.minecraft.network.chat.Style mc) {
-        if (mc == null || mc.getColor() == null) return tsp.Style.EMPTY;
-        return tsp.Style.of(String.format("#%06X", mc.getColor().getValue()));
-    }
+    /**
+     * Smart fallback: instead of fully reverting to original, keep the AI's
+     * human-readable translation (strip [[...]] markers) with the body text color,
+     * and append the original text in gray as reference.
+     */
+    private Component smartFallback(String template, StyledText original, boolean isParagraph,
+                                     tsp.Style bodyTspStyle) {
+        String translated = stripAllTspTokens(template);
+        String originalText = original.plainText();
 
-    /** TSP Style -> Minecraft Style（Phase 1 只颜色）。 */
-    private static net.minecraft.network.chat.Style toMcStyle(tsp.Style tspStyle) {
-        if (tspStyle == null || tspStyle.isEmpty()) return net.minecraft.network.chat.Style.EMPTY;
-        try {
-            int rgb = Integer.parseInt(tspStyle.colorHex().substring(1), 16);
-            return net.minecraft.network.chat.Style.EMPTY.withColor(TextColor.fromRgb(rgb));
-        } catch (Exception e) {
-            return net.minecraft.network.chat.Style.EMPTY;
-        }
-    }
-
-    /** StyledSegment 列表 -> Minecraft Component。段落模式 \n->空格（喂 Font.split wrap）。 */
-    private static Component toComponent(List<StyledSegment> segs, boolean isParagraph) {
+        net.minecraft.network.chat.Style bodyMc = StyledText.toMcStyle(bodyTspStyle);
         MutableComponent result = Component.empty();
-        for (StyledSegment seg : segs) {
-            String text = seg.text();
-            if (isParagraph) {
-                text = text.replace("\n", " ").replaceAll("\\s{2,}", " ");
-            }
-            result.append(Component.literal(text).setStyle(toMcStyle(seg.style())));
+
+        if (!translated.isEmpty()) {
+            result.append(Component.literal(translated).setStyle(bodyMc));
+        }
+        if (!originalText.isBlank()) {
+            if (!translated.isEmpty()) result.append(Component.literal(" "));
+            result.append(Component.literal("(原文: " + originalText + ")")
+                    .withStyle(net.minecraft.ChatFormatting.GRAY));
+        } else if (translated.isEmpty()) {
+            // Nothing salvageable — render original as-is
+            return original.component();
+        }
+
+        if (isParagraph) {
+            // Flatten newlines like normal paragraph rendering
+            return original.renderTsp(List.of(
+                    new StyledSegment(result.getString(), bodyTspStyle)), true);
         }
         return result;
     }
 
-    /** {N} -> vals[N]。 */
-    private static String fillNumbers(String text, List<String> vals) {
-        String r = text;
-        for (int i = 0; i < vals.size(); i++) r = r.replace("{" + i + "}", vals.get(i));
-        return r;
-    }
 }

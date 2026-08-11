@@ -21,7 +21,7 @@ public final class TspRecoveryTest {
         testV0("missing separator",       "[[0]]",               false);
         testV0("single pipe",             "[[0|text]]",          false);
         testV0("unclosed token",          "start [[0||text",     false);
-        testV0("nested token",            "[[0||outer [[1||inner]] text]]", false);
+        testV0("nested token (flattened)",  "[[0||outer [[1||inner]] text]]", true);
         testV0("stray closing",           "hello]] world",       false);
         testV0("empty brackets",          "[[]]",                false);
         testV0("only separator",          "[[||]]",              false);
@@ -47,6 +47,23 @@ public final class TspRecoveryTest {
         testV1Unrecoverable("space inside ID",   "[[ 1 2 || text]]");
         testV1Unrecoverable("non-numeric ID V1", "[[abc||text]]");
         testV1Unrecoverable("missing separator", "[[0 text]]");
+
+        // ===== V1 + v1.1: ID:HASH recovery in whitespace =====
+        testV1("checksum strict clean",      "[[0:abcd||text]]",    0, "text", false);
+        testV1("checksum with ws after [[",  "[[ 0:abcd||text]]",   0, "text", true);
+        testV1("checksum ws around ||",      "[[ 0:abcd || text]]",  0, "text", true);
+        testV1("checksum ws both sides",     "[[  2:beef  ||  hi ]]", 2, "hi", true);
+
+        // ===== V1 + v1.1: checksum format recovery =====
+        testV1ChecksumDegrade("illegal checksum ws", "[[ 0:XYZ! || text]]", 0, "text");
+
+        // ===== V1 + escape: escaped brackets in recovered text =====
+        testV1("escaped bracket in text",    "[[0||hello \\] world]]", 0, "hello ] world", false);
+
+        // ===== V1 + nested flatten =====
+        testNestedFlatten("simple nested",        "[[1:abcd||[[2:beef||textB]]textA]]");
+        testNestedFlatten("nested id with colon", "[[0:abcd||[[1:beef||更换]]它！]]");
+        testNestedFlatten("deep nested 3-level",  "[[0||a[[1||b[[2||c]]d]]e]]");
 
         // ===== Decoder recovery =====
         testDecoderUnknownId();
@@ -124,6 +141,52 @@ public final class TspRecoveryTest {
                 .anyMatch(e -> e.toLowerCase().contains("recover"));
         assertEq(expectRecovery, hasRecoveryNote, "recovery note expectation");
 
+        pass();
+    }
+
+    /** V1 recovery with v1.1 checksum — verify checksum is degraded to null when illegal. */
+    private static void testV1ChecksumDegrade(String name, String input, int expectedId, String expectedText) {
+        System.out.print("  V1 checksum degrade: " + name + " ... ");
+        TspParser parser = new TspParser(TspRecovery.Level.V1);
+        TspParser.ParseResult result;
+        try {
+            result = parser.parse(input);
+        } catch (Exception e) {
+            fail("CRASHED: " + e.getMessage());
+            return;
+        }
+
+        List<TspToken> tokens = result.tokens();
+        assertTrue(tokens.size() == 1, "exactly 1 token, got " + tokens.size());
+        TspToken t = tokens.get(0);
+        assertEq(expectedId, t.id(), "ID");
+        assertEq(expectedText, t.text(), "TEXT");
+        // Illegal checksum must be degraded to null (not left as garbage)
+        assertTrue(t.checksum() == null, "checksum degraded to null, got: " + t.checksum());
+        pass();
+    }
+
+    /** Verify nested tokens are flattened instead of rejected. */
+    private static void testNestedFlatten(String name, String input) {
+        System.out.print("  V1 nested flatten: " + name + " ... ");
+        TspParser parser = new TspParser(TspRecovery.Level.V1);
+        TspParser.ParseResult result;
+        try {
+            result = parser.parse(input);
+        } catch (Exception e) {
+            fail("CRASHED: " + e.getMessage());
+            return;
+        }
+
+        // Must produce at least 2 tokens (inner + outer-rest), and no plain text with [[ or ]]
+        assertTrue(result.tokens().size() >= 2,
+                "at least 2 tokens from flatten, got " + result.tokens().size());
+        for (TspElement e : result.elements()) {
+            if (e instanceof TspText t) {
+                assertTrue(!t.text().contains("[["),
+                        "plain text must not contain [[ (nesting not fully resolved): " + t.text());
+            }
+        }
         pass();
     }
 

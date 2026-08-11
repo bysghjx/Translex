@@ -19,6 +19,7 @@ public enum SkyBlockTerm {
     MINING_SPEED("Mining Speed", "采矿速度"),
     MINING_FORTUNE("Mining Fortune", "采矿时运"),
     PRISTINE("Pristine", "精纯"),
+    BREAKING_POWER("Breaking Power", "破坏力"),
 
     // 战斗属性
     ATTACK_SPEED("Bonus Attack Speed", "攻击速度"),

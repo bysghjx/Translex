@@ -6,8 +6,6 @@ import net.minecraft.client.gui.screens.inventory.tooltip.ClientTextTooltip;
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipPositioner;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.util.FormattedCharSequence;
-import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import org.slf4j.Logger;
@@ -23,6 +21,7 @@ import top.iencand.translex.client.translate.model.LineTemplate;
 import top.iencand.translex.client.translate.model.TranslationCacheEntry;
 import top.iencand.translex.client.translate.model.TranslationFormat;
 import top.iencand.translex.client.translate.model.TranslexTooltipContext;
+import top.iencand.translex.client.util.ComponentUtil;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -88,7 +87,7 @@ public abstract class DrawContextTooltipMixin {
                 OrderedTextTooltipComponentAccessor acc =
                         (OrderedTextTooltipComponentAccessor) ordered;
                 // 将 FormattedCharSequence 转回 Component 以提取原始 Style
-                Component originalText = orderedTextToText(acc.getText());
+                Component originalText = ComponentUtil.fromFormattedCharSequence(acc.getText());
                 slots.add(new Slot(i, acc, originalText));
             }
         }
@@ -122,26 +121,4 @@ public abstract class DrawContextTooltipMixin {
         }
     }
 
-    /** 将 {@link FormattedCharSequence} 转换回 {@link Component}，保留样式结构。 */
-    @Unique
-    private static Component orderedTextToText(FormattedCharSequence ordered) {
-        net.minecraft.network.chat.MutableComponent result = Component.empty();
-        StringBuilder segment = new StringBuilder();
-        Style[] currentStyle = {Style.EMPTY};
-
-        ordered.accept((index, style, codePoint) -> {
-            if (!style.equals(currentStyle[0]) && segment.length() > 0) {
-                result.append(Component.literal(segment.toString()).setStyle(currentStyle[0]));
-                segment.setLength(0);
-            }
-            currentStyle[0] = style;
-            segment.appendCodePoint(codePoint);
-            return true;
-        });
-
-        if (segment.length() > 0) {
-            result.append(Component.literal(segment.toString()).setStyle(currentStyle[0]));
-        }
-        return result;
-    }
 }

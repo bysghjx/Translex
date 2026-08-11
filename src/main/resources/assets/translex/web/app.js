@@ -56,7 +56,7 @@ const I18N_DICT = {
         welcomeDismiss: '知道了',
         buttonStyle: '按钮样式', enableTranslateButton: '显示翻译按钮', enableTranslateButtonDesc: '在聊天消息旁显示 [翻译] 按钮，关闭后按钮不再出现',
         outputMode: '翻译输出模式', outputModeChat: 'chat — 直接替换聊天消息', outputModeTemporary: 'temporary — 临时 Tooltip 显示', outputModePermanent: 'permanent — 永久写入物品缓存',
-        styleProtocol: '样式协议', styleProtocolSn: 'sN - 旧版 <sN> 标签（位置 ID，稳定）', styleProtocolTsp: 'TSP - [[ID||TEXT]]（颜色 dedup，省 token，新）',
+        styleProtocol: '样式协议 / TSP 模式', styleProtocolSn: 'sN - 旧版 <sN> 标签（位置 ID，稳定）', styleProtocolTsp: 'TSP-FULL - [[ID||TEXT]]（完整保护，兼容回退）', styleProtocolHybrid: 'TSP-HYBRID - 选择性 token（只保护数字/符号/非默认色，默认且更省 token）', tspChecksum: 'TSP 校验码', tspChecksumDesc: '生成 [[ID:HASH||TEXT]]（校验 AI 挪内容，颜色率最高，每 token 多 ~2 token）。关：[[ID||TEXT]] 省 ~4.5% token，无校验',
         enableCachePersistence: '缓存持久化', enableCachePersistenceDesc: '将翻译缓存写入磁盘，重启后保留',
         enablePeriodicSave: '定时自动保存', enablePeriodicSaveDesc: '每隔一定 tick 自动将缓存刷写到磁盘',
         periodicSaveInterval: '保存间隔 (ticks)', periodicSaveIntervalDesc: '24000 ticks ≈ 20 分钟。范围: 1200~240000',
@@ -123,7 +123,7 @@ const I18N_DICT = {
         welcomeDismiss: 'Got it',
         buttonStyle: 'Button Style', enableTranslateButton: 'Show Translate Button', enableTranslateButtonDesc: 'Show [Translate] button next to chat messages. Turn off to hide the button.',
         outputMode: 'Translation Output Mode', outputModeChat: 'chat — Replace chat message inline', outputModeTemporary: 'temporary — Show as temporary tooltip', outputModePermanent: 'permanent — Save permanently to item cache',
-        styleProtocol: 'Style Protocol', styleProtocolSn: 'sN - Legacy <sN> tags (position ID, stable)', styleProtocolTsp: 'TSP - [[ID||TEXT]] (color dedup, saves tokens, new)',
+        styleProtocol: 'Style Protocol / TSP Mode', styleProtocolSn: 'sN - Legacy <sN> tags (position ID, stable)', styleProtocolTsp: 'TSP-FULL - [[ID||TEXT]] (full protection, compatibility fallback)', styleProtocolHybrid: 'TSP-HYBRID - Selective token (default, protects high-risk content with fewer tokens)', tspChecksum: 'TSP Checksum', tspChecksumDesc: 'Generate [[ID:HASH||TEXT]] (detects AI moving content, highest color accuracy, ~2 extra tokens each). Off: [[ID||TEXT]] saves ~4.5% tokens, no check',
         enableCachePersistence: 'Cache Persistence', enableCachePersistenceDesc: 'Write translation cache to disk, survives restarts',
         enablePeriodicSave: 'Periodic Auto-Save', enablePeriodicSaveDesc: 'Flush cache to disk at regular intervals',
         periodicSaveInterval: 'Save Interval (ticks)', periodicSaveIntervalDesc: '24000 ticks ≈ 20 min. Range: 1200–240000',
@@ -167,7 +167,7 @@ const app = createApp({
                 presets:[], activePreset:'',
                 targetLanguage:'Simplified Chinese (简体中文)', targetLanguageMode:'preset',
                 userChatPrompt:'', userItemPrompt:'', properNounMode:'keep',
-                translationMode:'auto', buttonStyle:'NORMAL', enableTranslateButton:true, outputMode:'chat', styleProtocol:'TSP',
+                translationMode:'auto', buttonStyle:'NORMAL', enableTranslateButton:true, outputMode:'chat', styleProtocol:'HYBRID', tspChecksum:true,
                 enableCachePersistence:true, enablePeriodicSave:true, periodicSaveInterval:24000, cacheMaxEntries:20000,
                 enableChatCompact:true, compactTimeSeconds:120, compactColorCode:'GRAY', debug:false,
                 temperature:0.3, structuredOutput:false,
@@ -226,6 +226,7 @@ const app = createApp({
         styleProtocolOptions() { return [
             {value:'sN', label:this.lang.styleProtocolSn},
             {value:'TSP', label:this.lang.styleProtocolTsp},
+            {value:'HYBRID', label:this.lang.styleProtocolHybrid},
         ]; },
         compactColorOptions() { return ['GRAY','DARK_GRAY','GREEN','DARK_GREEN','AQUA','YELLOW','GOLD','RED'].map(c=>({value:c,label:c})); },
         debugStatusCards() { return [
@@ -317,7 +318,7 @@ const app = createApp({
                 apiKey:c.apiKey, apiUrl:c.apiUrl, model:c.model, provider:c.provider, maxTokens:c.maxTokens, anthropicVersion:c.anthropicVersion,
                 presets:c.presets, activePreset:c.activePreset,
                 targetLanguage:c.targetLanguage, userChatPrompt:c.userChatPrompt, userItemPrompt:c.userItemPrompt, properNounMode:c.properNounMode,
-                translationMode:c.translationMode, buttonStyle:c.buttonStyle, enableTranslateButton:c.enableTranslateButton, outputMode:c.outputMode, styleProtocol:c.styleProtocol,
+                translationMode:c.translationMode, buttonStyle:c.buttonStyle, enableTranslateButton:c.enableTranslateButton, outputMode:c.outputMode, styleProtocol:c.styleProtocol, tspChecksum:c.tspChecksum,
                 enableCachePersistence:c.enableCachePersistence, enablePeriodicSave:c.enablePeriodicSave, periodicSaveInterval:c.periodicSaveInterval, cacheMaxEntries:c.cacheMaxEntries,
                 enableChatCompact:c.enableChatCompact, compactTimeSeconds:c.compactTimeSeconds, compactColorCode:c.compactColorCode, debug:c.debug,
                 temperature:c.temperature, structuredOutput:c.structuredOutput,
@@ -338,7 +339,7 @@ const app = createApp({
                 c.targetLanguageMode=d.targetLanguageMode||'preset';
                 c.userChatPrompt=d.userChatPrompt||''; c.userItemPrompt=d.userItemPrompt||''; c.properNounMode=d.properNounMode||'keep';
                 c.translationMode=d.translationMode||'auto'; c.buttonStyle=d.buttonStyle||'NORMAL';
-                c.enableTranslateButton=d.enableTranslateButton!==false; c.outputMode=d.outputMode||'chat'; c.styleProtocol=d.styleProtocol||'sN';
+                c.enableTranslateButton=d.enableTranslateButton!==false; c.outputMode=d.outputMode||'chat'; c.styleProtocol=d.styleProtocol||'HYBRID'; c.tspChecksum=d.tspChecksum!==false;
                 c.enableCachePersistence=d.enableCachePersistence!==false; c.enablePeriodicSave=d.enablePeriodicSave!==false;
                 c.periodicSaveInterval=d.periodicSaveInterval||24000; c.cacheMaxEntries=d.cacheMaxEntries||20000;
                 c.enableChatCompact=d.enableChatCompact!==false; c.compactTimeSeconds=d.compactTimeSeconds||120;

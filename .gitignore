@@ -30,3 +30,4 @@ PLAN.md
 doc/HANDOFF.md
 # TSP test output
 tsp/checksum_out.txt
+logs/

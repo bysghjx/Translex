@@ -193,6 +193,7 @@
                 <toggle-row :label="lang.enableTranslateButton" :desc="lang.enableTranslateButtonDesc" v-model="config.enableTranslateButton"></toggle-row>
                 <select-field :label="lang.outputMode" v-model="config.outputMode" :options="outputModeOptions"></select-field>
                 <select-field :label="lang.styleProtocol" v-model="config.styleProtocol" :options="styleProtocolOptions"></select-field>
+                <check-field :label="lang.tspChecksum" :desc="lang.tspChecksumDesc" v-model="config.tspChecksum"></check-field>
             </div>
 
             <!-- 语言与提示词 -->

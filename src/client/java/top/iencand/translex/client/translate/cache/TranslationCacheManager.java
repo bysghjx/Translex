@@ -46,6 +46,9 @@ public class TranslationCacheManager {
         this.cacheFile = file;
         cache.setMaxSize(ModConfig.get().cacheMaxEntries);
         cache.load(file);
+        // 加载 TermDictionary 运行时词条（附魔 + 专有词汇，存同目录 term_dict.json）
+        File termFile = new File(file.getParentFile(), "term_dict.json");
+        top.iencand.translex.client.translate.model.TermDictionary.get().load(termFile);
     }
 
     /** 配置重载后刷新内存上限（供 ConfigReloadListener 调用）。 */
@@ -61,14 +64,11 @@ public class TranslationCacheManager {
         return applyGlossaryStatic(text);
     }
 
-    /** 静态词库替换：供不持有缓存管理器的聊天管线复用（词库为静态、无状态）。 */
+    /** 静态词库替换：供不持有缓存管理器的聊天管线复用（词库为静态、无状态）。
+     *  委托 TermDictionary（含 SkyBlockTerm 属性名 + 附魔名 + 专有词汇）。 */
     public static String applyGlossaryStatic(String text) {
         if (text == null) return null;
-        String result = text;
-        for (Map.Entry<Pattern, String> entry : GLOSSARY_PATTERNS.entrySet()) {
-            result = entry.getKey().matcher(result).replaceAll(entry.getValue());
-        }
-        return result;
+        return top.iencand.translex.client.translate.model.TermDictionary.get().apply(text);
     }
 
     // ===============================================================
@@ -125,24 +125,24 @@ public class TranslationCacheManager {
      * @return 标签间内容经词库替换后的模板，如 {@code <s0>防御力: </s0><s1>{0}</s1><s2>(+30)</s2>}
      */
     public static String applyGlossaryToTemplate(String template) {
-        if (template == null) return null;
-        StringBuilder result = new StringBuilder(template.length() + 32);
-        Matcher m = TEMPLATE_TAG.matcher(template);
-        while (m.find()) {
-            String content = m.group(2);
-            String glossed = applyGlossaryStatic(content);
-            m.appendReplacement(result,
-                    "<s" + m.group(1) + ">" + Matcher.quoteReplacement(glossed) + "</s" + m.group(1) + ">");
-        }
-        m.appendTail(result);
-        return result.toString();
+        return applyGlossaryToTemplate(template, "SN");
+    }
+
+    /** 重载：支持 TSP/HYBRID（[[ID||TEXT]]）和 SN（<sN>TEXT</sN>）两种格式。 */
+    public static String applyGlossaryToTemplate(String template, String formatId) {
+        return top.iencand.translex.client.translate.model.TermDictionary.get()
+                .applyToTemplate(template, formatId);
     }
 
     /** 检查带标签的模板经词库替换后是否仍含英文（决定是否需要 AI 翻译）。 */
     public static boolean templateStillHasEnglish(String template) {
-        if (template == null) return false;
-        // 去掉所有 <sN> 标签，检查剩余文本是否含英文字母
-        return Pattern.compile("[a-zA-Z]").matcher(template.replaceAll("</?s\\d+>", "")).find();
+        return templateStillHasEnglish(template, "SN");
+    }
+
+    /** 重载：支持 TSP/HYBRID 和 SN 两种格式。 */
+    public static boolean templateStillHasEnglish(String template, String formatId) {
+        return top.iencand.translex.client.translate.model.TermDictionary.get()
+                .hasEnglishRemaining(template, formatId);
     }
 
     // ===============================================================
@@ -172,8 +172,10 @@ public class TranslationCacheManager {
     // ===============================================================
 
     private void autoSave() {
-        if (cacheFile == null || dirtyShards.isEmpty()) return;
-        forceSave();
+        if (cacheFile != null && !dirtyShards.isEmpty()) {
+            forceSave();
+        }
+        saveTermDictionary();  // TermDictionary 内部检查 dirty
     }
 
     public void forceSave() {
@@ -192,11 +194,17 @@ public class TranslationCacheManager {
         // 内存上限由 TranslationCache 的 LRU 淘汰自动维护，无需在此粗暴全清。
     }
 
+    /** 持久化 TermDictionary 运行时词条（供 shutdown / 定时调用）。 */
+    public void saveTermDictionary() {
+        top.iencand.translex.client.translate.model.TermDictionary.get().save();
+    }
+
     public void shutdown() {
         ConsoleBroadcaster.broadcast("INFO", "Forcing cache save before shutdown...");
         try {
             saveScheduler.shutdown();
             forceSave();
+            saveTermDictionary();
             if (!saveScheduler.awaitTermination(1, TimeUnit.SECONDS)) {
                 saveScheduler.shutdownNow();
             }

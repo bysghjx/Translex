@@ -75,19 +75,45 @@ public final class TspParser {
                     parseErrors.add(tokenResult.parseError);
                 }
             } else {
-                // Malformed and unrecoverable.
-                // Skip the entire [[...]] span (if closed) so we don't parse inner tokens.
+                // Malformed and unrecoverable — try nested flatten as last resort.
+                // AI sometimes nests: [[A||[[B||textB]]textA]]. findClosingBrackets
+                // matched the inner ]], so we must find the outer closing and flatten.
+                boolean nestedFixed = false;
                 int skipTo = openPos + 2;
                 int close = findClosingBrackets(input, openPos + 2, len);
                 if (close >= 0) {
-                    skipTo = close + 2;
+                    String rawContent = input.substring(openPos + 2, close);
+                    if (rawContent.contains("[[")) {
+                        int outerClose = findOuterClosingBrackets(input, openPos + 2, len);
+                        if (outerClose >= 0) {
+                            String fullContent = input.substring(openPos + 2, outerClose);
+                            String flattened = TspRecovery.flattenNestedToken(fullContent);
+                            if (flattened != null) {
+                                // Inline-parse the flattened tokens
+                                TspParser innerParser = new TspParser(recoveryLevel);
+                                TspParser.ParseResult innerResult = innerParser.parse(flattened);
+                                if (!innerResult.elements().isEmpty()) {
+                                    elements.addAll(innerResult.elements());
+                                    parseErrors.addAll(innerResult.parseErrors());
+                                    parseErrors.add(new ParseError(
+                                            ParseError.Type.RECOVERED, openPos, fullContent,
+                                            "Recovered nested token(s)"));
+                                    pos = outerClose + 2;
+                                    nestedFixed = true;
+                                }
+                            }
+                        }
+                    }
                 }
-                String malformedText = input.substring(openPos, Math.min(skipTo, len));
-                elements.add(new TspText(malformedText));
-                if (tokenResult.parseError != null) {
-                    parseErrors.add(tokenResult.parseError);
+                if (!nestedFixed) {
+                    if (close >= 0) skipTo = close + 2;
+                    String malformedText = input.substring(openPos, Math.min(skipTo, len));
+                    elements.add(new TspText(malformedText));
+                    if (tokenResult.parseError != null) {
+                        parseErrors.add(tokenResult.parseError);
+                    }
+                    pos = skipTo;
                 }
-                pos = skipTo;
             }
         }
 
@@ -191,18 +217,60 @@ public final class TspParser {
         // Strict: TEXT preserved verbatim (leading/trailing whitespace is content).
         // Structural whitespace around ID/|| makes idStr non-numeric -> strict rejects,
         // V1 recovery handles it. Keeps encoder round-trip safe (V0 default).
-        if (text.contains("[[")) return null;  // nesting
+        if (text.contains("[[")) return null;  // nesting (checked on wire text, not unescaped)
 
-        return new TspToken(id, text, checksum);
+        return new TspToken(id, unescapeText(text), checksum);
+    }
+
+    /**
+     * Reverse {@link TspToken#escapeText(String)}: {@code \]} → {@code ]}, {@code \\} → {@code \}.
+     * Scans left-to-right; unrecognised escape sequences are kept as-is.
+     */
+    public static String unescapeText(String s) {
+        if (s == null || s.isEmpty() || s.indexOf('\\') < 0) return s;
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '\\' && i + 1 < s.length()) {
+                char next = s.charAt(i + 1);
+                switch (next) {
+                    case '\\' -> sb.append('\\');
+                    case ']'  -> sb.append(']');
+                    default  -> sb.append(c).append(next);
+                }
+                i++; // skip next char
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 
     /**
      * Find the closing {@code ]]} for a token. Returns position of first {@code ]}, or -1.
+     * Escape-aware: {@code \]} (odd leading backslashes) is an escaped bracket, not a delimiter.
      */
     private static int findClosingBrackets(String input, int fromIndex, int len) {
+        return findClosingBracketsDepth(input, fromIndex, len, false);
+    }
+
+    /** Like findClosingBrackets but skips over nested [[...]] spans to find the outermost closing ]]. */
+    private static int findOuterClosingBrackets(String input, int fromIndex, int len) {
+        return findClosingBracketsDepth(input, fromIndex, len, true);
+    }
+
+    private static int findClosingBracketsDepth(String input, int fromIndex, int len, boolean skipNested) {
+        int depth = 1;
         for (int i = fromIndex; i < len - 1; i++) {
-            if (input.charAt(i) == ']' && input.charAt(i + 1) == ']') {
-                return i;
+            if (skipNested && input.charAt(i) == '[' && input.charAt(i + 1) == '[') {
+                depth++;
+            } else if (input.charAt(i) == ']' && input.charAt(i + 1) == ']') {
+                int bs = 0;
+                for (int j = i - 1; j >= 0 && input.charAt(j) == '\\'; j--) bs++;
+                if ((bs & 1) == 0) { // not escaped
+                    depth--;
+                    if (depth == 0) return i;
+                }
             }
         }
         return -1;

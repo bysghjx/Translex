@@ -31,36 +31,77 @@ import java.util.Map;
  */
 public final class TspEncoder {
 
+    /** 编码策略：决定哪些 segment token 化、哪些裸文本。 */
+    public enum Policy {
+        /** Full TSP：所有非 plain segment 都 token（默认色也保护）。 */
+        FULL,
+        /** auto-default：默认色裸文本，其余 token（旧策略，已验证有吸文本问题）。 */
+        AUTO_DEFAULT,
+        /** Hybrid：只保护高风险内容（非默认色 + 数字 + 符号 + placeholder）。 */
+        HYBRID
+    }
+
     private final TspRegistry registry;
-    private final Style defaultStyle; // null = every style gets a token
-    private final boolean withChecksum;  // v1.1: 生成 [[ID:HASH||TEXT]]
+    private final Style defaultStyle;       // AUTO_DEFAULT 用
+    private final Policy policy;            // HYBRID 用（defaultStyle 自动从 segments 算）
+    private final boolean withChecksum;     // v1.1: 生成 [[ID:HASH||TEXT]]
 
-    /** No default style, no checksum (v1.0). */
-    public TspEncoder(TspRegistry registry) { this(registry, null, false); }
+    /** Full TSP + 可选 checksum（推荐 v1.1 用）。 */
+    public TspEncoder(TspRegistry registry, boolean withChecksum) {
+        this(registry, null, Policy.FULL, withChecksum);
+    }
 
-    /** Explicit default style, no checksum. */
-    public TspEncoder(TspRegistry registry, Style defaultStyle) { this(registry, defaultStyle, false); }
+    /** No default style, no checksum (v1.0)。 */
+    public TspEncoder(TspRegistry registry) { this(registry, null, Policy.FULL, false); }
 
-    /** No default style, optional checksum (v1.1). */
-    public TspEncoder(TspRegistry registry, boolean withChecksum) { this(registry, null, withChecksum); }
+    /** Explicit default style, no checksum (AUTO_DEFAULT)。 */
+    public TspEncoder(TspRegistry registry, Style defaultStyle) {
+        this(registry, defaultStyle, Policy.AUTO_DEFAULT, false);
+    }
 
-    /** Full constructor: default style + checksum mode. */
-    public TspEncoder(TspRegistry registry, Style defaultStyle, boolean withChecksum) {
+    /** 指定策略（FULL / HYBRID）+ checksum。 */
+    public TspEncoder(TspRegistry registry, Policy policy, boolean withChecksum) {
+        this(registry, null, policy, withChecksum);
+    }
+
+    /** Full constructor。 */
+    private TspEncoder(TspRegistry registry, Style defaultStyle, Policy policy, boolean withChecksum) {
         this.registry = registry;
         this.defaultStyle = defaultStyle;
+        this.policy = policy;
         this.withChecksum = withChecksum;
     }
 
-    /** Auto-detect default style (no checksum). */
+    /** Auto-detect default style, no checksum (AUTO_DEFAULT)。 */
     public static TspEncoder withAutoDefault(TspRegistry registry, List<StyledSegment> segments) {
-        return new TspEncoder(registry, detectDefaultStyle(segments), false);
+        return new TspEncoder(registry, detectDefaultStyle(segments), Policy.AUTO_DEFAULT, false);
+    }
+
+    /** Hybrid 策略 + checksum：用 Hybrid 默认色判定（plain 计票，按字符加权）。 */
+    public static TspEncoder withHybrid(TspRegistry registry, List<StyledSegment> segments, boolean withChecksum) {
+        return new TspEncoder(registry, HybridPolicy.detectHybridDefault(segments), Policy.HYBRID, withChecksum);
     }
 
     public String encode(List<StyledSegment> segments) {
+        // HYBRID: 预算 policy（默认色可能为 null -> EMPTY）
+        HybridPolicy hybrid = policy == Policy.HYBRID
+                ? new HybridPolicy(defaultStyle) : null;
+
         StringBuilder out = new StringBuilder();
         StringBuilder plainBuffer = new StringBuilder();
         for (StyledSegment seg : segments) {
-            if (seg.isPlain() || isDefault(seg.style())) {
+            boolean protect;
+            if (policy == Policy.HYBRID) {
+                protect = hybrid.shouldProtect(seg);
+            } else if (policy == Policy.AUTO_DEFAULT) {
+                // 旧策略：默认色裸文本，其余 token
+                protect = !seg.isPlain() && !isDefault(seg.style());
+            } else {
+                // FULL：所有非 plain 都 token
+                protect = !seg.isPlain();
+            }
+
+            if (!protect) {
                 plainBuffer.append(seg.text());
             } else {
                 flushPlain(plainBuffer, out);
@@ -73,12 +114,14 @@ public final class TspEncoder {
     }
 
     public String encodeOne(StyledSegment segment) {
-        if (segment.isPlain() || isDefault(segment.style())) return segment.text();
+        if (segment.isPlain()) return segment.text();
+        if (policy == Policy.AUTO_DEFAULT && isDefault(segment.style())) return segment.text();
         int id = registry.register(segment.style());
         return new TspToken(id, segment.text(), withChecksum ? sha4(segment.text()) : null).toWire();
     }
 
     public Style defaultStyle() { return defaultStyle; }
+    public Policy policy() { return policy; }
     public boolean withChecksum() { return withChecksum; }
 
     private boolean isDefault(Style style) {

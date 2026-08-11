@@ -14,6 +14,7 @@ import top.iencand.translex.client.translate.model.LineTemplate;
 import top.iencand.translex.client.translate.model.TranslationCacheEntry;
 import top.iencand.translex.client.translate.model.TranslationFormat;
 import top.iencand.translex.client.translate.model.TranslexTooltipContext;
+import top.iencand.translex.client.util.ComponentUtil;
 
 import java.util.List;
 
@@ -67,7 +68,7 @@ public abstract class ScreenTooltipMixin {
 
         // 诊断：输出原 tooltip 每行内容 + 对应 replacement（节流 2 秒）
         long now = System.currentTimeMillis();
-        boolean doDump = now - lastDumpMs >= DUMP_THROTTLE_MS;
+        boolean doDump = ModConfig.get().debug && now - lastDumpMs >= DUMP_THROTTLE_MS;
         if (doDump) lastDumpMs = now;
         if (doDump) {
         System.err.println("[Translex] === Tooltip dump (original -> replacement) ===");
@@ -86,9 +87,9 @@ public abstract class ScreenTooltipMixin {
             int i = 1;
             while (i < original.size() && i < replacement.size()) {
                 String repl = replacement.get(i);
-                // 段落首行：含格式标签（<s 或 [[）且 后续有空标记行（段落剩余行，orig 非空）
+                // 段落首行：repl 非空 + 后续有空标记行（段落剩余行，orig 非空）
+                // 注意：纯文本段落（无颜色高亮）template 无 [[ 标签，不能用 contains([[]) 判断
                 boolean isParaStart = repl != null && !repl.isEmpty()
-                        && (repl.contains("<s") || repl.contains("[["))
                         && i + 1 < replacement.size()
                         && (replacement.get(i + 1) == null || replacement.get(i + 1).isEmpty())
                         && i + 1 < original.size()
@@ -169,20 +170,6 @@ public abstract class ScreenTooltipMixin {
         }
     }
 
-    /** 从 Component 提取第一个有颜色的样式（行级主样式），用于段落行级上色。 */
-    private static net.minecraft.network.chat.Style extractFirstColorFromComponent(Component comp) {
-        if (comp == null) return net.minecraft.network.chat.Style.EMPTY;
-        top.iencand.translex.client.translate.model.StyleCodec.ExtractionResult er =
-                top.iencand.translex.client.translate.model.StyleCodec.extract(comp);
-        var sorted = new java.util.TreeMap<>(er.styleMap());
-        for (var entry : sorted.entrySet()) {
-            if (entry.getValue().getColor() != null) {
-                return net.minecraft.network.chat.Style.EMPTY.withColor(entry.getValue().getColor());
-            }
-        }
-        return net.minecraft.network.chat.Style.EMPTY;
-    }
-
     /** 合并 original[i..end) 的多个 Component 为一个（\n 分隔），用于段落 fromText。 */
     private static Component joinComponents(List<Component> original, int start, int end) {
         net.minecraft.network.chat.MutableComponent combined = net.minecraft.network.chat.Component.literal("");
@@ -212,16 +199,18 @@ public abstract class ScreenTooltipMixin {
         }
         if (bestWidth < 0) return null;
         List<net.minecraft.util.FormattedCharSequence> wrapped = font.split(text, bestWidth);
-        // 诊断日志（节流）
-        if (System.currentTimeMillis() - lastDumpMs < DUMP_THROTTLE_MS) {
-        String textStr = text.getString();
-        System.err.println("[Translex] wrapDiag: target=" + targetLines + " textLen=" + textStr.length()
-                + " bestWidth=" + bestWidth + " lines=" + wrapped.size()
-                + " text='" + (textStr.length() > 60 ? textStr.substring(0, 60) + "..." : textStr) + "'");
+        // 诊断日志（节流）：距上次输出超过阈值才打印，与 doDump 逻辑一致
+        long dumpNow = System.currentTimeMillis();
+        if (ModConfig.get().debug && dumpNow - lastDumpMs >= DUMP_THROTTLE_MS) {
+            lastDumpMs = dumpNow;
+            String textStr = text.getString();
+            System.err.println("[Translex] wrapDiag: target=" + targetLines + " textLen=" + textStr.length()
+                    + " bestWidth=" + bestWidth + " lines=" + wrapped.size()
+                    + " text='" + (textStr.length() > 60 ? textStr.substring(0, 60) + "..." : textStr) + "'");
         }
         List<Component> components = new java.util.ArrayList<>(wrapped.size());
         for (net.minecraft.util.FormattedCharSequence fcs : wrapped) {
-            components.add(formattedCharSequenceToComponent(fcs));
+            components.add(ComponentUtil.fromFormattedCharSequence(fcs));
         }
         // 行数 > target：合并尾行对齐（前 target-1 行各自，第 target 行 = 剩余合并）
         if (components.size() > targetLines) {
@@ -237,23 +226,4 @@ public abstract class ScreenTooltipMixin {
         return components;
     }
 
-    /** FormattedCharSequence -> Component（保留样式），复用 DrawContextTooltipMixin 的逻辑。 */
-    private static Component formattedCharSequenceToComponent(net.minecraft.util.FormattedCharSequence ordered) {
-        net.minecraft.network.chat.MutableComponent result = net.minecraft.network.chat.Component.empty();
-        StringBuilder segment = new StringBuilder();
-        net.minecraft.network.chat.Style[] currentStyle = {net.minecraft.network.chat.Style.EMPTY};
-        ordered.accept((index, style, codePoint) -> {
-            if (!style.equals(currentStyle[0]) && segment.length() > 0) {
-                result.append(net.minecraft.network.chat.Component.literal(segment.toString()).setStyle(currentStyle[0]));
-                segment.setLength(0);
-            }
-            currentStyle[0] = style;
-            segment.appendCodePoint(codePoint);
-            return true;
-        });
-        if (segment.length() > 0) {
-            result.append(net.minecraft.network.chat.Component.literal(segment.toString()).setStyle(currentStyle[0]));
-        }
-        return result;
-    }
 }

@@ -105,7 +105,9 @@ public class ClientStateManager {
     private void onGuiKeyPress(Screen screen, KeyEvent input) {
         // H 键：采集当前 GUI 所有物品 tooltip 存本地（TSP 测试数据收集）。
         // 用键位而非命令：容器 GUI 里按 T 打开聊天会关闭容器，命令执行时拿不到 screen。
-        if (ModKeybindings.HARVEST_KEY.matches(input)) {
+        if (ModConfig.get().debug
+                && ModKeybindings.HARVEST_KEY != null
+                && ModKeybindings.HARVEST_KEY.matches(input)) {
             LocalPlayer player = Minecraft.getInstance().player;
             LoreHarvester.HarvestResult result = LoreHarvester.harvestAll();
             if (player != null) {

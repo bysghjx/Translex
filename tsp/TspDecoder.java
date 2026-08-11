@@ -40,6 +40,7 @@ public final class TspDecoder {
     private int repairedCount;    // Level 2: HASH 唯一匹配，自动修复 ID
     private int ambiguousCount;   // Level 3: HASH 多匹配，不猜（ambiguous）
     private int invalidCount;     // Level 3: HASH 不合法 / 丢失
+    private int missingCount;     // Level 3: 输入 (ID,HASH) 对在输出中缺失（AI 丢 token）
 
     public TspDecoder(TspRegistry registry) {
         this(registry, null, null);
@@ -56,11 +57,32 @@ public final class TspDecoder {
         repairedCount = 0;
         ambiguousCount = 0;
         invalidCount = 0;
+        missingCount = 0;
+        // Track which (ID, HASH) pairs from idHashSet are covered by output tokens.
+        // Includes Level 2 repairs: if token arrives with wrong ID but HASH fixes it,
+        // the corrected (ID, HASH) is also covered.
+        Set<String> covered = idHashSet != null ? new java.util.HashSet<>() : null;
         List<StyledSegment> segments = new ArrayList<>();
         for (TspElement element : parseResult.elements()) {
             switch (element) {
-                case TspToken token -> segments.add(new StyledSegment(token.text(), resolveStyle(token)));
+                case TspToken token -> {
+                    Style s = resolveStyle(token, covered);
+                    segments.add(new StyledSegment(token.text(), s));
+                }
                 case TspText text -> segments.add(StyledSegment.plain(text.text()));
+            }
+        }
+        // Post-decode: detect (ID, HASH) pairs from input that are missing in output.
+        // Skip when output has zero checksum tokens (v1.0 compat — nothing to match).
+        if (covered != null) {
+            boolean anyChecksum = false;
+            for (TspToken t : parseResult.tokens()) {
+                if (t.checksum() != null) { anyChecksum = true; break; }
+            }
+            if (anyChecksum) {
+                for (String expected : idHashSet) {
+                    if (!covered.contains(expected)) missingCount++;
+                }
             }
         }
         return segments;
@@ -76,11 +98,12 @@ public final class TspDecoder {
      * 解析 token 的样式，含 v1.1 checksum 校验（Level 1/2/3）。
      * 原则：能确定就修，不能确定就回退（Style.EMPTY，调用方整段回退）。
      */
-    private Style resolveStyle(TspToken token) {
+    private Style resolveStyle(TspToken token, Set<String> covered) {
         if (idHashSet != null && token.checksum() != null) {
             String idHash = token.id() + ":" + token.checksum();
             if (idHashSet.contains(idHash)) {
                 // Level 0: (ID, HASH) 匹配 -> 正确
+                if (covered != null) covered.add(idHash);
                 return registry.getStyle(token.id());
             } else if (hashToIds != null && hashToIds.containsKey(token.checksum())) {
                 // HASH 合法，检查匹配数
@@ -88,6 +111,7 @@ public final class TspDecoder {
                 if (ids.size() == 1) {
                     // Level 2: 唯一匹配 -> 确定性修复 ID（100% 确定，不猜）
                     repairedCount++;
+                    if (covered != null) covered.add(ids.get(0) + ":" + token.checksum());
                     return registry.getStyle(ids.get(0));
                 } else {
                     // Level 3: 多匹配（同内容不同色）-> ambiguous，不猜
@@ -113,6 +137,9 @@ public final class TspDecoder {
     /** Level 3 invalid 次数（HASH 不合法）。 */
     public int getInvalidCount() { return invalidCount; }
 
-    /** Level 3 总异常（ambiguous + invalid）。>0 时调用方应整段回退。 */
-    public int getLevel3Count() { return ambiguousCount + invalidCount; }
+    /** Level 3 missing 次数（输入 token 在输出中缺失，AI 丢 token）。 */
+    public int getMissingCount() { return missingCount; }
+
+    /** Level 3 总异常（ambiguous + invalid + missing）。>0 时调用方应整段回退。 */
+    public int getLevel3Count() { return ambiguousCount + invalidCount + missingCount; }
 }

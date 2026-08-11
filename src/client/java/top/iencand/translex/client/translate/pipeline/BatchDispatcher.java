@@ -2,6 +2,7 @@ package top.iencand.translex.client.translate.pipeline;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import net.minecraft.client.Minecraft;
 import top.iencand.translex.client.config.ModConfig;
@@ -71,7 +72,8 @@ public class BatchDispatcher {
         flush();
     }
 
-    private record BatchEntry(int index, String text, CompletableFuture<String> future) {}
+    private record BatchEntry(int index, String text, CompletableFuture<String> future,
+                              String debugOrig, String debugGlossed) {}
 
     public BatchDispatcher(PipelineConfig config, TranslationRequester sharedRequester) {
         this.config = config;
@@ -92,6 +94,14 @@ public class BatchDispatcher {
      * 提交文本进行翻译。如果相同文本已在本管线队列中等待，则返回已存在的 Future（管线内去重）。
      */
     public CompletableFuture<String> submit(String text) {
+        return submit(text, null, null);
+    }
+
+    /**
+     * 提交文本 + debug 信息（原文 / 词典过滤后）。debug 模式下抓包页面显示对照。
+     * debugOrig/debugGlossed 为 null 时不记录 debug（向后兼容）。
+     */
+    public CompletableFuture<String> submit(String text, String debugOrig, String debugGlossed) {
         if (text == null || text.isBlank()) {
             return CompletableFuture.completedFuture(text);
         }
@@ -105,7 +115,7 @@ public class BatchDispatcher {
 
         synchronized (batchQueue) {
             int idx = batchQueue.size();
-            batchQueue.add(new BatchEntry(idx, text, future));
+            batchQueue.add(new BatchEntry(idx, text, future, debugOrig, debugGlossed));
         }
 
         updateProgress();
@@ -185,6 +195,7 @@ public class BatchDispatcher {
                     te.estimatedTokens            = estimatedTokens;
                     te.estimatedSystemPromptTokens = systemPromptTokens;
                     te.estimatedPayloadTokens      = payloadTokens;
+                    te.debugLines = buildDebugLines(batch);
                     MetricsCollector.get().recordTrace(te);
                     if (rawResult.startsWith("§c")) {
                         ConsoleBroadcaster.broadcast("ERROR",
@@ -294,6 +305,24 @@ public class BatchDispatcher {
         return o;
     }
 
+    /**
+     * 构建 per-line debug 信息（原文 / 词典过滤后 / encoded template），用于抓包页面对照。
+     * 只有 submit 时传了 debugOrig/debugGlossed 的 entry 才记录。返回 JSON 数组字符串，null 表示无 debug。
+     */
+    private static String buildDebugLines(List<BatchEntry> batch) {
+        JsonArray arr = new JsonArray();
+        for (BatchEntry e : batch) {
+            if (e.debugOrig() == null && e.debugGlossed() == null) continue;
+            JsonObject o = new JsonObject();
+            o.addProperty("idx", e.index());
+            if (e.debugOrig() != null) o.addProperty("orig", e.debugOrig());
+            if (e.debugGlossed() != null) o.addProperty("glossed", e.debugGlossed());
+            o.addProperty("encoded", e.text());
+            arr.add(o);
+        }
+        return arr.size() > 0 ? arr.toString() : null;
+    }
+
     // ===============================================================
     // 单条重试
     // ===============================================================
@@ -337,6 +366,7 @@ public class BatchDispatcher {
                             te.estimatedTokens            = estTokens;
                             te.estimatedSystemPromptTokens = sysTokens;
                             te.estimatedPayloadTokens      = payTokens;
+                            te.debugLines = buildDebugLines(List.of(entry));
                             MetricsCollector.get().recordTrace(te);
                             Map<Integer, String> parsed = parseDictResponse(rawResult, 1);
                             String result = parsed.get(0);

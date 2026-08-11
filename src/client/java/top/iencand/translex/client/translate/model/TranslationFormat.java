@@ -23,6 +23,13 @@ public interface TranslationFormat {
     String id();
 
     /**
+     * Whether this format uses the TSP token grammar and prompt family.
+     */
+    default boolean usesTspSyntax() {
+        return false;
+    }
+
+    /**
      * 编码结果：模板字符串 + registryHash。
      *
      * @param template   发给 AI 的模板（含 {@code {0}} 占位符），sN 为 {@code <sN>...</sN>}，
@@ -37,7 +44,15 @@ public interface TranslationFormat {
      * @param component 原文（单行或段落合并后的 Component）
      * @return Encoded（template + registryHash）
      */
-    Encoded encode(Component component);
+    Encoded encode(StyledText text);
+
+    /**
+     * Compatibility bridge for callers that have not yet materialized the
+     * protocol-neutral styled representation.
+     */
+    default Encoded encode(Component component) {
+        return encode(StyledText.of(component));
+    }
 
     /**
      * 译文模板 + 原文 -> 带 styles 的 Component（解码）。
@@ -50,12 +65,24 @@ public interface TranslationFormat {
      *                    null 表示不校验）
      * @return 带 styles 的 Component，或 {@code null}（registryHash 不匹配 -> cache miss）
      */
-    Component decode(String template, Component original, boolean isParagraph, String registryHash);
+    Component decode(String template, StyledText original, boolean isParagraph, String registryHash);
+
+    /**
+     * Compatibility bridge for renderer and cache call sites.
+     */
+    default Component decode(String template, Component original, boolean isParagraph, String registryHash) {
+        return decode(template, StyledText.of(original), isParagraph, registryHash);
+    }
 
     /** v1.1: 带 RecoveryStats 的 decode（TSP 记 recovery 事件，sN 忽略）。 */
-    default Component decode(String template, Component original, boolean isParagraph,
+    default Component decode(String template, StyledText original, boolean isParagraph,
                              String registryHash, tsp.RecoveryStats stats) {
         return decode(template, original, isParagraph, registryHash);
+    }
+
+    default Component decode(String template, Component original, boolean isParagraph,
+                             String registryHash, tsp.RecoveryStats stats) {
+        return decode(template, StyledText.of(original), isParagraph, registryHash, stats);
     }
 
     /**
@@ -65,8 +92,8 @@ public interface TranslationFormat {
      */
     String stripFormatTags(String template);
 
-    /** 按 id 选 format 实例（"TSP" -> TspFormat，否则 SnFormat）。 */
+    /** 按 id 选 format 实例（"TSP"/"HYBRID" -> TspFormat，否则 SnFormat）。 */
     static TranslationFormat forId(String id) {
-        return "TSP".equalsIgnoreCase(id) ? new TspFormat() : new SnFormat();
+        return TranslationFormatRegistry.forId(id);
     }
 }

@@ -41,21 +41,16 @@ public final class TranslationPrompts {
           + "Output ONLY the JSON object.";
 
     /** 物品 lore 翻译的 TSP 强 prompt 模板：[[ID||TEXT]] ID 绑定内容 + 反例 + 占位符。
-     *  大规模实测（767 段落）颜色准确率 100%，弱 prompt 会 5/5 错（AI 挪内容到错 ID）。 */
+     *  大规模实测（767 段落）颜色准确率 100%，弱 prompt 会 5/5 错（AI 挪内容到错 ID）。
+     *  保守精简：保留示例和关键指令（颜色率关键），去掉角色描述/冗余措辞。 */
     private static final String ITEM_SYSTEM_TEMPLATE_TSP =
-            "You are a Minecraft item tooltip translation engine. Translate every value of the "
-          + "JSON object into %s, returning a JSON object with the same keys. "
-          + "A value may be a single line or a multiline paragraph (lines joined by \\n); "
-          + "keep the SAME number of lines and the SAME \\n structure. "
-          + "[[NUMBER||TEXT]] tokens: NUMBER is a style ID PERMANENTLY BOUND to its content. "
-          + "[[N||X]] MUST become [[N||translated X]] - N stays attached to its ORIGINAL content. "
-          + "NEVER move content to a different NUMBER. NEVER merge or split tokens. "
-          + "{0} {1} etc. are number placeholders - output them LITERALLY, never fill or remove. "
+            "Translate every JSON value into %s; return JSON with same keys, same line count and \\n structure. "
+          + "[[N||X]] tokens: N is a style ID bound to its content. [[N||X]] MUST become [[N||translated X]] "
+          + "- keep N attached to original content, never move/merge/split tokens. "
+          + "{0} {1} etc. are placeholders - output literally, never fill or remove. "
           + "Example: [[0||56%%]] -> [[0||56%%]], [[1||Glacite]] -> [[1||冰川]] (NOT [[0||冰川]]). "
           + "Reorder whole tokens freely for natural Chinese. "
           + "%s"
-          + "Actually translate every value; never return the input unchanged. "
-          + "If unsure, leave that value unchanged. "
           + "Output ONLY the JSON object.";
 
     /** 默认目标语言，targetLanguage 为空时回落。 */

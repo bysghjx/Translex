@@ -166,6 +166,15 @@ app.component('trace-accordion', {
                         <div class="text-xs font-semibold mb-1.5" style="color:var(--accent)">Request</div>
                         <pre class="trace-pre text-xs rounded-lg p-3 font-mono" style="background:var(--bg-input);color:var(--text-secondary)">{{ pretty(trace.requestBody) }}</pre>
                     </div>
+                    <div v-if="trace.debugLines && trace.debugLines.length" style="max-height:280px;overflow-y:auto">
+                        <div class="text-xs font-semibold mb-1.5" style="color:var(--warning)">Debug Lines（原文 / 过滤后 / TSP处理）</div>
+                        <div v-for="line in trace.debugLines" :key="line.idx" class="text-xs space-y-0.5 rounded-lg p-2 mb-1.5" style="background:var(--bg-input)">
+                            <div class="font-mono" style="color:var(--text-muted)">[{{ line.idx }}]</div>
+                            <div v-if="line.orig"><span style="color:var(--text-muted)">原文:</span> <span style="color:var(--text-secondary)">{{ line.orig }}</span></div>
+                            <div v-if="line.glossed"><span style="color:var(--text-muted)">过滤后:</span> <span style="color:var(--success)">{{ line.glossed }}</span></div>
+                            <div><span style="color:var(--text-muted)">TSP:</span> <span style="color:var(--accent)">{{ line.encoded }}</span></div>
+                        </div>
+                    </div>
                     <div>
                         <div class="text-xs font-semibold mb-1.5" style="color:var(--success)">Response</div>
                         <pre class="trace-pre text-xs rounded-lg p-3 font-mono" style="background:var(--bg-input);color:var(--text-secondary)">{{ prettyResponse(trace) }}</pre>
@@ -193,6 +202,7 @@ app.component('trace-accordion', {
     methods: {
         fmt(n) { if (!n) return '0'; if (n >= 1e6) return (n/1e6).toFixed(1)+'M'; if (n >= 1e3) return (n/1e3).toFixed(1)+'k'; return String(n); },
         pretty(s) { if (!s) return ''; try { return JSON.stringify(JSON.parse(s), null, 2); } catch(e) { return s; } },
+        parseDebugLines(s) { if (!s) return []; try { return JSON.parse(s); } catch(e) { return []; } },
         // debug 模式显示完整 response body；非 debug 只保留 choices/model，去掉 id/object/created/usage 等元数据
         prettyResponse(trace) {
             if (this.debug) return this.pretty(trace.responseBody);

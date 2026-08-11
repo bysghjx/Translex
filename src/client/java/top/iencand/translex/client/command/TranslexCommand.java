@@ -14,6 +14,7 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.ChatFormatting;
 import java.awt.Desktop;
 import java.net.URI;
+import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import top.iencand.translex.client.translate.cache.TemporaryTooltipCache;
@@ -51,7 +52,7 @@ public class TranslexCommand {
 
     public void register() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, environment) -> {
-            dispatcher.register(literal("translex")
+            var root = literal("translex")
                     .executes(this::executeHelp)
                     // /translex translate <message_id>
                     .then(literal("translate")
@@ -96,20 +97,26 @@ public class TranslexCommand {
                     .then(literal("config")
                             .executes(this::executeConfig))
                     // /translex harvest-all - 抓取当前 GUI 所有物品 tooltip 存本地（TSP 测试数据收集）
-                    .then(literal("harvest-all")
-                            .executes(this::executeHarvestAll))
-                    // /translex protocol sN|TSP - 切换样式协议（两套并存）
+                    // /translex protocol sN|TSP-FULL|TSP-HYBRID - 切换协议或 TSP 模式
                     .then(literal("protocol")
                             .then(argument("mode", StringArgumentType.word())
                                     .suggests((ctx, builder) -> {
                                         builder.suggest("sN");
-                                        builder.suggest("TSP");
+                                        builder.suggest("TSP-FULL");
+                                        builder.suggest("TSP-HYBRID");
                                         return builder.buildFuture();
                                     })
-                                    .executes(this::executeProtocol)))
-            );
+                                    .executes(this::executeProtocol)));
+
+            if (ModConfig.get().debug) {
+                root.then(literal("harvest-all")
+                        .executes(this::executeHarvestAll));
+            }
+
+            dispatcher.register(root);
         });
-        LOGGER.info("Translex command registered (translate, text, say, reload, compat, button, mode, reset, config, harvest-all, protocol).");
+        LOGGER.info("Translex command registered (translate, text, say, reload, compat, button, mode, reset, config, protocol{}).",
+                ModConfig.get().debug ? ", harvest-all" : "");
     }
 
     // ===============================================================
@@ -315,7 +322,7 @@ public class TranslexCommand {
         switch (mode) {
             case "chat", "temporary", "permanent" -> {
                 ModConfig.get().outputMode = mode;
-                ModConfig.forceSave();
+                ModConfig.saveConfig();
                 source.sendFeedback(Component.literal(
                         I18nHelper.getPrefixed("translex.info.output_mode", mode)));
             }
@@ -358,7 +365,7 @@ public class TranslexCommand {
         FabricClientCommandSource source = context.getSource();
         ModConfig config = ModConfig.get();
         config.debug = !config.debug;
-        ModConfig.forceSave();
+        ModConfig.saveConfig();
 
         if (config.debug) {
             source.sendFeedback(Component.literal(
@@ -433,6 +440,9 @@ public class TranslexCommand {
      * 在容器 GUI 内直接按下，screen 保持容器。
      */
     private int executeHarvestAll(CommandContext<FabricClientCommandSource> context) {
+        if (!ModConfig.get().debug) {
+            return 0;
+        }
         FabricClientCommandSource source = context.getSource();
         source.sendFeedback(Component.literal(
                 I18nHelper.getPrefixed("translex.harvest.use_key_hint")));
@@ -440,18 +450,23 @@ public class TranslexCommand {
     }
 
     // ===============================================================
-    // 样式协议切换（/translex protocol sN|TSP）
+    // 样式协议或 TSP 模式切换（/translex protocol sN|TSP-FULL|TSP-HYBRID）
     // ===============================================================
 
-    /** 切换样式协议：sN（legacy 位置 ID）/ TSP（颜色 dedup）。两套并存，下次翻译生效。 */
+    /** 切换样式协议或 TSP 模式；内部仍保存兼容值 SN/TSP/HYBRID。 */
     private int executeProtocol(CommandContext<FabricClientCommandSource> context) {
         FabricClientCommandSource source = context.getSource();
         String mode = StringArgumentType.getString(context, "mode");
-        if ("sN".equalsIgnoreCase(mode) || "TSP".equalsIgnoreCase(mode)) {
-            // 统一存 "sN" / "TSP"（与 Web UI 选项一致；forId 用 equalsIgnoreCase 兼容）
-            String proto = "TSP".equalsIgnoreCase(mode) ? "TSP" : "sN";
+        String normalized = mode.trim().toUpperCase(Locale.ROOT);
+        String proto = switch (normalized) {
+            case "SN" -> "SN";
+            case "TSP", "TSP-FULL" -> "TSP";
+            case "HYBRID", "TSP-HYBRID" -> "HYBRID";
+            default -> null;
+        };
+        if (proto != null) {
             ModConfig.get().styleProtocol = proto;
-            ModConfig.forceSave();
+            ModConfig.saveConfig();
             source.sendFeedback(Component.literal(
                     I18nHelper.getPrefixed("translex.info.protocol", proto)));
         } else {

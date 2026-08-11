@@ -21,11 +21,21 @@ public record TspToken(int id, String text, String checksum) implements TspEleme
         if (text == null) throw new IllegalArgumentException("text must not be null");
     }
 
-    /** Render this token back to TSP wire format (v1.1 if checksum present). */
+    /** Render this token back to TSP wire format (v1.1 if checksum present).
+     *  <p>Escapes {@code \} and {@code ]} in TEXT so {@code ]]} in content
+     *  does not prematurely close the token. Parser reverses this via
+     *  {@link TspParser#unescapeText(String)}.</p> */
     public String toWire() {
+        String escaped = escapeText(text);
         return checksum != null
-                ? "[[" + id + ":" + checksum + "||" + text + "]]"
-                : "[[" + id + "||" + text + "]]";
+                ? "[[" + id + ":" + checksum + "||" + escaped + "]]"
+                : "[[" + id + "||" + escaped + "]]";
+    }
+
+    /** Escape {@code \} → {@code \\} then {@code ]} → {@code \]} so that
+     *  {@code ]]} in content survives the wire round-trip. */
+    static String escapeText(String s) {
+        return s.replace("\\", "\\\\").replace("]", "\\]");
     }
 
     @Override

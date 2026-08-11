@@ -72,6 +72,7 @@ public class TranslationManager {
     public void shutdown() {
         chatPipeline.shutdown();
         itemPipeline.shutdown();
+        sharedRequester.shutdown();
     }
 
     /** 使物品翻译会话失效：进行中的异步回调将被丢弃，不写入新会话的缓存。 */

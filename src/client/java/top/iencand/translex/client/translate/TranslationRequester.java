@@ -8,6 +8,8 @@ import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import javax.net.ssl.SSLHandshakeException;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import net.minecraft.client.Minecraft;
 import top.iencand.translex.client.config.ModConfig;
@@ -40,6 +42,13 @@ public class TranslationRequester {
 
     private static final int MAX_RETRIES = 3;
     private static final long[] RETRY_BACKOFF_MS = {1000, 2000, 4000};
+
+    /** 重试专用调度器：复用单条 daemon 线程，避免每次重试新建一个 Timer 线程。 */
+    private final ScheduledExecutorService retryScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "translex-retry");
+        t.setDaemon(true);
+        return t;
+    });
 
     public void requestTranslation(
             String apiKey,
@@ -202,13 +211,14 @@ public class TranslationRequester {
             String apiKey, String apiUrl, String model, String systemPrompt,
             String optionalUserPrompt, String userContent, String cacheKey, String displayIdentifier,
             TranslationCallback callback, int retryCount) {
-        new java.util.Timer().schedule(new java.util.TimerTask() {
-            @Override
-            public void run() {
-                requestTranslationInternal(apiKey, apiUrl, model, systemPrompt,
-                        optionalUserPrompt, userContent, cacheKey, displayIdentifier, callback, retryCount);
-            }
-        }, delayMs);
+        retryScheduler.schedule(() -> requestTranslationInternal(apiKey, apiUrl, model, systemPrompt,
+                optionalUserPrompt, userContent, cacheKey, displayIdentifier, callback, retryCount),
+                delayMs, TimeUnit.MILLISECONDS);
+    }
+
+    /** 释放重试调度器：取消尚未执行的 pending 重试。 */
+    public void shutdown() {
+        retryScheduler.shutdownNow();
     }
 
     /** Parse Retry-After header (seconds or HTTP-date). Falls back to defaultDelay. */

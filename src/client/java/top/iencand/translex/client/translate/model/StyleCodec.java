@@ -150,8 +150,17 @@ public final class StyleCodec {
             if (string.isEmpty()) return Optional.empty();
 
             if (style.isEmpty()) {
-                flushPending(pending, pendingStyle, pendingId, out, styleMap, snapshots, counter);
-                out.append(string);
+                // Hypixel quirk: §-codes embedded in TEXT content (not in Style).
+                // e.g. {"text":"§9Gemstone Fuel Tank"} → Style.EMPTY, text has literal §9.
+                // Parse as legacy string to recover proper colors, then process sub-segments.
+                if (string.indexOf('§') >= 0) {
+                    flushPending(pending, pendingStyle, pendingId, out, styleMap, snapshots, counter);
+                    extractLegacyInline(string, out, styleMap, snapshots, counter,
+                            pending, pendingStyle, pendingId);
+                } else {
+                    flushPending(pending, pendingStyle, pendingId, out, styleMap, snapshots, counter);
+                    out.append(string);
+                }
             } else {
                 if (pendingStyle[0] != null && !pendingStyle[0].equals(style)) {
                     flushPending(pending, pendingStyle, pendingId, out, styleMap, snapshots, counter);
@@ -188,6 +197,38 @@ public final class StyleCodec {
         pending.setLength(0);
         pendingStyle[0] = null;
         pendingId[0] = null;
+    }
+
+    /**
+     * Handle text segments that contain embedded §-codes (Hypixel quirk:
+     * the § character is in the TEXT string, not in the Style object).
+     * Parses as legacy text and recursively processes styled sub-segments.
+     */
+    private static void extractLegacyInline(
+            String legacyText,
+            StringBuilder out,
+            Map<Integer, Style> styleMap,
+            Map<Integer, StyleSnapshot> snapshots,
+            AtomicInteger counter,
+            StringBuilder pending, Style[] pendingStyle, Integer[] pendingId) {
+        Component parsed = fromLegacyString(legacyText);
+        parsed.visit((subStyle, subString) -> {
+            if (subString.isEmpty()) return Optional.empty();
+            if (subStyle.isEmpty()) {
+                flushPending(pending, pendingStyle, pendingId, out, styleMap, snapshots, counter);
+                out.append(subString);
+            } else {
+                if (pendingStyle[0] != null && !pendingStyle[0].equals(subStyle)) {
+                    flushPending(pending, pendingStyle, pendingId, out, styleMap, snapshots, counter);
+                }
+                if (pendingStyle[0] == null) {
+                    pendingStyle[0] = subStyle;
+                    pendingId[0] = counter.getAndIncrement();
+                }
+                pending.append(subString);
+            }
+            return Optional.empty();
+        }, Style.EMPTY);
     }
 
     /** 从完整的样式映射表重新应用样式（内存中，同一会话）。 */

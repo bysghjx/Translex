@@ -176,6 +176,7 @@ public class MetricsCollector {
         public long cachedTokens     = 0;  // API 返回的缓存命中 Token 数（服务器端）
         public long reasoningTokens  = 0;  // API 返回的 reasoning/thinking Token 数
         public boolean hasTokenData  = false;
+        public String debugLines     = null;  // per-line debug（原文/过滤后/encoded），JSON 数组字符串，null 表示无
 
         public TraceEntry(String timestamp, String method, String url,
                           boolean success, long durationMs,

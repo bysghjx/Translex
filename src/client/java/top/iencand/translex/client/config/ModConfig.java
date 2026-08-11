@@ -27,9 +27,13 @@ public class ModConfig {
     /** AI 供应商适配器 id（见 AiProviders）：openai / anthropic。决定请求/响应格式。 */
     public String provider = "openai";
 
-    /** 样式协议：sN（legacy <sN> 标签，位置 ID）| TSP（[[ID||TEXT]]，颜色 dedup）。
-     *  两套并存，默认 TSP（实测颜色 100% + 省 token 18.6%），可切 sN 回退。 */
-    public String styleProtocol = "TSP";
+    /** 样式协议：sN（legacy <sN> 标签，位置 ID）| TSP（[[ID||TEXT]]，Full）
+     *  | HYBRID（TSP 的选择性 token 模式）。默认 HYBRID，可切换 TSP Full 或 sN 回退。 */
+    public String styleProtocol = "HYBRID";
+
+    /** TSP checksum 开关：true 生成 [[ID:HASH||TEXT]]（checksum 校验，检测 AI 挪内容到错 ID，
+     *  颜色率最高但每 token 多 ~2 token）；false 生成 [[ID||TEXT]]（省 ~4.5% token，无校验）。 */
+    public boolean tspChecksum = true;
 
     /** 最大输出 token。Anthropic 必填；OpenAI 兼容端点忽略。 */
     public int maxTokens = 4096;
@@ -275,6 +279,7 @@ public class ModConfig {
             instance.enableTranslateButton = toml.getBoolean("enableTranslateButton", instance.enableTranslateButton);
             instance.outputMode = toml.getString("outputMode", instance.outputMode);
             instance.debug = toml.getBoolean("debug", instance.debug);
+            instance.tspChecksum = toml.getBoolean("tspChecksum", instance.tspChecksum);
 
             migrateLegacyPrompt(toml);
             LOGGER.info("Config loaded successfully.");
@@ -387,7 +392,7 @@ public class ModConfig {
 
         sb.append("# AI provider adapter: \"openai\" (OpenAI-compatible) or \"anthropic\" (Claude native)\n");
         sb.append("provider = \"").append(escapeToml(instance.provider)).append("\"\n");
-        sb.append("# Style protocol: \"sN\" (legacy <sN> position-ID) or \"TSP\" ([[ID||TEXT]] color-dedup). Default TSP.\n");
+        sb.append("# Style protocol: \"sN\" (legacy), \"TSP\" (TSP Full), or \"HYBRID\" (TSP Hybrid). Default HYBRID.\n");
         sb.append("styleProtocol = \"").append(escapeToml(instance.styleProtocol)).append("\"\n");
         sb.append("# Max output tokens (required by Anthropic; ignored by OpenAI-compatible endpoints)\n");
         sb.append("maxTokens = ").append(instance.maxTokens).append("\n");
@@ -452,6 +457,8 @@ public class ModConfig {
 
         sb.append("# Debug mode: auto-open web dashboard to network traces tab on startup\n");
         sb.append("debug = ").append(instance.debug).append("\n");
+        sb.append("# TSP checksum mode: true = [[ID:HASH||TEXT]] (tamper detection), false = [[ID||TEXT]]\n");
+        sb.append("tspChecksum = ").append(instance.tspChecksum).append("\n");
 
         // ── 连接预设库（TOML array of tables）──
         if (instance.presets != null && !instance.presets.isEmpty()) {
@@ -488,7 +495,4 @@ public class ModConfig {
         return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
-    public static void forceSave() {
-        saveConfig();
-    }
 }
